@@ -1,0 +1,17 @@
+# Virtual environment
+.venv/
+
+# PDFs (test corpus — keep locally, don't track in git)
+*.pdf
+
+# Extracted JSON outputs (build artifacts)
+*.json
+
+# Layout debug image output directories
+layout_output*/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
