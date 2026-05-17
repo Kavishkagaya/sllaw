@@ -100,6 +100,12 @@ def fetch_acts(conn, statuses, years=None):
         return cur.fetchall()
 
 
+def _refetch(conn, act_id):
+    with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+        cur.execute("SELECT * FROM acts WHERE id = %s", (act_id,))
+        return cur.fetchone()
+
+
 def mark_failed(conn, act_id, error):
     with conn.cursor() as cur:
         cur.execute(
@@ -388,8 +394,41 @@ def main():
                 log.error("  %d: ERROR — %s", year, exc)
             time.sleep(CRAWL_DELAY)
 
-    # ── Phase 2: Download ─────────────────────────────────────────────────────
-    if do_download:
+    # ── Phases 2+3: Download → Extract → Delete (one act at a time) ──────────
+    # Default mode: stream through each act without accumulating PDFs on disk.
+    # --download-only and --extract-only keep the old batch behaviour for debugging.
+    if do_download and do_extract:
+        want    = ["discovered", "downloaded"] + (["failed"] if args.retry_failed else [])
+        pending = list(fetch_acts(conn, want, years))
+        log.info("[pipeline] %d acts to process  →  pdf tmp: %s", len(pending), pdf_dir)
+        converter = build_converter()
+        for i, act in enumerate(pending, 1):
+            label = act["act_number"]
+
+            # Download (skip if already on disk from a previous interrupted run)
+            if act["status"] != "downloaded":
+                ok = download_pdf(conn, session, act, pdf_dir)
+                if not ok:
+                    log.info("  [%4d/%d] %-12s  download FAIL", i, len(pending), label)
+                    time.sleep(CRAWL_DELAY)
+                    continue
+                # Refresh act row so pdf_path is populated
+                act = _refetch(conn, act["id"])
+                time.sleep(CRAWL_DELAY)
+
+            # Extract
+            ok = extract_one(conn, converter, act)
+            log.info("  [%4d/%d] %-12s  %s", i, len(pending), label,
+                     "ok" if ok else "extract FAIL")
+
+            # Delete PDF to free disk space
+            if ok and act.get("pdf_path"):
+                try:
+                    Path(act["pdf_path"]).unlink(missing_ok=True)
+                except Exception:
+                    pass
+
+    elif do_download:
         want    = ["discovered"] + (["failed"] if args.retry_failed else [])
         pending = list(fetch_acts(conn, want, years))
         log.info("[download] %d PDFs to fetch  →  %s", len(pending), pdf_dir)
@@ -399,8 +438,7 @@ def main():
                      act["act_number"], "ok" if ok else "FAIL")
             time.sleep(CRAWL_DELAY)
 
-    # ── Phase 3: Extraction ───────────────────────────────────────────────────
-    if do_extract:
+    elif do_extract:
         want    = ["downloaded"] + (["failed"] if args.retry_failed else [])
         pending = list(fetch_acts(conn, want, years))
         log.info("[extract]  %d PDFs to process", len(pending))
@@ -409,6 +447,11 @@ def main():
             ok = extract_one(conn, converter, act)
             log.info("  [%4d/%d] %-12s  %s", i, len(pending),
                      act["act_number"], "ok" if ok else "FAIL")
+            if ok and act.get("pdf_path"):
+                try:
+                    Path(act["pdf_path"]).unlink(missing_ok=True)
+                except Exception:
+                    pass
 
     print_stats(conn)
     conn.close()
