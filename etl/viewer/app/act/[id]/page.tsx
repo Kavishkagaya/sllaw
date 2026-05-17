@@ -69,6 +69,14 @@ export default async function ActPage({ params }: PageProps) {
             No. {act.actNumber} · {act.year}
           </span>
         </h1>
+        {act.flagged && (
+          <span
+            className="shrink-0 bg-amber-50 text-amber-600 border border-amber-200 px-2 py-0.5 rounded text-xs font-medium"
+            title={act.flagReasons.join("; ")}
+          >
+            ⚑ {act.flagReasons.length} flag{act.flagReasons.length !== 1 ? "s" : ""}
+          </span>
+        )}
       </div>
       <div className="flex-1 min-h-0">
         <DocViewer data={docJson} pdfUrl={pdfUrl} />

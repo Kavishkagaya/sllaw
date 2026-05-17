@@ -22,6 +22,8 @@ export const acts = pgTable("acts", {
   rawJson: jsonb("raw_json"),
   status: text("status").notNull(),
   error: text("error"),
+  flagged: boolean("flagged").notNull().default(false),
+  flagReasons: text("flag_reasons").array().notNull().default([]),
 });
 
 export const parts = pgTable("parts", {

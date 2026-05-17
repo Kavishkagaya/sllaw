@@ -29,6 +29,14 @@ RE_SUB_ITEM  = re.compile(r'^\(([ivxlcdm]+)\)\s*(.*)', re.DOTALL | re.IGNORECASE
 RE_PART      = re.compile(r'^PART\s+([IVXLC]+)[—\-\s]*(.*)', re.IGNORECASE | re.DOTALL)
 RE_CHAPTER   = re.compile(r'^CHAPTER\s+([IVXLC]+)[—\-\s]*(.*)', re.IGNORECASE | re.DOTALL)
 RE_PROVISO   = re.compile(r'^Provided\b')
+RE_SCHEDULE  = re.compile(
+    r'^(FIRST|SECOND|THIRD|FOURTH|FIFTH|SIXTH|SEVENTH|EIGHTH|NINTH|TENTH'
+    r'|\d+(?:ST|ND|RD|TH))\s+SCHEDULE\b'
+    r'|^SCHEDULE\s+[IVXLC\d]'
+    r'|^TABLE\s+[A-Z]\b'
+    r'|^FORM\s+[A-Z0-9]',
+    re.IGNORECASE,
+)
 RE_INTEGER   = re.compile(r'^\d+$')
 RE_PRINT_REF = re.compile(r'^\d+\s*[—–-]\s*PP\s*\d+')
 
@@ -206,9 +214,12 @@ def classify(text):
     """
     Returns (kind, number, remaining_text).
     kind ∈ section_opener | part_header | chapter_header | subsection |
-            list_item | sub_item | proviso | text
+            list_item | sub_item | proviso | schedule_header | text
     """
     t = text.strip()
+
+    if RE_SCHEDULE.match(t):
+        return 'schedule_header', None, t
 
     m = RE_SECTION.match(t)
     if m:
@@ -263,14 +274,26 @@ def marginal_at(marg_elems, y_top, y_bot):
 
 def build_structure(pages_data):
     """
-    Walk (main_elems, marg_elems) for each page in order.
-    Returns (parts, sections_dict).
+    Walk (main_elems, marg_elems, page_type) for each page in order.
+    page_type: 'text' | 'other' | 'sparse'
+    Returns (parts, sections_list, appendices).
     """
     parts = []
-    sections = {}          # str(number) → section dict
+    sections = []          # list of section dicts (preserves duplicates across parts)
+    appendices = []        # raw text from 'other' pages and schedule content
+    _appendix_buf = []     # accumulator for consecutive raw-content lines
+    flags = []             # extraction quality issues detected
     current_part = None
     current_section = None
     awaiting_part_title = False
+    in_schedule = False    # true once a SCHEDULE/TABLE/FORM header is seen
+    _seen_sec_nums = {}    # number → first part that used it (collision detection)
+    _max_sec_num = 0       # highest section number seen (regression detection)
+
+    def flush_appendix():
+        if _appendix_buf:
+            appendices.append({"text": "\n".join(_appendix_buf)})
+            _appendix_buf.clear()
 
     def open_section(number, short_title, part_number):
         return {
@@ -281,9 +304,20 @@ def build_structure(pages_data):
         }
 
     def flush():
-        nonlocal current_section
+        nonlocal current_section, _max_sec_num
         if current_section:
-            sections[str(current_section['number'])] = current_section
+            num = current_section['number']
+            part = current_section.get('part', '?')
+            # Collision: same number already used in a different part
+            if num in _seen_sec_nums and _seen_sec_nums[num] != part:
+                flags.append(f"section_collision:s{num}_parts_{_seen_sec_nums[num]},{part}")
+            else:
+                _seen_sec_nums[num] = part
+            # Regression: number dropped to < 10% of previous high → schedule leaking in
+            if _max_sec_num > 10 and num < _max_sec_num * 0.1:
+                flags.append(f"section_regression:{_max_sec_num}_to_{num}")
+            _max_sec_num = max(_max_sec_num, num)
+            sections.append(current_section)
             current_section = None
 
     def add_to_body(node):
@@ -299,13 +333,39 @@ def build_structure(pages_data):
                 return node
         return None
 
-    for main_elems, marg_elems in pages_data:
+    for entry in pages_data:
+        main_elems, marg_elems, page_type = entry if len(entry) == 3 else (*entry, 'text')
+
+        # 'other' pages (schedules, forms, tables): collect raw text, skip section parsing
+        if page_type == 'other':
+            for elem in main_elems:
+                t = elem['text'].strip()
+                if t and not RE_PRINT_REF.match(t):
+                    _appendix_buf.append(t)
+            continue
+
+        flush_appendix()  # end any accumulated 'other' run before resuming sections
+
         for elem in main_elems:
             # Skip print-run references (e.g. "2 —PP 012867– 5,000 (2000/09)")
             if RE_PRINT_REF.match(elem['text'].strip()):
                 continue
 
             kind, num, rest = classify(elem['text'])
+
+            # Once a schedule/table/form header is seen, everything after is appendix
+            if kind == 'schedule_header':
+                flush()
+                flush_appendix()
+                if not in_schedule:
+                    flags.append(f"schedule_keyword:{elem['text'].strip()[:40]}")
+                in_schedule = True
+                _appendix_buf.append(elem['text'].strip())
+                continue
+
+            if in_schedule:
+                _appendix_buf.append(elem['text'].strip())
+                continue
 
             # Backfill part/chapter title from the next ALL-CAPS text element
             # (but don't consume another structural header as a title)
@@ -397,7 +457,10 @@ def build_structure(pages_data):
                 add_to_body({'type': 'text', 'text': rest})
 
     flush()
-    return parts, sections
+    flush_appendix()
+    if appendices:
+        flags.append(f"appendix_content:{len(appendices)}_chunks")
+    return parts, sections, appendices, flags
 
 
 # ── Cover metadata ────────────────────────────────────────────────────────────
@@ -462,18 +525,19 @@ def extract_act(pdf_path, output_path=None, verbose=True):
             meta.update(extract_cover_metadata(clusters))
 
         if ptype == 'sparse':
-            pages_data.append(([], []))
+            pages_data.append(([], [], 'sparse'))
         elif ptype == 'text':
             main_e, marg_e = page_elements(clusters)
-            pages_data.append((main_e, marg_e))
+            pages_data.append((main_e, marg_e, 'text'))
             if verbose and pg_idx < 5:
                 print(f"  p{pg_idx+1}: {len(main_e)} main / {len(marg_e)} marginal elements")
-        else:
-            pages_data.append(([], []))
+        else:  # 'other': table/schedule page — keep text, skip section parsing
+            main_e, _ = page_elements(clusters)
+            pages_data.append((main_e, [], 'other'))
 
     if verbose:
         print("Building structure...")
-    parts, sections = build_structure(pages_data)
+    parts, sections, appendices, flags = build_structure(pages_data)
 
     act = {
         'title':       meta.get('title', ''),
@@ -484,13 +548,16 @@ def extract_act(pdf_path, output_path=None, verbose=True):
         'total_pages': total_pages,
         'parts':       parts,
         'sections':    sections,
+        'appendices':  appendices,
+        'flags':       flags,
     }
 
     with open(output_path, 'w', encoding='utf-8') as f:
         json.dump(act, f, indent=2, ensure_ascii=False)
 
     if verbose:
-        print(f"\n→ {len(sections)} sections, {len(parts)} parts  →  {output_path}")
+        flag_str = f"  flags: {flags}" if flags else ""
+        print(f"\n→ {len(sections)} sections, {len(parts)} parts, {len(appendices)} appendix chunk(s)  →  {output_path}{flag_str}")
 
     return act
 
@@ -525,7 +592,12 @@ def section_full_text(section):
 
 
 def print_section(act, number):
-    s = act['sections'].get(str(number))
+    secs = act['sections']
+    # Support both old dict format and new list format
+    if isinstance(secs, dict):
+        s = secs.get(str(number))
+    else:
+        s = next((x for x in secs if x.get('number') == number), None)
     if not s:
         print(f"Section {number} not found.")
         return
@@ -538,10 +610,12 @@ def print_section(act, number):
 def search_sections(act, query):
     q = query.lower()
     results = []
-    for num, s in act['sections'].items():
+    secs = act['sections']
+    items = secs.values() if isinstance(secs, dict) else secs
+    for s in items:
         full = section_full_text(s).lower()
         if q in full or (s['short_title'] and q in s['short_title'].lower()):
-            results.append((int(num), s['short_title']))
+            results.append((s['number'], s['short_title']))
     results.sort()
     return results
 
@@ -561,7 +635,7 @@ if __name__ == '__main__':
         with open(path) as f:
             act = json.load(f)
         print(f"{act['title']} (No. {act['number']} of {act['year']})")
-        print(f"{len(act['sections'])} sections, {len(act['parts'])} parts")
+        print(f"{len(act['sections'])} sections, {len(act['parts'])} parts, {len(act.get('appendices', []))} appendix chunks")
 
         if '--section' in args:
             idx = args.index('--section')

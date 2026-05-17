@@ -251,11 +251,13 @@ def extract_one(conn, converter, act):
                 meta.update(extract_cover_metadata(clusters))
 
             if ptype == "text":
-                pages_data.append(page_elements(clusters))
+                main_e, marg_e = page_elements(clusters)
+                pages_data.append((main_e, marg_e, "text"))
             else:
-                pages_data.append(([], []))
+                main_e, _ = page_elements(clusters)
+                pages_data.append((main_e, [], "other"))
 
-        parts, sections = build_structure(pages_data)
+        parts, sections, appendices, flags = build_structure(pages_data)
 
         act_doc = {
             "title":       meta.get("title", ""),
@@ -266,6 +268,8 @@ def extract_one(conn, converter, act):
             "total_pages": total_pages,
             "parts":       parts,
             "sections":    sections,
+            "appendices":  appendices,
+            "flags":       flags,
         }
 
     except Exception as exc:
@@ -283,6 +287,8 @@ def extract_one(conn, converter, act):
                     parts_count    = %s,
                     sections_count = %s,
                     raw_json       = %s,
+                    flagged        = %s,
+                    flag_reasons   = %s,
                     status         = 'extracted',
                     error          = NULL,
                     updated_at     = NOW()
@@ -295,6 +301,8 @@ def extract_one(conn, converter, act):
                     len(parts),
                     len(sections),
                     json.dumps(act_doc),
+                    bool(flags),
+                    flags,
                     act_id,
                 ),
             )
@@ -318,7 +326,7 @@ def extract_one(conn, converter, act):
                     ),
                 )
 
-            for num_str, s in sections.items():
+            for s in sections:
                 cur.execute(
                     """
                     INSERT INTO sections
@@ -326,11 +334,12 @@ def extract_one(conn, converter, act):
                     VALUES (%s, %s, %s, %s, %s)
                     ON CONFLICT (act_id, section_number) DO UPDATE
                         SET short_title = EXCLUDED.short_title,
+                            part_number = EXCLUDED.part_number,
                             body        = EXCLUDED.body
                     """,
                     (
                         act_id,
-                        int(num_str),
+                        s["number"],
                         s.get("short_title"),
                         s.get("part"),
                         json.dumps(s.get("body", [])),

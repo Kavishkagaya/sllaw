@@ -32,6 +32,8 @@ export default async function Home({ searchParams }: PageProps) {
           description: acts.description,
           partsCount: acts.partsCount,
           sectionsCount: acts.sectionsCount,
+          flagged: acts.flagged,
+          flagReasons: acts.flagReasons,
         })
         .from(acts)
         .where(and(eq(acts.status, "extracted"), actSearch))
@@ -143,6 +145,14 @@ export default async function Home({ searchParams }: PageProps) {
               <div className="flex items-center gap-2 text-xs shrink-0 ml-4">
                 {row.partsCount != null && (
                   <span className="text-gray-400">{row.partsCount}P / {row.sectionsCount}S</span>
+                )}
+                {"flagged" in row && row.flagged && (
+                  <span
+                    className="bg-amber-50 text-amber-600 border border-amber-200 px-2 py-0.5 rounded font-medium"
+                    title={"flagReasons" in row ? (row.flagReasons as string[]).join("; ") : ""}
+                  >
+                    ⚑ flagged
+                  </span>
                 )}
                 <span className="text-gray-300">→</span>
               </div>
