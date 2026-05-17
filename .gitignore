@@ -6,6 +6,9 @@
 
 # Extracted JSON outputs (build artifacts)
 *.json
+# But track the viewer's npm manifests
+!etl/viewer/package.json
+!etl/viewer/package-lock.json
 
 # Layout debug image output directories
 layout_output*/
