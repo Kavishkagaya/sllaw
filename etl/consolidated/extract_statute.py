@@ -1,0 +1,334 @@
+#!/usr/bin/env python3
+"""
+extract_statute.py — Consolidated statute extractor
+
+Two entry points:
+  extract_statute(html)           — HTML files from lankalaw.net
+  extract_statute_pdf(conv, path) — PDF files via docling (same pipeline as acts)
+
+Both return:
+  {title, description, enacted_date, is_repealed, parts, sections}
+  sections[num] = {short_title, part, body}  — body is always plain text
+"""
+
+import re
+import sys
+from pathlib import Path
+from typing import Optional
+
+from bs4 import BeautifulSoup
+
+# Make the acts extractor available for PDF parsing.
+# sys.path manipulation is intentional — etl/acts/ is a sibling package.
+_ACTS_DIR = Path(__file__).parent.parent / "acts"
+if str(_ACTS_DIR) not in sys.path:
+    sys.path.insert(0, str(_ACTS_DIR))
+
+try:
+    import pypdfium2 as pdfium  # noqa: F401 (used in extract_statute_pdf)
+    from extract_act import (  # type: ignore[import]
+        build_converter as _build_converter,
+        build_structure as _build_structure,
+        cell_cx as _cell_cx,
+        cells_text as _cells_text,
+        cells_y_span as _cells_y_span,
+        cluster_label as _cluster_label,
+        detect_page_type as _detect_page_type,
+        extract_cover_metadata as _extract_cover_metadata,
+        find_column_gap as _find_column_gap,
+        is_header_footer as _is_header_footer,
+        page_elements as _page_elements,
+        RE_INTEGER as _RE_INTEGER,
+        section_full_text as _section_full_text,
+    )
+    _PDF_AVAILABLE = True
+except ImportError:
+    _PDF_AVAILABLE = False
+
+
+def extract_statute(html: str) -> dict:
+    soup = BeautifulSoup(html, "html.parser")
+
+    title = _extract_title(soup)
+    description = _extract_description(soup)
+    enacted_date = _extract_date(soup)
+    is_repealed = _is_repealed(soup)
+    parts, sections = _extract_structure(soup)
+
+    return {
+        "title": title,
+        "description": description,
+        "enacted_date": enacted_date,
+        "is_repealed": is_repealed,
+        "parts": parts,
+        "sections": sections,
+    }
+
+
+# ── Field extractors ──────────────────────────────────────────────────────────
+
+def _extract_title(soup: BeautifulSoup) -> str:
+    el = soup.find("font", class_="actname")
+    if el:
+        return el.get_text(strip=True)
+    title_tag = soup.find("title")
+    return title_tag.get_text(strip=True) if title_tag else ""
+
+
+def _extract_description(soup: BeautifulSoup) -> str:
+    el = soup.find(class_="descriptionhead")
+    return el.get_text(strip=True) if el else ""
+
+
+def _extract_date(soup: BeautifulSoup) -> Optional[str]:
+    for td in soup.find_all("td", attrs={"align": "right"}):
+        text = td.get_text(" ", strip=True)
+        m = re.search(r'\[([^\]]+)\]', text)
+        if m:
+            raw = re.sub(r'\s+', ' ', m.group(1)).strip()
+            if raw:
+                return raw
+    return None
+
+
+def _is_repealed(soup: BeautifulSoup) -> bool:
+    # Repealed statutes have a red notice in <p class="actinfo">
+    el = soup.find("p", class_="actinfo")
+    if el and "repeal" in el.get_text().lower():
+        return True
+    # Also check if the actname itself says "repealed"
+    actname = soup.find("font", class_="actname")
+    if actname and "repeal" in actname.get_text().lower():
+        return True
+    return False
+
+
+# ── Structure extraction ──────────────────────────────────────────────────────
+
+def _extract_structure(soup: BeautifulSoup) -> tuple[list, dict]:
+    """
+    Walk all font.sectionpart and font.sectionshorttitle elements in document
+    order to build parts list and sections dict keyed by section number string.
+    """
+    parts: list[dict] = []
+    sections: dict[str, dict] = {}
+
+    current_part: Optional[str] = None
+    current_part_sections: list[str] = []
+
+    # Collect all marker elements in document order
+    markers = soup.find_all("font", class_=lambda c: c and (
+        "sectionpart" in c or "sectionshorttitle" in c
+    ))
+
+    for el in markers:
+        classes = el.get("class", [])
+
+        if "sectionpart" in classes:
+            _flush_part(parts, current_part, current_part_sections)
+            current_part = el.get_text(strip=True)
+            current_part_sections = []
+
+        elif "sectionshorttitle" in classes:
+            short_title = el.get_text(" ", strip=True).rstrip(".")
+
+            # The sectioncontent is in the sibling <td> of the same <tr>
+            tr = el.find_parent("tr")
+            if tr is None:
+                continue
+            content_el = tr.find("font", class_="sectioncontent")
+            if content_el is None:
+                continue
+
+            section_num, body = _parse_section_content(content_el)
+            if section_num is None:
+                continue
+
+            sections[section_num] = {
+                "short_title": short_title,
+                "part": current_part,
+                "body": body,
+            }
+            current_part_sections.append(section_num)
+
+    _flush_part(parts, current_part, current_part_sections)
+    return parts, sections
+
+
+def _flush_part(parts: list, name: Optional[str], section_nums: list) -> None:
+    if name is not None:
+        parts.append({
+            "number": name,
+            "title": "",
+            "sections": section_nums,
+            "type": "part",
+        })
+
+
+def _parse_section_content(content_el) -> tuple[Optional[str], str]:
+    """
+    Return (section_number_str, body_text) from a font.sectioncontent element.
+    The section number is the text of the first <a> tag inside the element.
+    """
+    a_tag = content_el.find("a")
+    if a_tag is None:
+        return None, content_el.get_text(" ", strip=True)
+
+    section_num = a_tag.get_text(strip=True)
+    if not section_num:
+        return None, content_el.get_text(" ", strip=True)
+
+    full_text = content_el.get_text(" ", strip=True)
+    # Strip the leading "N." or "N " prefix
+    prefix = section_num + "."
+    if full_text.startswith(prefix):
+        body = full_text[len(prefix):].strip()
+    elif full_text.startswith(section_num):
+        body = full_text[len(section_num):].lstrip(". ").strip()
+    else:
+        body = full_text
+
+    return section_num, body
+
+
+# ── PDF extraction (docling) ──────────────────────────────────────────────────
+
+def _page_elements_at(clusters, gap_center: float):
+    """
+    Split page clusters into (main_elems, marg_elems) using a fixed gap_center
+    instead of the dynamic per-page gap detection.  Works the same as
+    page_elements() but never falls back to single-column mode.
+    """
+    body = [cl for cl in clusters if not _is_header_footer(cl)]
+
+    left_n  = sum(1 for cl in body for c in cl.cells if _cell_cx(c) < gap_center)
+    right_n = sum(1 for cl in body for c in cl.cells if _cell_cx(c) >= gap_center)
+    main_is_left = left_n >= right_n
+
+    main_elems: list = []
+    marg_elems: list = []
+
+    for cl in sorted(body, key=lambda c: c.bbox.t):
+        left_cells  = [c for c in cl.cells if _cell_cx(c) < gap_center]
+        right_cells = [c for c in cl.cells if _cell_cx(c) >= gap_center]
+
+        main_cells = left_cells  if main_is_left else right_cells
+        marg_cells = right_cells if main_is_left else left_cells
+        lbl        = _cluster_label(cl)
+
+        if main_cells:
+            t = _cells_text(main_cells)
+            if t:
+                y0, y1 = _cells_y_span(main_cells)
+                main_elems.append({"text": t, "y_top": y0, "y_bot": y1, "label": lbl})
+
+        if marg_cells:
+            t = _cells_text(marg_cells)
+            if t and not _RE_INTEGER.match(t.strip()) and len(t.strip()) > 2:
+                y0, y1 = _cells_y_span(marg_cells)
+                marg_elems.append({"text": t, "y_top": y0, "y_bot": y1})
+
+    return main_elems, marg_elems
+
+
+def build_pdf_converter():
+    """Create and return the docling DocumentConverter (call once, reuse)."""
+    if not _PDF_AVAILABLE:
+        raise RuntimeError("docling / pypdfium2 not installed; cannot extract PDFs")
+    return _build_converter()
+
+
+def extract_statute_pdf(converter, pdf_path: str) -> dict:
+    """
+    Extract a consolidated statute from a PDF using docling.
+    converter — from build_pdf_converter()
+    Returns the same dict shape as extract_statute().
+    """
+    if not _PDF_AVAILABLE:
+        raise RuntimeError("docling / pypdfium2 not installed; cannot extract PDFs")
+
+    path = Path(pdf_path)
+    result = converter.convert(str(path.resolve()))
+    total_pages = len(pdfium.PdfDocument(str(path)))
+
+    # Pass 1: collect per-page gap centres to compute a stable global split.
+    # Consolidated PDFs have a consistent marginal column but stray cells
+    # often bridge the gap on individual pages, causing per-page detection to
+    # fail.  Using the median of successful detections gives a reliable split
+    # that works across the whole document.
+    from statistics import median
+    gap_centers: list[float] = []
+    for pg_idx in range(min(total_pages, len(result.pages))):
+        clusters = result.pages[pg_idx].predictions.layout.clusters
+        body = [cl for cl in clusters
+                if cl.label.value not in ("page_header", "page_footer")]
+        gap = _find_column_gap(body)
+        if gap:
+            gap_centers.append(gap[0])
+    global_gap = median(gap_centers) if gap_centers else None
+
+    meta: dict = {}
+    pages_data: list = []
+
+    for pg_idx in range(total_pages):
+        if pg_idx >= len(result.pages):
+            break
+        clusters = result.pages[pg_idx].predictions.layout.clusters
+        ptype = _detect_page_type(clusters)
+        if pg_idx == 0:
+            meta.update(_extract_cover_metadata(clusters))
+            # Override title: the cover section_header is the short title;
+            # extract_cover_metadata() often picks up amendment "Act Nos" text.
+            for cl in clusters:
+                if (hasattr(cl.label, "value") and cl.label.value == "section_header"):
+                    t = _cells_text(cl.cells).strip()
+                    if t and len(t) < 100:
+                        meta["title"] = t
+                        break
+        if ptype == "sparse":
+            pages_data.append(([], []))
+        elif global_gap is not None:
+            pages_data.append(_page_elements_at(clusters, global_gap))
+        else:
+            pages_data.append(_page_elements(clusters))
+
+    # Normalise PART headings: PDF renderer drops the space between "PART" and
+    # the Roman numeral (e.g. "PARTI" instead of "PART I", "PARTIA" for Part IA).
+    _RE_PART_JOIN = re.compile(r'^(PART)([IVXLC][A-Z]*)', re.IGNORECASE)
+
+    def _fix_part(text: str) -> str:
+        return _RE_PART_JOIN.sub(lambda m: f"{m.group(1)} {m.group(2)}", text)
+
+    pages_data = [
+        ([{**e, "text": _fix_part(e["text"])} for e in main], marg)
+        for main, marg in pages_data
+    ]
+
+    parts_raw, sections_raw = _build_structure(pages_data)
+
+    parts = [
+        {
+            "number":   p["number"],
+            "title":    p.get("title", ""),
+            "sections": [str(s) for s in p.get("sections", [])],
+            "type":     p.get("type", "part"),
+        }
+        for p in parts_raw
+    ]
+    sections = {
+        num_str: {
+            "short_title": s.get("short_title"),
+            "part":        s.get("part"),
+            "body":        _section_full_text(s),
+        }
+        for num_str, s in sections_raw.items()
+    }
+
+    return {
+        "title":        meta.get("title", ""),
+        "description":  "",
+        "enacted_date": meta.get("certified"),
+        "is_repealed":  False,
+        "parts":        parts,
+        "sections":     sections,
+    }
