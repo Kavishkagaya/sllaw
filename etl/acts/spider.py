@@ -84,6 +84,21 @@ def get_conn():
     return psycopg2.connect(url)
 
 
+def reconnect_if_needed(conn):
+    """Return a live connection, reconnecting if Neon closed the idle one."""
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT 1")
+        return conn
+    except Exception:
+        try:
+            conn.close()
+        except Exception:
+            pass
+        log.info("Reconnecting to database...")
+        return get_conn()
+
+
 def fetch_acts(conn, statuses, years=None):
     with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
         if years:
@@ -403,6 +418,7 @@ def main():
         log.info("[pipeline] %d acts to process  →  pdf tmp: %s", len(pending), pdf_dir)
         converter = build_converter()
         for i, act in enumerate(pending, 1):
+            conn = reconnect_if_needed(conn)
             label = act["act_number"]
 
             # Download (skip if already on disk from a previous interrupted run)
@@ -433,6 +449,7 @@ def main():
         pending = list(fetch_acts(conn, want, years))
         log.info("[download] %d PDFs to fetch  →  %s", len(pending), pdf_dir)
         for i, act in enumerate(pending, 1):
+            conn = reconnect_if_needed(conn)
             ok = download_pdf(conn, session, act, pdf_dir)
             log.info("  [%4d/%d] %-12s  %s", i, len(pending),
                      act["act_number"], "ok" if ok else "FAIL")
@@ -444,6 +461,7 @@ def main():
         log.info("[extract]  %d PDFs to process", len(pending))
         converter = build_converter()
         for i, act in enumerate(pending, 1):
+            conn = reconnect_if_needed(conn)
             ok = extract_one(conn, converter, act)
             log.info("  [%4d/%d] %-12s  %s", i, len(pending),
                      act["act_number"], "ok" if ok else "FAIL")
