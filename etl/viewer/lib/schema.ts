@@ -20,6 +20,8 @@ export const acts = pgTable("acts", {
   partsCount: integer("parts_count"),
   sectionsCount: integer("sections_count"),
   rawJson: jsonb("raw_json"),
+  doclingJson: jsonb("docling_json"),
+  docJson: jsonb("doc_json"),
   status: text("status").notNull(),
   error: text("error"),
   flagged: boolean("flagged").notNull().default(false),

@@ -29,8 +29,8 @@ export default async function ActPage({ params }: PageProps) {
     .where(eq(sections.actId, actId))
     .orderBy(sections.sectionNumber);
 
-  // Build the JSON to display: prefer raw_json, fall back to structured DB data
-  const docJson = act.rawJson ?? {
+  // Build the JSON to display: prefer doc_json, then raw_json, then structured DB data
+  const docJson = act.docJson ?? act.rawJson ?? {
     title: act.title || act.description,
     act_number: act.actNumber,
     year: act.year,

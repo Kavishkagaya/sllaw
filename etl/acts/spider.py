@@ -3,7 +3,7 @@
 spider.py — Sri Lanka Legal Acts Spider
 
 Crawls documents.gov.lk/view/act/ for acts from 2006 onwards,
-downloads English PDFs, extracts structure via extract_act.py,
+downloads English PDFs, runs the two-pass extraction pipeline,
 and stores results in Neon PostgreSQL.
 
 Local usage (.venv):
@@ -20,8 +20,9 @@ Flags:
   --log-file PATH            also write logs to this file
   --discover-only            only populate acts table
   --download-only            only download PDFs
-  --extract-only             only extract already-downloaded PDFs
-  --retry-failed             include failed acts in download/extract phases
+  --extract-only             pass 1 + pass 2 on already-downloaded PDFs (no new downloads)
+  --build-only               pass 2 only on acts that already have docling_json (no PDF needed)
+  --retry-failed             include failed acts in download/extract/build phases
   --stats                    print DB status counts and exit
 """
 
@@ -48,17 +49,16 @@ import pypdfium2 as pdfium
 sys.path.insert(0, str(Path(__file__).parent))
 from extract_act import (
     build_converter,
-    build_structure,
+    build_document,
     detect_page_type,
-    extract_cover_metadata,
-    page_elements,
+    serialize_clusters,
 )
 
 # ── Constants ─────────────────────────────────────────────────────────────────
 
 BASE_URL    = "https://documents.gov.lk/view/act/"
 START_YEAR  = 2006
-CRAWL_DELAY = 1.5   # seconds between outbound HTTP requests
+CRAWL_DELAY = 1.5
 
 log = logging.getLogger("spider")
 
@@ -66,8 +66,8 @@ log = logging.getLogger("spider")
 # ── Logging setup ─────────────────────────────────────────────────────────────
 
 def setup_logging(log_file=None):
-    fmt = "%(asctime)s  %(levelname)-7s  %(message)s"
-    datefmt = "%Y-%m-%d %H:%M:%S"
+    fmt      = "%(asctime)s  %(levelname)-7s  %(message)s"
+    datefmt  = "%Y-%m-%d %H:%M:%S"
     handlers = [logging.StreamHandler(sys.stdout)]
     if log_file:
         Path(log_file).parent.mkdir(parents=True, exist_ok=True)
@@ -85,7 +85,6 @@ def get_conn():
 
 
 def reconnect_if_needed(conn):
-    """Return a live connection, reconnecting if Neon closed the idle one."""
     try:
         with conn.cursor() as cur:
             cur.execute("SELECT 1")
@@ -141,16 +140,12 @@ def print_stats(conn):
         log.info("  (empty)")
         return
     for status, count in rows:
-        log.info("  %-12s  %5d", status, count)
+        log.info("  %-14s  %5d", status, count)
 
 
 # ── Phase 1 — Discovery ───────────────────────────────────────────────────────
 
 def discover_year(conn, session, year):
-    """
-    Fetch acts_YYYY.html, parse the act table, upsert new rows.
-    Returns (new_rows_inserted, total_rows_found).
-    """
     url  = f"{BASE_URL}acts_{year}.html"
     resp = session.get(url, timeout=30)
     resp.raise_for_status()
@@ -194,10 +189,6 @@ def discover_year(conn, session, year):
 # ── Phase 2 — Download ────────────────────────────────────────────────────────
 
 def download_pdf(conn, session, act, pdf_dir):
-    """
-    Download the English PDF to pdf_dir/YYYY/<filename>.
-    Updates status → 'downloaded'. Returns True on success.
-    """
     act_id   = act["id"]
     pdf_url  = act["pdf_url"]
     filename = Path(urlparse(pdf_url).path).name
@@ -224,56 +215,67 @@ def download_pdf(conn, session, act, pdf_dir):
     return True
 
 
-# ── Phase 3 — Extraction ──────────────────────────────────────────────────────
+# ── Pass 1 — Docling serialisation ───────────────────────────────────────────
 
-def extract_one(conn, converter, act):
-    """
-    Run the docling → extract_act pipeline on a downloaded PDF.
-    Writes raw_json, parts, and sections to the DB.
-    Updates status → 'extracted'. Returns True on success.
-    """
+def extract_pass1(conn, converter, act):
+    """Run docling on the PDF, serialise all cluster data → docling_json.
+    Status → 'docling_done'. Does NOT delete the PDF (caller handles that)."""
     act_id   = act["id"]
     pdf_path = Path(act["pdf_path"])
 
     try:
         result      = converter.convert(str(pdf_path.resolve()))
         total_pages = len(pdfium.PdfDocument(str(pdf_path)))
-        meta        = {}
-        pages_data  = []
 
+        pages = []
         for pg_idx in range(total_pages):
             if pg_idx >= len(result.pages):
                 break
             clusters = result.pages[pg_idx].predictions.layout.clusters
             ptype    = detect_page_type(clusters)
+            pages.append({
+                "index":     pg_idx,
+                "page_type": ptype,
+                "clusters":  serialize_clusters(clusters),
+            })
 
-            if pg_idx == 0:
-                meta.update(extract_cover_metadata(clusters))
-
-            if ptype == "text":
-                main_e, marg_e = page_elements(clusters)
-                pages_data.append((main_e, marg_e, "text"))
-            else:
-                main_e, _ = page_elements(clusters)
-                pages_data.append((main_e, [], "other"))
-
-        parts, sections, appendices, flags = build_structure(pages_data)
-
-        act_doc = {
-            "title":       meta.get("title", ""),
-            "number":      meta.get("number"),
-            "year":        meta.get("year"),
-            "certified":   meta.get("certified"),
-            "source":      str(pdf_path),
-            "total_pages": total_pages,
-            "parts":       parts,
-            "sections":    sections,
-            "appendices":  appendices,
-            "flags":       flags,
-        }
+        docling_json = {"total_pages": total_pages, "pages": pages}
 
     except Exception as exc:
-        mark_failed(conn, act_id, f"extract: {exc}")
+        mark_failed(conn, act_id, f"docling: {exc}")
+        return False
+
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE acts SET docling_json=%s, status='docling_done', error=NULL,"
+                " updated_at=NOW() WHERE id=%s",
+                (json.dumps(docling_json), act_id),
+            )
+        conn.commit()
+    except Exception as exc:
+        conn.rollback()
+        mark_failed(conn, act_id, f"db write pass1: {exc}")
+        return False
+
+    return True
+
+
+# ── Pass 2 — Document build ───────────────────────────────────────────────────
+
+def extract_pass2(conn, act):
+    """Build doc_json from docling_json (no PDF needed).
+    Status → 'extracted'. Collision sections are stored under composite keys and flagged."""
+    act_id       = act["id"]
+    docling_json = act.get("docling_json")
+    if not docling_json:
+        mark_failed(conn, act_id, "pass2: no docling_json")
+        return False
+
+    try:
+        doc = build_document(docling_json)
+    except Exception as exc:
+        mark_failed(conn, act_id, f"pass2: {exc}")
         return False
 
     try:
@@ -286,7 +288,7 @@ def extract_one(conn, converter, act):
                     total_pages    = %s,
                     parts_count    = %s,
                     sections_count = %s,
-                    raw_json       = %s,
+                    doc_json       = %s,
                     flagged        = %s,
                     flag_reasons   = %s,
                     status         = 'extracted',
@@ -295,62 +297,21 @@ def extract_one(conn, converter, act):
                 WHERE id = %s
                 """,
                 (
-                    act_doc["title"],
-                    act_doc["certified"],
-                    total_pages,
-                    len(parts),
-                    len(sections),
-                    json.dumps(act_doc),
-                    bool(flags),
-                    flags,
+                    doc["title"],
+                    doc["certified"],
+                    doc["total_pages"],
+                    len(doc["parts"]),
+                    len(doc["sections"]),
+                    json.dumps(doc),
+                    bool(doc["flags"]),
+                    doc["flags"],
                     act_id,
                 ),
             )
-
-            for p in parts:
-                cur.execute(
-                    """
-                    INSERT INTO parts
-                        (act_id, part_number, title, section_numbers, part_type)
-                    VALUES (%s, %s, %s, %s, %s)
-                    ON CONFLICT (act_id, part_number) DO UPDATE
-                        SET title           = EXCLUDED.title,
-                            section_numbers = EXCLUDED.section_numbers
-                    """,
-                    (
-                        act_id,
-                        p["number"],
-                        p.get("title", ""),
-                        p.get("sections", []),
-                        p.get("type", "part"),
-                    ),
-                )
-
-            for s in sections:
-                cur.execute(
-                    """
-                    INSERT INTO sections
-                        (act_id, section_number, short_title, part_number, body)
-                    VALUES (%s, %s, %s, %s, %s)
-                    ON CONFLICT (act_id, section_number) DO UPDATE
-                        SET short_title = EXCLUDED.short_title,
-                            part_number = EXCLUDED.part_number,
-                            body        = EXCLUDED.body
-                    """,
-                    (
-                        act_id,
-                        s["number"],
-                        s.get("short_title"),
-                        s.get("part"),
-                        json.dumps(s.get("body", [])),
-                    ),
-                )
-
         conn.commit()
-
     except Exception as exc:
         conn.rollback()
-        mark_failed(conn, act_id, f"db write: {exc}")
+        mark_failed(conn, act_id, f"db write pass2: {exc}")
         return False
 
     return True
@@ -359,21 +320,20 @@ def extract_one(conn, converter, act):
 # ── CLI ───────────────────────────────────────────────────────────────────────
 
 def parse_args():
-    p = argparse.ArgumentParser(description="Sri Lanka Legal Acts Spider")
+    p   = argparse.ArgumentParser(description="Sri Lanka Legal Acts Spider")
     grp = p.add_mutually_exclusive_group()
     grp.add_argument("--year",  type=int, help="Single year, e.g. --year 2024")
     grp.add_argument("--years", type=str, help="Range, e.g. --years 2010-2015")
-    p.add_argument("--pdf-dir",       default=os.environ.get("PDF_DIR", "pdfs"),
-                   help="Directory to store downloaded PDFs (default: ./pdfs or $PDF_DIR)")
-    p.add_argument("--log-file",      default=None,
-                   help="Path to write log file (in addition to stdout)")
+    p.add_argument("--pdf-dir",       default=os.environ.get("PDF_DIR", "pdfs"))
+    p.add_argument("--log-file",      default=None)
     p.add_argument("--discover-only", action="store_true")
     p.add_argument("--download-only", action="store_true")
-    p.add_argument("--extract-only",  action="store_true")
-    p.add_argument("--retry-failed",  action="store_true",
-                   help="Include failed acts in download/extract phases")
-    p.add_argument("--stats",         action="store_true",
-                   help="Print DB status counts and exit")
+    p.add_argument("--extract-only",  action="store_true",
+                   help="Pass 1 + Pass 2 on already-downloaded PDFs")
+    p.add_argument("--build-only",    action="store_true",
+                   help="Pass 2 only: rebuild doc_json from existing docling_json (no PDF)")
+    p.add_argument("--retry-failed",  action="store_true")
+    p.add_argument("--stats",         action="store_true")
     return p.parse_args()
 
 
@@ -387,7 +347,7 @@ def resolve_years(args):
 
 
 def main():
-    args = parse_args()
+    args    = parse_args()
     setup_logging(args.log_file)
 
     pdf_dir = Path(args.pdf_dir).expanduser().resolve()
@@ -400,9 +360,10 @@ def main():
 
     years = resolve_years(args)
 
-    do_discover = not (args.download_only or args.extract_only)
-    do_download = not (args.discover_only or args.extract_only)
-    do_extract  = not (args.discover_only or args.download_only)
+    do_discover = not (args.download_only or args.extract_only or args.build_only)
+    do_download = not (args.discover_only or args.extract_only or args.build_only)
+    do_extract  = not (args.discover_only or args.download_only or args.build_only)
+    do_build    = args.build_only
 
     session = requests.Session()
     session.headers["User-Agent"] = "sllaw-spider/1.0 (legal research, non-commercial)"
@@ -418,36 +379,40 @@ def main():
                 log.error("  %d: ERROR — %s", year, exc)
             time.sleep(CRAWL_DELAY)
 
-    # ── Phases 2+3: Download → Extract → Delete (one act at a time) ──────────
-    # Default mode: stream through each act without accumulating PDFs on disk.
-    # --download-only and --extract-only keep the old batch behaviour for debugging.
+    # ── Phases 2+3: Download → Pass1 → Pass2 → Delete (one act at a time) ────
     if do_download and do_extract:
         want    = ["discovered", "downloaded"] + (["failed"] if args.retry_failed else [])
         pending = list(fetch_acts(conn, want, years))
         log.info("[pipeline] %d acts to process  →  pdf tmp: %s", len(pending), pdf_dir)
         converter = build_converter()
         for i, act in enumerate(pending, 1):
-            conn = reconnect_if_needed(conn)
+            conn  = reconnect_if_needed(conn)
             label = act["act_number"]
 
-            # Download (skip if already on disk from a previous interrupted run)
+            # Download (skip if PDF already on disk from a previous interrupted run)
             if act["status"] != "downloaded":
                 ok = download_pdf(conn, session, act, pdf_dir)
                 if not ok:
                     log.info("  [%4d/%d] %-12s  download FAIL", i, len(pending), label)
                     time.sleep(CRAWL_DELAY)
                     continue
-                # Refresh act row so pdf_path is populated
                 act = _refetch(conn, act["id"])
                 time.sleep(CRAWL_DELAY)
 
-            # Extract
-            ok = extract_one(conn, converter, act)
-            log.info("  [%4d/%d] %-12s  %s", i, len(pending), label,
-                     "ok" if ok else "extract FAIL")
+            # Pass 1: docling → docling_json
+            ok = extract_pass1(conn, converter, act)
+            if not ok:
+                log.info("  [%4d/%d] %-12s  pass1 FAIL", i, len(pending), label)
+                continue
+            act = _refetch(conn, act["id"])
 
-            # Delete PDF to free disk space
-            if ok and act.get("pdf_path"):
+            # Pass 2: build doc_json
+            ok = extract_pass2(conn, act)
+            log.info("  [%4d/%d] %-12s  %s", i, len(pending), label,
+                     "ok" if ok else "pass2 FAIL")
+
+            # Delete PDF
+            if act.get("pdf_path"):
                 try:
                     Path(act["pdf_path"]).unlink(missing_ok=True)
                 except Exception:
@@ -459,26 +424,44 @@ def main():
         log.info("[download] %d PDFs to fetch  →  %s", len(pending), pdf_dir)
         for i, act in enumerate(pending, 1):
             conn = reconnect_if_needed(conn)
-            ok = download_pdf(conn, session, act, pdf_dir)
+            ok   = download_pdf(conn, session, act, pdf_dir)
             log.info("  [%4d/%d] %-12s  %s", i, len(pending),
                      act["act_number"], "ok" if ok else "FAIL")
             time.sleep(CRAWL_DELAY)
 
     elif do_extract:
-        want    = ["downloaded"] + (["failed"] if args.retry_failed else [])
-        pending = list(fetch_acts(conn, want, years))
-        log.info("[extract]  %d PDFs to process", len(pending))
+        want      = ["downloaded"] + (["failed"] if args.retry_failed else [])
+        pending   = list(fetch_acts(conn, want, years))
+        log.info("[extract]  %d PDFs to process  (pass1 + pass2)", len(pending))
         converter = build_converter()
         for i, act in enumerate(pending, 1):
             conn = reconnect_if_needed(conn)
-            ok = extract_one(conn, converter, act)
+
+            ok = extract_pass1(conn, converter, act)
+            if not ok:
+                log.info("  [%4d/%d] %-12s  pass1 FAIL", i, len(pending), act["act_number"])
+                continue
+            act = _refetch(conn, act["id"])
+
+            ok = extract_pass2(conn, act)
             log.info("  [%4d/%d] %-12s  %s", i, len(pending),
-                     act["act_number"], "ok" if ok else "FAIL")
+                     act["act_number"], "ok" if ok else "pass2 FAIL")
+
             if ok and act.get("pdf_path"):
                 try:
                     Path(act["pdf_path"]).unlink(missing_ok=True)
                 except Exception:
                     pass
+
+    elif do_build:
+        want    = ["docling_done"] + (["failed"] if args.retry_failed else [])
+        pending = list(fetch_acts(conn, want, years))
+        log.info("[build]    %d acts to rebuild from docling_json", len(pending))
+        for i, act in enumerate(pending, 1):
+            conn = reconnect_if_needed(conn)
+            ok   = extract_pass2(conn, act)
+            log.info("  [%4d/%d] %-12s  %s", i, len(pending),
+                     act["act_number"], "ok" if ok else "FAIL")
 
     print_stats(conn)
     conn.close()
