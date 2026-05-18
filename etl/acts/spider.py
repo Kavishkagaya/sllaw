@@ -121,12 +121,26 @@ def _refetch(conn, act_id):
 
 
 def mark_failed(conn, act_id, error):
-    with conn.cursor() as cur:
-        cur.execute(
-            "UPDATE acts SET status='failed', error=%s, updated_at=NOW() WHERE id=%s",
-            (str(error)[:500], act_id),
-        )
-    conn.commit()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE acts SET status='failed', error=%s, updated_at=NOW() WHERE id=%s",
+                (str(error)[:500], act_id),
+            )
+        conn.commit()
+    except Exception:
+        try:
+            conn.rollback()
+            conn2 = get_conn()
+            with conn2.cursor() as cur:
+                cur.execute(
+                    "UPDATE acts SET status='failed', error=%s, updated_at=NOW() WHERE id=%s",
+                    (str(error)[:500], act_id),
+                )
+            conn2.commit()
+            conn2.close()
+        except Exception:
+            pass
 
 
 def print_stats(conn):
@@ -388,35 +402,40 @@ def main():
         for i, act in enumerate(pending, 1):
             conn  = reconnect_if_needed(conn)
             label = act["act_number"]
-
-            # Download (skip if PDF already on disk from a previous interrupted run)
-            if act["status"] != "downloaded":
-                ok = download_pdf(conn, session, act, pdf_dir)
-                if not ok:
-                    log.info("  [%4d/%d] %-12s  download FAIL", i, len(pending), label)
+            try:
+                # Download (skip if PDF already on disk from a previous interrupted run)
+                if act["status"] != "downloaded":
+                    ok = download_pdf(conn, session, act, pdf_dir)
+                    if not ok:
+                        log.info("  [%4d/%d] %-12s  download FAIL", i, len(pending), label)
+                        time.sleep(CRAWL_DELAY)
+                        continue
+                    act = _refetch(conn, act["id"])
                     time.sleep(CRAWL_DELAY)
+
+                # Pass 1: docling → docling_json
+                ok = extract_pass1(conn, converter, act)
+                if not ok:
+                    log.info("  [%4d/%d] %-12s  pass1 FAIL", i, len(pending), label)
                     continue
                 act = _refetch(conn, act["id"])
-                time.sleep(CRAWL_DELAY)
 
-            # Pass 1: docling → docling_json
-            ok = extract_pass1(conn, converter, act)
-            if not ok:
-                log.info("  [%4d/%d] %-12s  pass1 FAIL", i, len(pending), label)
-                continue
-            act = _refetch(conn, act["id"])
+                # Pass 2: build doc_json
+                ok = extract_pass2(conn, act)
+                log.info("  [%4d/%d] %-12s  %s", i, len(pending), label,
+                         "ok" if ok else "pass2 FAIL")
 
-            # Pass 2: build doc_json
-            ok = extract_pass2(conn, act)
-            log.info("  [%4d/%d] %-12s  %s", i, len(pending), label,
-                     "ok" if ok else "pass2 FAIL")
+                # Delete PDF
+                if act.get("pdf_path"):
+                    try:
+                        Path(act["pdf_path"]).unlink(missing_ok=True)
+                    except Exception:
+                        pass
 
-            # Delete PDF
-            if act.get("pdf_path"):
-                try:
-                    Path(act["pdf_path"]).unlink(missing_ok=True)
-                except Exception:
-                    pass
+            except Exception as exc:
+                log.error("  [%4d/%d] %-12s  UNCAUGHT: %s", i, len(pending), label, exc)
+                conn = reconnect_if_needed(conn)
+                mark_failed(conn, act["id"], f"uncaught: {exc}")
 
     elif do_download:
         want    = ["discovered"] + (["failed"] if args.retry_failed else [])
