@@ -272,6 +272,7 @@ def extract_one(conn, session, statute) -> bool:
                 )
 
             for num_str, s in sections.items():
+                body = s.get("body", [])
                 cur.execute(
                     """
                     INSERT INTO consolidated_sections
@@ -286,7 +287,7 @@ def extract_one(conn, session, statute) -> bool:
                         num_str,
                         s.get("short_title"),
                         s.get("part"),
-                        s.get("body", ""),
+                        json.dumps(body) if isinstance(body, list) else body,
                     ),
                 )
 

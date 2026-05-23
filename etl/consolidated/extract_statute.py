@@ -110,6 +110,157 @@ def _is_repealed(soup: BeautifulSoup) -> bool:
     return False
 
 
+# ── HTML body node classifiers ────────────────────────────────────────────────
+
+_RE_HTML_SUBSEC  = re.compile(r'^\((\d+[A-Za-z]?)\)\s*(.*)', re.DOTALL)
+_RE_HTML_LIST    = re.compile(r'^\(([a-z]{1,3})\)\s*(.*)', re.DOTALL)
+_RE_HTML_PROVISO = re.compile(r'^Provided\b', re.IGNORECASE)
+
+
+def _subsec_own_text(el) -> str:
+    """Text of a subsectioncontent element, ignoring its nested table children."""
+    parts = []
+    for child in el.children:
+        if getattr(child, 'name', None) == 'table':
+            continue
+        t = child.get_text(' ', strip=True) if hasattr(child, 'get_text') else str(child).strip()
+        if t:
+            parts.append(t)
+    return ' '.join(parts).strip()
+
+
+def _build_body_nodes(content_el) -> list:
+    """
+    Parse a font.sectioncontent element into structured body nodes.
+    Returns the same node types as the PDF path:
+      subsection, list_item, sub_item, proviso, text
+    Marginal notes (short_title) are NOT in the content_el — they are in
+    the sibling sectionshorttitle cell and handled separately.
+    """
+    nodes: list = []
+
+    # ── Intro text (between section-number font and first table) ──
+    intro_parts = []
+    for child in content_el.children:
+        cname = getattr(child, 'name', None)
+        if cname == 'table':
+            break
+        if cname == 'font':
+            if 'subsectioncontent' in (child.get('class') or []):
+                break
+            if child.get('style'):   # bold section-number wrapper — skip
+                continue
+        t = child.get_text(' ', strip=True) if hasattr(child, 'get_text') \
+            else str(child).strip()
+        t = t.lstrip('. ')
+        if t:
+            intro_parts.append(t)
+    intro = ' '.join(intro_parts).strip()
+    if intro:
+        nodes.append({"type": "text", "text": intro})
+
+    # ── Collect all subsectioncontent with depth ──────────────────
+    flat: list[dict] = []
+    for sub in content_el.find_all('font', class_='subsectioncontent'):
+        depth = sum(
+            1 for p in sub.parents
+            if getattr(p, 'name', None) == 'font'
+            and 'subsectioncontent' in (p.get('class') or [])
+        )
+        text = _subsec_own_text(sub)
+        if not text:
+            continue
+
+        if _RE_HTML_PROVISO.match(text):
+            flat.append({'type': 'proviso', 'text': text, '_d': depth})
+            continue
+
+        m = _RE_HTML_SUBSEC.match(text)
+        if m:
+            flat.append({'type': 'subsection', 'number': m.group(1),
+                         'text': m.group(2).strip(), 'items': [], '_d': depth})
+            continue
+
+        m = _RE_HTML_LIST.match(text)
+        if m:
+            label, rest = f'({m.group(1)})', m.group(2).strip()
+            lbl = m.group(1)
+            # True roman sub-items: (i) alone, or multi-char sequences like (ii)(iii)(iv)
+            # Single chars like (c)(v)(x)(l)(m) are list_items even though they're
+            # valid roman digits — they only appear as sub_items when multi-char.
+            is_roman = (lbl == 'i') or (len(lbl) >= 2 and all(c in 'ivxlcdm' for c in lbl))
+            node_type = 'sub_item' if (is_roman and depth >= 1) else 'list_item'
+            if node_type == 'list_item':
+                flat.append({'type': 'list_item', 'label': label,
+                             'text': rest, 'sub_items': [], '_d': depth})
+            else:
+                flat.append({'type': 'sub_item', 'label': label,
+                             'text': rest, '_d': depth})
+            continue
+
+        flat.append({'type': 'text', 'text': text, '_d': depth})
+
+    # ── Nest flat nodes into subsection.items / list_item.sub_items ──
+    cur_sub: dict | None = None
+    cur_li:  dict | None = None
+
+    for node in flat:
+        d = node.pop('_d', 0)
+        t = node['type']
+
+        if t == 'subsection':
+            nodes.append(node)
+            cur_sub, cur_li = node, None
+
+        elif t == 'list_item':
+            if cur_sub is not None and d > 0:
+                cur_sub['items'].append(node)
+            else:
+                nodes.append(node)
+                cur_sub = None
+            cur_li = node
+
+        elif t == 'sub_item':
+            if cur_li is not None:
+                cur_li['sub_items'].append(node)
+            else:
+                nodes.append(node)
+            # don't reset cur_sub/cur_li
+
+        else:  # text / proviso
+            nodes.append(node)
+            cur_sub, cur_li = None, None
+
+    return nodes
+
+
+def _parse_marginal(short_el) -> tuple[str, list[str]]:
+    """
+    Return (short_title, amendments) from a font.sectionshorttitle element.
+    Amendment references live in <tr class="morginalnotes"> and are kept
+    separate from the short title text.
+    """
+    amendments = []
+    for tr in short_el.find_all('tr', class_='morginalnotes'):
+        t = tr.get_text(' ', strip=True)
+        if t:
+            amendments.append(t)
+
+    # Title = all text except the amendment table and <br>
+    parts = []
+    for child in short_el.children:
+        cname = getattr(child, 'name', None)
+        if cname in ('table', 'br'):
+            continue
+        t = child.get_text(' ', strip=True) if hasattr(child, 'get_text') \
+            else str(child).strip()
+        if t:
+            parts.append(t)
+
+    title = ' '.join(parts).strip().rstrip('.')
+    return title, amendments
+
+
 # ── Structure extraction ──────────────────────────────────────────────────────
 
 def _extract_structure(soup: BeautifulSoup) -> tuple[list, dict]:
@@ -123,7 +274,6 @@ def _extract_structure(soup: BeautifulSoup) -> tuple[list, dict]:
     current_part: Optional[str] = None
     current_part_sections: list[str] = []
 
-    # Collect all marker elements in document order
     markers = soup.find_all("font", class_=lambda c: c and (
         "sectionpart" in c or "sectionshorttitle" in c
     ))
@@ -137,9 +287,8 @@ def _extract_structure(soup: BeautifulSoup) -> tuple[list, dict]:
             current_part_sections = []
 
         elif "sectionshorttitle" in classes:
-            short_title = el.get_text(" ", strip=True).rstrip(".")
+            short_title, amendments = _parse_marginal(el)
 
-            # The sectioncontent is in the sibling <td> of the same <tr>
             tr = el.find_parent("tr")
             if tr is None:
                 continue
@@ -147,14 +296,15 @@ def _extract_structure(soup: BeautifulSoup) -> tuple[list, dict]:
             if content_el is None:
                 continue
 
-            section_num, body = _parse_section_content(content_el)
+            section_num = _section_number(content_el)
             if section_num is None:
                 continue
 
             sections[section_num] = {
-                "short_title": short_title,
-                "part": current_part,
-                "body": body,
+                "short_title": short_title or None,
+                "amendments":  amendments,
+                "part":        current_part,
+                "body":        _build_body_nodes(content_el),
             }
             current_part_sections.append(section_num)
 
@@ -172,30 +322,13 @@ def _flush_part(parts: list, name: Optional[str], section_nums: list) -> None:
         })
 
 
-def _parse_section_content(content_el) -> tuple[Optional[str], str]:
-    """
-    Return (section_number_str, body_text) from a font.sectioncontent element.
-    The section number is the text of the first <a> tag inside the element.
-    """
+def _section_number(content_el) -> Optional[str]:
+    """Return the section number string from a font.sectioncontent element."""
     a_tag = content_el.find("a")
     if a_tag is None:
-        return None, content_el.get_text(" ", strip=True)
-
-    section_num = a_tag.get_text(strip=True)
-    if not section_num:
-        return None, content_el.get_text(" ", strip=True)
-
-    full_text = content_el.get_text(" ", strip=True)
-    # Strip the leading "N." or "N " prefix
-    prefix = section_num + "."
-    if full_text.startswith(prefix):
-        body = full_text[len(prefix):].strip()
-    elif full_text.startswith(section_num):
-        body = full_text[len(section_num):].lstrip(". ").strip()
-    else:
-        body = full_text
-
-    return section_num, body
+        return None
+    num = a_tag.get_text(strip=True)
+    return num if num else None
 
 
 # ── PDF extraction (docling) ──────────────────────────────────────────────────
