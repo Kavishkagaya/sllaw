@@ -202,7 +202,7 @@ def extract_one(conn, session, statute) -> bool:
     url        = statute["source_url"]
 
     try:
-        resp = session.get(url, timeout=30)
+        resp = session.get(url, timeout=120)
         resp.raise_for_status()
         data = extract_statute(resp.text)
     except Exception as exc:

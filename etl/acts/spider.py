@@ -292,6 +292,8 @@ def extract_pass2(conn, act):
         mark_failed(conn, act_id, f"pass2: {exc}")
         return False
 
+    final_status = 'flagged' if doc.get("stopped") else 'extracted'
+
     try:
         with conn.cursor() as cur:
             cur.execute(
@@ -305,7 +307,7 @@ def extract_pass2(conn, act):
                     doc_json       = %s,
                     flagged        = %s,
                     flag_reasons   = %s,
-                    status         = 'extracted',
+                    status         = %s,
                     error          = NULL,
                     updated_at     = NOW()
                 WHERE id = %s
@@ -319,6 +321,7 @@ def extract_pass2(conn, act):
                     json.dumps(doc),
                     bool(doc["flags"]),
                     doc["flags"],
+                    final_status,
                     act_id,
                 ),
             )
@@ -473,7 +476,7 @@ def main():
                     pass
 
     elif do_build:
-        want    = ["docling_done"] + (["failed"] if args.retry_failed else [])
+        want    = ["docling_done", "flagged"] + (["failed"] if args.retry_failed else [])
         pending = list(fetch_acts(conn, want, years))
         log.info("[build]    %d acts to rebuild from docling_json", len(pending))
         for i, act in enumerate(pending, 1):

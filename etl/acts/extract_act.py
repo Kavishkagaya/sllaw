@@ -27,7 +27,8 @@ from pathlib import Path
 import pypdfium2 as pdfium
 from docling.backend.pypdfium2_backend import PyPdfiumDocumentBackend
 from docling.datamodel.base_models import InputFormat
-from docling.datamodel.pipeline_options import PdfPipelineOptions
+from docling.datamodel.layout_model_specs import DOCLING_LAYOUT_EGRET_LARGE
+from docling.datamodel.pipeline_options import LayoutOptions, PdfPipelineOptions
 from docling.document_converter import DocumentConverter, PdfFormatOption
 
 # ── Pattern matchers ──────────────────────────────────────────────────────────
@@ -50,6 +51,15 @@ RE_SCHEDULE  = re.compile(
 RE_INTEGER   = re.compile(r'^\d+$')
 RE_PRINT_REF = re.compile(r'^\d+\s*[—–-]\s*PP\s*\d+')
 
+# Structural patterns we don't yet handle — trigger flag-and-stop in build_structure
+RE_STRUCTURAL_ALARM = re.compile(
+    r'^(\d+[A-Za-z])\.\s'           # alphanumeric section: 1A. 2B.
+    r'|^SECTION\s+\d'               # written-out SECTION 5
+    r'|^ARTICLE\s+\d'               # ARTICLE heading
+    r'|^DIVISION\s+[IVXLC\d]',     # DIVISION heading
+    re.IGNORECASE,
+)
+
 GAP_MIN_PT     = 8   # minimum column gap width in PDF points
 MIN_CELLS_BODY = 8   # pages with fewer cells → cover or back-page
 
@@ -57,9 +67,11 @@ MIN_CELLS_BODY = 8   # pages with fewer cells → cover or back-page
 # ── Docling setup ─────────────────────────────────────────────────────────────
 
 def build_converter():
-    opts = PdfPipelineOptions()
-    opts.do_ocr = False
-    opts.do_table_structure = False
+    opts = PdfPipelineOptions(
+        do_ocr=False,
+        do_table_structure=False,
+        layout_options=LayoutOptions(model_spec=DOCLING_LAYOUT_EGRET_LARGE),
+    )
     return DocumentConverter(
         format_options={
             InputFormat.PDF: PdfFormatOption(
@@ -347,6 +359,9 @@ def classify(text):
     if m:
         return 'sub_item', m.group(1).lower(), m.group(2).strip()
 
+    if RE_STRUCTURAL_ALARM.match(t):
+        return 'unknown', None, t
+
     return 'text', None, t
 
 
@@ -377,12 +392,14 @@ def build_structure(pages_data):
       - normal key  : str(section_number)   e.g. "47"
       - collision   : "PART/number"         e.g. "XXIII/1"  (flagged)
 
-    Returns (parts, sections_dict, appendices, flags).
+    Returns (parts, sections_dict, schedules, appendices, flags, stopped).
     """
     parts            = []
     sections         = {}       # key: str(num) or "PART/num" on collision
+    schedules        = []       # list of {"name": str, "content": [str, ...]}
     appendices       = []
     _appendix_buf    = []
+    _sched_buf       = None     # active schedule being accumulated
     flags            = []
     current_part     = None
     current_section  = None
@@ -395,6 +412,12 @@ def build_structure(pages_data):
         if _appendix_buf:
             appendices.append({"text": "\n".join(_appendix_buf)})
             _appendix_buf.clear()
+
+    def flush_schedule():
+        nonlocal _sched_buf
+        if _sched_buf is not None:
+            schedules.append(_sched_buf)
+            _sched_buf = None
 
     def open_section(number, short_title, part_number):
         return {'number': number, 'short_title': short_title, 'part': part_number, 'body': []}
@@ -455,15 +478,24 @@ def build_structure(pages_data):
             if kind == 'schedule_header':
                 flush()
                 flush_appendix()
-                if not in_schedule:
-                    flags.append(f"schedule_keyword:{elem['text'].strip()[:40]}")
+                flush_schedule()
+                flags.append(f"schedule_keyword:{elem['text'].strip()[:40]}")
+                _sched_buf = {"name": elem['text'].strip(), "content": []}
                 in_schedule = True
-                _appendix_buf.append(elem['text'].strip())
                 continue
 
             if in_schedule:
-                _appendix_buf.append(elem['text'].strip())
+                t = elem['text'].strip()
+                if t and _sched_buf is not None:
+                    _sched_buf["content"].append(t)
                 continue
+
+            if kind == 'unknown':
+                flags.append(f"unknown_pattern:{elem['text'].strip()[:60]}")
+                flush()
+                flush_appendix()
+                flush_schedule()
+                return parts, sections, schedules, appendices, flags, True
 
             if awaiting_part_title and kind == 'text' and elem['text'].strip().isupper():
                 current_part['title'] = elem['text'].strip()
@@ -549,9 +581,10 @@ def build_structure(pages_data):
 
     flush()
     flush_appendix()
+    flush_schedule()
     if appendices:
         flags.append(f"appendix_content:{len(appendices)}_chunks")
-    return parts, sections, appendices, flags
+    return parts, sections, schedules, appendices, flags, False
 
 
 # ── Cover metadata ────────────────────────────────────────────────────────────
@@ -624,7 +657,7 @@ def build_document(docling_json):
             main_e, _ = page_elements_d(clusters_d)
             pages_data.append((main_e, [], 'other'))
 
-    parts, sections, appendices, flags = build_structure(pages_data)
+    parts, sections, schedules, appendices, flags, stopped = build_structure(pages_data)
 
     return {
         "title":       meta.get("title", ""),
@@ -634,8 +667,10 @@ def build_document(docling_json):
         "total_pages": docling_json.get("total_pages"),
         "parts":       parts,
         "sections":    sections,
+        "schedules":   schedules,
         "appendices":  appendices,
         "flags":       flags,
+        "stopped":     stopped,
     }
 
 
@@ -673,9 +708,11 @@ def extract_act(pdf_path, output_path=None, verbose=True):
         json.dump(act, f, indent=2, ensure_ascii=False)
 
     if verbose:
-        flag_str = f"  flags: {act['flags']}" if act['flags'] else ""
+        flag_str    = f"  flags: {act['flags']}" if act['flags'] else ""
+        stopped_str = "  [STOPPED — unknown pattern, needs parser support]" if act.get("stopped") else ""
         print(f"\n→ {len(act['sections'])} sections, {len(act['parts'])} parts, "
-              f"{len(act['appendices'])} appendix chunk(s)  →  {output_path}{flag_str}")
+              f"{len(act.get('schedules', []))} schedule(s), "
+              f"{len(act['appendices'])} appendix chunk(s)  →  {output_path}{flag_str}{stopped_str}")
 
     return act
 
