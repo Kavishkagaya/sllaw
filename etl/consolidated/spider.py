@@ -51,8 +51,9 @@ load_dotenv()
 sys.path.insert(0, str(Path(__file__).parent))
 from extract_statute import (
     build_pdf_converter,
+    build_document_pdf,
     extract_statute,
-    extract_statute_pdf,
+    run_docling_pass1,
 )
 
 # ── Collections registry ──────────────────────────────────────────────────────
@@ -299,7 +300,7 @@ def extract_one(conn, session, statute) -> bool:
     return True
 
 
-# ── Phase 2b — Download & Extract PDF ────────────────────────────────────────
+# ── Phase 2b — Download & Extract PDF (two-pass) ─────────────────────────────
 
 def _download_pdf(session, url: str, dest: Path) -> bool:
     try:
@@ -311,7 +312,8 @@ def _download_pdf(session, url: str, dest: Path) -> bool:
         return False
 
 
-def extract_one_pdf(conn, session, converter, statute, pdf_dir: Path) -> bool:
+def extract_pass1_pdf(conn, session, converter, statute, pdf_dir: Path) -> bool:
+    """Pass 1: download PDF, run docling, store docling_json → status docling_done."""
     statute_id = statute["id"]
     url        = statute["source_url"]
     filename   = Path(url.split("/")[-1])
@@ -325,23 +327,68 @@ def extract_one_pdf(conn, session, converter, statute, pdf_dir: Path) -> bool:
         time.sleep(CRAWL_DELAY)
 
     try:
-        data = extract_statute_pdf(converter, str(dest))
+        docling_json = run_docling_pass1(converter, str(dest))
     except Exception as exc:
-        mark_failed(conn, statute_id, f"pdf extract: {exc}")
+        mark_failed(conn, statute_id, f"docling pass1: {exc}")
         dest.unlink(missing_ok=True)
+        return False
+
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE consolidated_statutes SET
+                    docling_json = %s,
+                    status       = 'docling_done',
+                    error        = NULL,
+                    updated_at   = NOW()
+                WHERE id = %s
+                """,
+                (json.dumps(docling_json), statute_id),
+            )
+        conn.commit()
+    except Exception as exc:
+        conn.rollback()
+        mark_failed(conn, statute_id, f"db write pass1: {exc}")
+        dest.unlink(missing_ok=True)
+        return False
+
+    dest.unlink(missing_ok=True)
+    return True
+
+
+def extract_pass2(conn, statute) -> bool:
+    """Pass 2: build structured doc from stored docling_json → status extracted/flagged."""
+    statute_id   = statute["id"]
+    docling_json = statute.get("docling_json")
+    if docling_json is None:
+        mark_failed(conn, statute_id, "pass2: no docling_json stored")
+        return False
+
+    try:
+        data = build_document_pdf(docling_json)
+    except Exception as exc:
+        mark_failed(conn, statute_id, f"pass2 build: {exc}")
         return False
 
     parts    = data["parts"]
     sections = data["sections"]
+    stopped  = data.get("stopped", False)
+    flags    = data.get("flags", [])
+
+    final_status = "flagged" if stopped else "extracted"
 
     doc = {
         "title":        data["title"],
         "description":  data["description"],
         "enacted_date": data["enacted_date"],
         "is_repealed":  data["is_repealed"],
-        "source_url":   url,
+        "source_url":   statute["source_url"],
         "parts":        parts,
         "sections":     sections,
+        "schedules":    data.get("schedules", []),
+        "flags":        flags,
+        "stopped":      stopped,
     }
 
     try:
@@ -355,8 +402,9 @@ def extract_one_pdf(conn, session, converter, statute, pdf_dir: Path) -> bool:
                     is_repealed    = %s,
                     parts_count    = %s,
                     sections_count = %s,
+                    doc_json       = %s,
                     raw_json       = %s,
-                    status         = 'extracted',
+                    status         = %s,
                     error          = NULL,
                     updated_at     = NOW()
                 WHERE id = %s
@@ -369,6 +417,8 @@ def extract_one_pdf(conn, session, converter, statute, pdf_dir: Path) -> bool:
                     len(parts),
                     len(sections),
                     json.dumps(doc),
+                    json.dumps(doc),
+                    final_status,
                     statute_id,
                 ),
             )
@@ -396,16 +446,17 @@ def extract_one_pdf(conn, session, converter, statute, pdf_dir: Path) -> bool:
                             body        = EXCLUDED.body
                     """,
                     (statute_id, num_str, s.get("short_title"),
-                     s.get("part"), s.get("body", "")),
+                     s.get("part"), json.dumps(s.get("body", []))),
                 )
         conn.commit()
     except Exception as exc:
         conn.rollback()
-        mark_failed(conn, statute_id, f"db write: {exc}")
-        dest.unlink(missing_ok=True)
+        mark_failed(conn, statute_id, f"db write pass2: {exc}")
         return False
 
-    dest.unlink(missing_ok=True)
+    if stopped and flags:
+        log.warning("  [flagged] %s  flags: %s",
+                    statute["source_url"].split("/")[-1], flags[:3])
     return True
 
 
@@ -418,6 +469,8 @@ def parse_args():
                    help=f"Which collection to crawl: {list(COLLECTIONS)}")
     p.add_argument("--discover-only",    action="store_true")
     p.add_argument("--extract-only",     action="store_true")
+    p.add_argument("--build-only",       action="store_true",
+                   help="Run pass 2 only (structure build) on docling_done and flagged PDFs")
     p.add_argument("--retry-failed",     action="store_true")
     p.add_argument("--skip-html-dupes",  action="store_true",
                    help="Skip HTML URLs already indexed from any other collection")
@@ -443,21 +496,21 @@ def main():
         conn.close()
         return
 
-    if not args.collection:
+    if not args.collection and not args.build_only:
         log.error("--collection is required (choices: %s)", list(COLLECTIONS))
         conn.close()
         sys.exit(1)
 
-    collection = args.collection
-    index_url  = COLLECTIONS[collection]
+    collection = args.collection or ""
+    index_url  = COLLECTIONS.get(collection, "")
     pdf_dir    = Path(args.pdf_dir).expanduser().resolve()
     pdf_dir.mkdir(parents=True, exist_ok=True)
 
-    do_discover = not args.extract_only
+    do_discover = not args.extract_only and not args.build_only
     do_extract  = not args.discover_only
 
     # ── Phase 1: Discovery ────────────────────────────────────────────────────
-    if do_discover:
+    if do_discover and collection and index_url:
         log.info("[discover] collection=%s  index=%s", collection, index_url)
         try:
             inserted, total = discover(
@@ -471,7 +524,7 @@ def main():
             sys.exit(1)
 
     # ── Phase 2a: Fetch & Extract HTML statutes ───────────────────────────────
-    if do_extract:
+    if do_extract and collection:
         want = ["discovered"] + (["failed"] if args.retry_failed else [])
 
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
@@ -494,8 +547,8 @@ def main():
             )
             time.sleep(CRAWL_DELAY)
 
-    # ── Phase 2b: Download & Extract PDF statutes (docling) ───────────────────
-    if do_extract:
+    # ── Phase 2b: Pass 1 — Download & run docling on PDFs ────────────────────
+    if do_extract and not args.build_only and collection:
         want = ["discovered"] + (["failed"] if args.retry_failed else [])
 
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
@@ -508,14 +561,42 @@ def main():
             pdf_pending = cur.fetchall()
 
         if pdf_pending:
-            log.info("[extract-pdf] %d PDF statutes to process  → %s",
-                     len(pdf_pending), pdf_dir)
+            log.info("[pass1-pdf] %d PDF statutes  → %s", len(pdf_pending), pdf_dir)
             converter = build_pdf_converter()
             for i, statute in enumerate(pdf_pending, 1):
-                ok = extract_one_pdf(conn, session, converter, statute, pdf_dir)
+                ok = extract_pass1_pdf(conn, session, converter, statute, pdf_dir)
                 log.info(
                     "  [%4d/%d] %-45s  %s",
                     i, len(pdf_pending),
+                    statute["source_url"].split("/")[-1],
+                    "pass1-ok" if ok else "FAIL",
+                )
+
+    # ── Phase 2c: Pass 2 — Build structure from docling_json ─────────────────
+    if do_extract or args.build_only:
+        want2 = ["docling_done", "flagged"]
+        if collection:
+            q2      = ("SELECT * FROM consolidated_statutes"
+                       " WHERE collection = %s AND source_type = 'pdf'"
+                       " AND status = ANY(%s) ORDER BY id")
+            params2 = (collection, want2)
+        else:
+            q2      = ("SELECT * FROM consolidated_statutes"
+                       " WHERE source_type = 'pdf'"
+                       " AND status = ANY(%s) ORDER BY id")
+            params2 = (want2,)
+
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(q2, params2)
+            build_pending = cur.fetchall()
+
+        if build_pending:
+            log.info("[pass2-build] %d PDF statutes to structure", len(build_pending))
+            for i, statute in enumerate(build_pending, 1):
+                ok = extract_pass2(conn, statute)
+                log.info(
+                    "  [%4d/%d] %-45s  %s",
+                    i, len(build_pending),
                     statute["source_url"].split("/")[-1],
                     "ok" if ok else "FAIL",
                 )

@@ -33,13 +33,20 @@ try:
         cells_text as _cells_text,
         cells_y_span as _cells_y_span,
         cluster_label as _cluster_label,
+        dcell_cx as _dcell_cx,
+        dcells_text as _dcells_text,
         detect_page_type as _detect_page_type,
+        detect_page_type_d as _detect_page_type_d,
         extract_cover_metadata as _extract_cover_metadata,
+        extract_cover_metadata_d as _extract_cover_metadata_d,
         find_column_gap as _find_column_gap,
+        find_column_gap_d as _find_column_gap_d,
         is_header_footer as _is_header_footer,
         page_elements as _page_elements,
+        page_elements_d as _page_elements_d,
         RE_INTEGER as _RE_INTEGER,
         section_full_text as _section_full_text,
+        serialize_clusters as _serialize_clusters,
     )
     _PDF_AVAILABLE = True
 except ImportError:
@@ -231,11 +238,156 @@ def _page_elements_at(clusters, gap_center: float):
     return main_elems, marg_elems
 
 
+def _page_elements_at_d(clusters_d: list, gap_center: float):
+    """Dict-cluster version of _page_elements_at with a fixed gap_center."""
+    body = [cl for cl in clusters_d if cl["label"] not in ("page_header", "page_footer")]
+
+    left_n  = sum(1 for cl in body for c in cl["cells"] if _dcell_cx(c) < gap_center)
+    right_n = sum(1 for cl in body for c in cl["cells"] if _dcell_cx(c) >= gap_center)
+    main_is_left = left_n >= right_n
+
+    main_elems, marg_elems = [], []
+    for cl in sorted(body, key=lambda c: c["bbox"]["t"]):
+        left_cells  = [c for c in cl["cells"] if _dcell_cx(c) < gap_center]
+        right_cells = [c for c in cl["cells"] if _dcell_cx(c) >= gap_center]
+        main_cells  = left_cells  if main_is_left else right_cells
+        marg_cells  = right_cells if main_is_left else left_cells
+        lbl         = cl["label"]
+
+        if main_cells:
+            t = _dcells_text(main_cells)
+            if t:
+                ys = [y for c in main_cells for y in (c["y0"], c["y1"])]
+                main_elems.append({"text": t, "y_top": min(ys), "y_bot": max(ys), "label": lbl})
+
+        if marg_cells:
+            t = _dcells_text(marg_cells)
+            if t and not _RE_INTEGER.match(t.strip()) and len(t.strip()) > 2:
+                ys = [y for c in marg_cells for y in (c["y0"], c["y1"])]
+                marg_elems.append({"text": t, "y_top": min(ys), "y_bot": max(ys)})
+
+    return main_elems, marg_elems
+
+
 def build_pdf_converter():
     """Create and return the docling DocumentConverter (call once, reuse)."""
     if not _PDF_AVAILABLE:
         raise RuntimeError("docling / pypdfium2 not installed; cannot extract PDFs")
     return _build_converter()
+
+
+def run_docling_pass1(converter, pdf_path: str) -> dict:
+    """
+    Pass 1: run docling on a PDF and return docling_json (serialised clusters).
+    Same format as the acts pipeline — can be stored and reused in pass 2.
+    """
+    if not _PDF_AVAILABLE:
+        raise RuntimeError("docling / pypdfium2 not installed; cannot extract PDFs")
+    path   = Path(pdf_path)
+    result = converter.convert(str(path.resolve()))
+    total  = len(pdfium.PdfDocument(str(path)))
+    pages  = []
+    for pg_idx in range(total):
+        if pg_idx >= len(result.pages):
+            break
+        clusters = result.pages[pg_idx].predictions.layout.clusters
+        ptype    = _detect_page_type(clusters)
+        pages.append({
+            "index":     pg_idx,
+            "page_type": ptype,
+            "clusters":  _serialize_clusters(clusters),
+        })
+    return {"total_pages": total, "pages": pages, "source_type": "pdf"}
+
+
+def build_document_pdf(docling_json: dict) -> dict:
+    """
+    Pass 2: build structured statute doc from stored docling_json (no PDF needed).
+    Uses global median gap centre for column split, same logic as the live path.
+    Returns same shape as extract_statute() plus flags/stopped/schedules.
+    """
+    if not _PDF_AVAILABLE:
+        raise RuntimeError("docling not available")
+    from statistics import median
+
+    pages_raw = docling_json.get("pages", [])
+
+    # Recompute global gap from stored dict clusters
+    gap_centers: list[float] = []
+    for pg in pages_raw:
+        body = [cl for cl in pg["clusters"]
+                if cl["label"] not in ("page_header", "page_footer")]
+        gap = _find_column_gap_d(body)
+        if gap:
+            gap_centers.append(gap[0])
+    global_gap = median(gap_centers) if gap_centers else None
+
+    _RE_PART_JOIN = re.compile(r'^(PART)([IVXLC][A-Z]*)', re.IGNORECASE)
+
+    def fix_part(text: str) -> str:
+        return _RE_PART_JOIN.sub(lambda m: f"{m.group(1)} {m.group(2)}", text)
+
+    meta: dict = {}
+    pages_data: list = []
+
+    for pg in pages_raw:
+        clusters_d = pg["clusters"]
+        ptype      = pg.get("page_type") or _detect_page_type_d(clusters_d)
+
+        if pg["index"] == 0:
+            meta.update(_extract_cover_metadata_d(clusters_d))
+            for cl in clusters_d:
+                if cl.get("label") == "section_header":
+                    t = _dcells_text(cl["cells"]).strip()
+                    if t and len(t) < 100:
+                        meta["title"] = t
+                        break
+
+        if ptype == "sparse":
+            pages_data.append(([], []))
+        elif global_gap is not None:
+            pages_data.append(_page_elements_at_d(clusters_d, global_gap))
+        else:
+            pages_data.append(_page_elements_d(clusters_d))
+
+    # Fix PARTI → PART I in element texts
+    pages_data = [
+        ([{**e, "text": fix_part(e["text"])} for e in main], marg)
+        for main, marg in pages_data
+    ]
+
+    parts_raw, sections_raw, schedules_raw, appendices_raw, flags, stopped = \
+        _build_structure(pages_data)
+
+    parts = [
+        {
+            "number":   p["number"],
+            "title":    p.get("title", ""),
+            "sections": [str(s) for s in p.get("sections", [])],
+            "type":     p.get("type", "part"),
+        }
+        for p in parts_raw
+    ]
+    sections = {
+        num_str: {
+            "short_title": s.get("short_title"),
+            "part":        s.get("part"),
+            "body":        s.get("body", []),   # structured nodes, not flat text
+        }
+        for num_str, s in sections_raw.items()
+    }
+
+    return {
+        "title":        meta.get("title", ""),
+        "description":  "",
+        "enacted_date": meta.get("certified"),
+        "is_repealed":  False,
+        "parts":        parts,
+        "sections":     sections,
+        "schedules":    schedules_raw,
+        "flags":        flags,
+        "stopped":      stopped,
+    }
 
 
 def extract_statute_pdf(converter, pdf_path: str) -> dict:
@@ -304,7 +456,8 @@ def extract_statute_pdf(converter, pdf_path: str) -> dict:
         for main, marg in pages_data
     ]
 
-    parts_raw, sections_raw = _build_structure(pages_data)
+    parts_raw, sections_raw, schedules_raw, _appendices, flags, stopped = \
+        _build_structure(pages_data)
 
     parts = [
         {
@@ -331,4 +484,7 @@ def extract_statute_pdf(converter, pdf_path: str) -> dict:
         "is_repealed":  False,
         "parts":        parts,
         "sections":     sections,
+        "schedules":    schedules_raw,
+        "flags":        flags,
+        "stopped":      stopped,
     }

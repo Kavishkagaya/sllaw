@@ -33,7 +33,8 @@ from docling.document_converter import DocumentConverter, PdfFormatOption
 
 # ── Pattern matchers ──────────────────────────────────────────────────────────
 
-RE_SECTION   = re.compile(r'^(\d+)\.\s*(.*)', re.DOTALL)
+RE_SECTION       = re.compile(r'^(\d+)\.\s*(.*)', re.DOTALL)
+RE_SECTION_ALPHA = re.compile(r'^(\d+[A-Za-z]+)\.\s*(.*)', re.DOTALL)  # e.g. 1A. 2B.
 RE_SUBSECT   = re.compile(r'^\((\d+)\)\s*(.*)', re.DOTALL)
 RE_LIST_ITEM = re.compile(r'^\(([a-z])\)\s*(.*)', re.DOTALL)
 RE_SUB_ITEM  = re.compile(r'^\(([ivxlcdm]+)\)\s*(.*)', re.DOTALL | re.IGNORECASE)
@@ -53,10 +54,9 @@ RE_PRINT_REF = re.compile(r'^\d+\s*[—–-]\s*PP\s*\d+')
 
 # Structural patterns we don't yet handle — trigger flag-and-stop in build_structure
 RE_STRUCTURAL_ALARM = re.compile(
-    r'^(\d+[A-Za-z])\.\s'           # alphanumeric section: 1A. 2B.
-    r'|^SECTION\s+\d'               # written-out SECTION 5
-    r'|^ARTICLE\s+\d'               # ARTICLE heading
-    r'|^DIVISION\s+[IVXLC\d]',     # DIVISION heading
+    r'^SECTION\s+\d'               # written-out SECTION 5
+    r'|^ARTICLE\s+\d'              # ARTICLE heading
+    r'|^DIVISION\s+[IVXLC\d]',    # DIVISION heading
     re.IGNORECASE,
 )
 
@@ -336,6 +336,10 @@ def classify(text):
     if m:
         return 'section_opener', m.group(1), m.group(2).strip()
 
+    m = RE_SECTION_ALPHA.match(t)
+    if m:
+        return 'section_opener', m.group(1), m.group(2).strip()  # num is e.g. '1A'
+
     m = RE_PART.match(t)
     if m:
         return 'part_header', m.group(1).upper(), m.group(2).strip()
@@ -439,9 +443,13 @@ def build_structure(pages_data):
             _seen_sec_nums[num] = part
             sections[key] = current_section
 
-        if _max_sec_num > 10 and num < _max_sec_num * 0.1:
-            flags.append(f"section_regression:{_max_sec_num}_to_{num}")
-        _max_sec_num = max(_max_sec_num, num)
+        try:
+            num_int = int(num)
+            if _max_sec_num > 10 and num_int < _max_sec_num * 0.1:
+                flags.append(f"section_regression:{_max_sec_num}_to_{num_int}")
+            _max_sec_num = max(_max_sec_num, num_int)
+        except (ValueError, TypeError):
+            pass  # alphanumeric section number — skip regression check
         current_section = None
 
     def add_to_body(node):
@@ -528,12 +536,16 @@ def build_structure(pages_data):
             elif kind == 'section_opener':
                 flush()
                 short = marginal_at(marg_elems, elem['y_top'], elem['y_bot'])
+                try:
+                    sec_num = int(num)
+                except (ValueError, TypeError):
+                    sec_num = num  # alphanumeric e.g. '1A'
                 current_section = open_section(
-                    int(num), short,
+                    sec_num, short,
                     current_part['number'] if current_part else None,
                 )
                 if current_part:
-                    current_part['sections'].append(int(num))
+                    current_part['sections'].append(sec_num)
 
                 if rest:
                     k2, n2, r2 = classify(rest)
