@@ -52,6 +52,7 @@ from extract_act import (
     build_document,
     detect_page_type,
     serialize_clusters,
+    serialize_table,
 )
 
 # ── Constants ─────────────────────────────────────────────────────────────────
@@ -111,6 +112,16 @@ def fetch_acts(conn, statuses, years=None):
                 "SELECT * FROM acts WHERE status = ANY(%s) ORDER BY year, act_number",
                 (list(statuses),),
             )
+        return cur.fetchall()
+
+
+def fetch_acts_missing_docling(conn):
+    """Return all acts where docling_json was never stored (old single-pass pipeline)."""
+    with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+        cur.execute(
+            "SELECT * FROM acts WHERE docling_json IS NULL AND pdf_url IS NOT NULL"
+            " ORDER BY year, act_number"
+        )
         return cur.fetchall()
 
 
@@ -253,7 +264,8 @@ def extract_pass1(conn, converter, act):
                 "clusters":  serialize_clusters(clusters),
             })
 
-        docling_json = {"total_pages": total_pages, "pages": pages}
+        tables = [serialize_table(t) for t in result.document.tables]
+        docling_json = {"total_pages": total_pages, "pages": pages, "tables": tables}
 
     except Exception as exc:
         mark_failed(conn, act_id, f"docling: {exc}")
@@ -338,6 +350,7 @@ def extract_pass2(conn, act):
 
 def parse_args():
     p   = argparse.ArgumentParser(description="Sri Lanka Legal Acts Spider")
+    p.add_argument("--act-id",  type=int, default=None, help="Process a single act by DB id (full pipeline)")
     grp = p.add_mutually_exclusive_group()
     grp.add_argument("--year",  type=int, help="Single year, e.g. --year 2024")
     grp.add_argument("--years", type=str, help="Range, e.g. --years 2010-2015")
@@ -349,7 +362,10 @@ def parse_args():
                    help="Pass 1 + Pass 2 on already-downloaded PDFs")
     p.add_argument("--build-only",    action="store_true",
                    help="Pass 2 only: rebuild doc_json from existing docling_json (no PDF)")
+    p.add_argument("--ocr",           action="store_true", help="Enable OCR in docling (GPU recommended)")
     p.add_argument("--retry-failed",  action="store_true")
+    p.add_argument("--reindex",       action="store_true",
+                   help="Re-download + re-docling acts that have no docling_json stored")
     p.add_argument("--stats",         action="store_true")
     return p.parse_args()
 
@@ -375,12 +391,39 @@ def main():
         conn.close()
         return
 
+    if args.act_id:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute("SELECT * FROM acts WHERE id=%s", (args.act_id,))
+            act = cur.fetchone()
+        if not act:
+            sys.exit(f"No act with id={args.act_id}")
+        session   = requests.Session()
+        session.headers["User-Agent"] = "sllaw-spider/1.0 (legal research, non-commercial)"
+        converter = build_converter(ocr=args.ocr)
+        pdf_dir   = Path(args.pdf_dir).expanduser().resolve()
+        log.info("[act-id] Processing act %s (id=%d)", act["act_number"], act["id"])
+        ok = download_pdf(conn, session, act, pdf_dir)
+        if not ok:
+            sys.exit("Download failed")
+        act = _refetch(conn, act["id"])
+        ok = extract_pass1(conn, converter, act)
+        if not ok:
+            sys.exit("Pass 1 failed")
+        act = _refetch(conn, act["id"])
+        ok = extract_pass2(conn, act)
+        if ok and act.get("pdf_path"):
+            Path(act["pdf_path"]).unlink(missing_ok=True)
+        log.info("Done — %s", "ok" if ok else "pass2 FAIL")
+        conn.close()
+        return
+
     years = resolve_years(args)
 
-    do_discover = not (args.download_only or args.extract_only or args.build_only)
-    do_download = not (args.discover_only or args.extract_only or args.build_only)
-    do_extract  = not (args.discover_only or args.download_only or args.build_only)
+    do_discover = not (args.download_only or args.extract_only or args.build_only or args.reindex)
+    do_download = not (args.discover_only or args.extract_only or args.build_only or args.reindex)
+    do_extract  = not (args.discover_only or args.download_only or args.build_only or args.reindex)
     do_build    = args.build_only
+    do_reindex  = args.reindex
 
     session = requests.Session()
     session.headers["User-Agent"] = "sllaw-spider/1.0 (legal research, non-commercial)"
@@ -401,7 +444,7 @@ def main():
         want    = ["discovered", "downloaded"] + (["failed"] if args.retry_failed else [])
         pending = list(fetch_acts(conn, want, years))
         log.info("[pipeline] %d acts to process  →  pdf tmp: %s", len(pending), pdf_dir)
-        converter = build_converter()
+        converter = build_converter(ocr=args.ocr)
         for i, act in enumerate(pending, 1):
             conn  = reconnect_if_needed(conn)
             label = act["act_number"]
@@ -455,7 +498,7 @@ def main():
         want      = ["downloaded"] + (["failed"] if args.retry_failed else [])
         pending   = list(fetch_acts(conn, want, years))
         log.info("[extract]  %d PDFs to process  (pass1 + pass2)", len(pending))
-        converter = build_converter()
+        converter = build_converter(ocr=args.ocr)
         for i, act in enumerate(pending, 1):
             conn = reconnect_if_needed(conn)
 
@@ -484,6 +527,43 @@ def main():
             ok   = extract_pass2(conn, act)
             log.info("  [%4d/%d] %-12s  %s", i, len(pending),
                      act["act_number"], "ok" if ok else "FAIL")
+
+    elif do_reindex:
+        pending = list(fetch_acts_missing_docling(conn))
+        log.info("[reindex]  %d acts missing docling_json  →  pdf tmp: %s", len(pending), pdf_dir)
+        converter = build_converter(ocr=args.ocr)
+        for i, act in enumerate(pending, 1):
+            conn  = reconnect_if_needed(conn)
+            label = act["act_number"]
+            try:
+                ok = download_pdf(conn, session, act, pdf_dir)
+                if not ok:
+                    log.info("  [%4d/%d] %-12s  download FAIL", i, len(pending), label)
+                    time.sleep(CRAWL_DELAY)
+                    continue
+                act = _refetch(conn, act["id"])
+                time.sleep(CRAWL_DELAY)
+
+                ok = extract_pass1(conn, converter, act)
+                if not ok:
+                    log.info("  [%4d/%d] %-12s  pass1 FAIL", i, len(pending), label)
+                    continue
+                act = _refetch(conn, act["id"])
+
+                ok = extract_pass2(conn, act)
+                log.info("  [%4d/%d] %-12s  %s", i, len(pending), label,
+                         "ok" if ok else "pass2 FAIL")
+
+                if act.get("pdf_path"):
+                    try:
+                        Path(act["pdf_path"]).unlink(missing_ok=True)
+                    except Exception:
+                        pass
+
+            except Exception as exc:
+                log.error("  [%4d/%d] %-12s  UNCAUGHT: %s", i, len(pending), label, exc)
+                conn = reconnect_if_needed(conn)
+                mark_failed(conn, act["id"], f"uncaught: {exc}")
 
     print_stats(conn)
     conn.close()

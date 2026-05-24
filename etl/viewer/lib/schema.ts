@@ -51,6 +51,7 @@ export const consolidatedStatutes = pgTable("consolidated_statutes", {
   collection: text("collection").notNull(),
   sourceUrl: text("source_url").notNull(),
   sourceType: text("source_type").notNull().default("html"),
+  htmlCode: text("html_code"),
   indexTitle: text("index_title").notNull(),
   isRepealed: boolean("is_repealed").notNull().default(false),
   title: text("title"),
@@ -59,6 +60,8 @@ export const consolidatedStatutes = pgTable("consolidated_statutes", {
   partsCount: integer("parts_count"),
   sectionsCount: integer("sections_count"),
   rawJson: jsonb("raw_json"),
+  doclingJson: jsonb("docling_json"),
+  docJson: jsonb("doc_json"),
   status: text("status").notNull(),
   error: text("error"),
 });

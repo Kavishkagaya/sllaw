@@ -28,7 +28,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 sys.path.insert(0, str(Path(__file__).parent))
-from extract_act import build_converter, detect_page_type, serialize_clusters
+from extract_act import build_converter, detect_page_type, serialize_clusters, serialize_table
 
 log = logging.getLogger("stage1")
 
@@ -67,7 +67,8 @@ def _run_pdf(path: Path) -> dict:
             "page_type": ptype,
             "clusters":  serialize_clusters(clusters),
         })
-    return {"total_pages": total, "pages": pages, "source_type": "pdf"}
+    tables = [serialize_table(t) for t in result.document.tables]
+    return {"total_pages": total, "pages": pages, "tables": tables, "source_type": "pdf"}
 
 
 def _run_html(path: Path) -> dict:

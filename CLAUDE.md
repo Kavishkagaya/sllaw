@@ -23,19 +23,24 @@ Work that needs Surya or long-running spiders runs on **ada** — use the `/ada-
 
 ## ETL pipelines
 
+See [`etl/CLAUDE.md`](etl/CLAUDE.md) for the full pipeline architecture, `doc_json` schema, parser internals, and common tasks.
+
 ### Acts (`etl/acts/`)
 
-Scrapes `documents.gov.lk/view/act/` for acts from 2006 onwards.
+Scrapes `documents.gov.lk/view/act/` for acts from 2006 onwards. Two-stage pipeline:
 
 ```bash
 .venv/bin/python3 etl/migrate.py
-.venv/bin/python3 etl/acts/spider.py                   # all years
-.venv/bin/python3 etl/acts/spider.py --year 2024       # single year
+.venv/bin/python3 etl/acts/spider.py                   # stage 1: all years
+.venv/bin/python3 etl/acts/spider.py --year 2024
+.venv/bin/python3 etl/acts/stage2.py --all             # stage 2: structure extraction
+.venv/bin/python3 etl/acts/stage2.py --flagged         # re-parse stopped acts
 .venv/bin/python3 etl/acts/spider.py --stats
 ```
 
-**DB tables:** `acts`, `parts`, `sections`  
-**Pipeline:** discover → download PDF → docling extract → delete PDF
+**DB tables:** `acts`  
+**Stage 1:** discover → download PDF → docling serialise → delete PDF → `status=docling_done`  
+**Stage 2:** `docling_json` → structured `doc_json` → `status=extracted`
 
 ### Consolidated Statutes (`etl/consolidated/`)
 
@@ -47,30 +52,21 @@ Scrapes lankalaw.net for consolidated statutes. Two collections:
 | `2024` | `lankalaw.net/…/consolidated-acts-2024/` | HTML + PDF | 85 HTML + 304 PDF |
 
 ```bash
-# 2006 collection (HTML only, ~25 min)
 .venv/bin/python3 etl/consolidated/spider.py --collection 2006
-
-# 2024 collection — skip HTML already scraped from 2006
 .venv/bin/python3 etl/consolidated/spider.py --collection 2024 --skip-html-dupes
-
-# Stats across all collections
 .venv/bin/python3 etl/consolidated/spider.py --stats
 ```
 
-**DB tables:** `consolidated_statutes` (with `collection` + `source_type` columns), `consolidated_parts`, `consolidated_sections`
+**DB tables:** `consolidated_statutes`, `consolidated_parts`, `consolidated_sections`
 
 **HTML pipeline:** fetch HTML → BeautifulSoup → store  
 **PDF pipeline:** download → docling (global column-gap detection) → store → delete
-
-#### PDF extraction details
 
 Consolidated PDFs use a two-column layout (marginal notes left, body right) with gap centre ≈ 159 pt. A global pass across all pages is done first to find the median gap — individual pages often have stray cells bridging the gap, so per-page detection alone fails on ~70% of pages.
 
 Known limitations:
 - Date is always `None` (no "Certified on" line in consolidated PDFs)
 - Alphanumeric amendment sections (e.g. `1A.`, `1B.`) are absorbed into the preceding numeric section's body
-
-**DB tables:** `consolidated_statutes`, `consolidated_parts`, `consolidated_sections`
 
 ## Document Viewer (`etl/viewer/`)
 

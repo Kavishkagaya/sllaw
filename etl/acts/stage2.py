@@ -74,7 +74,10 @@ def process_act(conn, act) -> bool:
             conn.rollback()
         return False
 
-    final_status = "flagged" if doc.get("stopped") else "extracted"
+    # doc.get("stopped") only exists in old doc_json written before this parser
+    # version; new runs never set it.  Both cases land in "extracted" now since
+    # the parser no longer hard-stops — unknown content goes to doc["rest"].
+    final_status = "stopped" if doc.get("stopped") else "extracted"
 
     try:
         with conn.cursor() as cur:
@@ -142,28 +145,30 @@ def batch_process(conn, statuses: list[str], years=None):
         acts = cur.fetchall()
 
     log.info("[stage2] %d acts to process", len(acts))
-    ok_n = flag_n = fail_n = 0
+    ok_n = rest_n = fail_n = 0
 
     for i, act in enumerate(acts, 1):
         ok     = process_act(conn, act)
         status, reasons = _act_status(conn, act["id"])
 
-        if status == "flagged":
-            label  = f"FLAGGED  {reasons[-1][:60] if reasons else '?'}"
-            flag_n += 1
-        elif ok:
-            label = "ok"
-            ok_n += 1
-        else:
+        rest_flags = [r for r in reasons if r.startswith("rest:")]
+        if not ok:
             label  = "FAIL"
             fail_n += 1
+        elif rest_flags:
+            label  = f"ok+rest  {rest_flags[0][:55]}"
+            ok_n  += 1
+            rest_n += 1
+        else:
+            label = "ok"
+            ok_n += 1
 
         log.info("  [%4d/%d] %-12s  %s", i, len(acts), act["act_number"], label)
 
-    log.info("[stage2] done  %d extracted / %d flagged / %d failed",
-             ok_n, flag_n, fail_n)
-    if flag_n:
-        log.info("  Add pattern support to extract_act.py then rerun with --flagged")
+    log.info("[stage2] done  %d extracted (%d with rest content) / %d failed",
+             ok_n, rest_n, fail_n)
+    if rest_n:
+        log.info("  Inspect rest content: check flag_reasons starting with 'rest:'")
 
 
 # ── CLI ───────────────────────────────────────────────────────────────────────
@@ -173,7 +178,7 @@ def parse_args():
     g = p.add_mutually_exclusive_group()
     g.add_argument("--act-id",  type=int, help="Process a single act by DB id")
     g.add_argument("--all",     action="store_true", help="Process all docling_done acts")
-    g.add_argument("--flagged", action="store_true", help="Reprocess flagged acts")
+    g.add_argument("--flagged", action="store_true", help="Reprocess stopped/flagged acts (status=stopped or status=flagged)")
     p.add_argument("--year",    type=int, help="Limit to a single year (use with --all)")
     return p.parse_args()
 
@@ -198,12 +203,14 @@ def main():
             sys.exit(f"No act with id={args.act_id}")
         ok = process_act(conn, act)
         status, reasons = _act_status(conn, args.act_id)
-        if status == "flagged":
-            log.warning("FLAGGED: %s", reasons)
+        rest_flags = [r for r in reasons if r.startswith("rest:")]
+        if rest_flags:
+            log.warning("rest content: %s", rest_flags)
         conn.close()
         sys.exit(0 if ok else 1)
 
-    statuses = ["flagged"] if args.flagged else ["docling_done", "flagged"]
+    # "stopped" = new name; "flagged" = old status value before migration
+    statuses = ["stopped", "flagged"] if args.flagged else ["docling_done"]
     years    = [args.year] if args.year else None
     batch_process(conn, statuses, years)
     conn.close()

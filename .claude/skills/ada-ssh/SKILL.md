@@ -112,19 +112,23 @@ Then prefix commands with `CUDA_VISIBLE_DEVICES=<best_gpu>`.
 
 ## Running long jobs
 
-For jobs that take more than a minute, use `nohup` and poll the log:
+**Always use tmux** for any job that takes more than a few seconds. This ensures the job survives SSH disconnects and can be inspected later.
 
 ```python
-run(child, f'cd ~/sllaw_layout && CUDA_VISIBLE_DEVICES={gpu} nohup ~/miniconda3/envs/sllaw/bin/python script.py > run.log 2>&1 & echo "PID: $!"')
-# poll until done
-import time
-while True:
-    log = run(child, 'tail -5 ~/sllaw_layout/run.log')
-    print(log)
-    if 'Done.' in log or 'Error' in log or 'Traceback' in log:
-        break
-    time.sleep(10)
+# Start job in a named tmux session
+run(child, "tmux new-session -d -s <session_name> '~/miniconda3/envs/sllaw/bin/python ~/sllaw/script.py > ~/sllaw/logs/run.log 2>&1'")
+
+# Check status via pane capture
+out = run(child, 'tmux capture-pane -t <session_name> -p')
+
+# Or tail the log file
+out = run(child, 'tail -20 ~/sllaw/logs/run.log')
+
+# Kill a session
+run(child, 'tmux kill-session -t <session_name> 2>/dev/null; true')
 ```
+
+Never use `nohup ... &` — always use tmux instead.
 
 ## Retrieving output images
 
@@ -139,7 +143,7 @@ scp_from_ada('~/sllaw_layout/layout_output_docling_gpu/*.png', '/home/kavishka/s
 1. `connect_ada()` → get child (reads password from `ADA_PASSWORD` env var)
 2. Check GPU free memory, pick least-used GPU
 3. `scp_to_ada(script, '~/sllaw_layout/script.py')` if needed
-4. `run(child, 'nohup ... & echo PID: $!')` for long jobs
-5. Poll log until done
+4. `run(child, 'tmux new-session -d -s <name> "..."')` — always use tmux for long jobs
+5. Check progress: `run(child, 'tmux capture-pane -t <name> -p')`
 6. `scp_from_ada(results, local_dir)` to retrieve outputs
 7. `close(child)`

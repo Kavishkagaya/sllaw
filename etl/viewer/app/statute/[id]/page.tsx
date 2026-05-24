@@ -33,7 +33,7 @@ export default async function StatutePage({ params }: PageProps) {
     .where(eq(consolidatedSections.statuteId, statuteId))
     .orderBy(consolidatedSections.id);
 
-  const docJson = statute.rawJson ?? {
+  const docJson = statute.docJson ?? statute.rawJson ?? {
     title: statute.title || statute.indexTitle,
     collection: statute.collection,
     source_type: statute.sourceType,
