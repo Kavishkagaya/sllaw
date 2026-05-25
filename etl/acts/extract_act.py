@@ -69,6 +69,27 @@ RE_STRUCTURAL_ALARM = re.compile(
     re.IGNORECASE,
 )
 
+# Amendment language — when a section's body or marginal note matches this,
+# subsequent section-like openers inside that section are replacement text
+# for the amended act, not new top-level sections.
+RE_AMENDMENT = re.compile(
+    r'\bis\s+hereby\s+amended\b'
+    r'|\bis\s+amended\s+by\b'
+    r'|\bshall\s+be\s+amended\b'
+    r'|\bby\s+substitut(?:ing|ion)\b'
+    r'|\bby\s+insert(?:ing|ion)\b'
+    r'|\bby\s+delet(?:ing|ion)\b'
+    r'|\bby\s+omitting\b'
+    r'|\bby\s+adding\b'
+    r'|\bby\s+the\s+repeal\b'
+    r'|\brepeal\s+of\s+(?:section|subsection)\b'
+    r'|\bfollowing\s+(?:section|subsection|paragraph)\s+(?:is|are)\s+(?:substituted|added|inserted)\b'
+    r'|\bamendment\s+of\s+(?:section|subsection)\b'
+    r'|\breplacement\s+of\s+(?:section|subsection)\b'
+    r'|\bsubstitution\s+therefor\b',
+    re.IGNORECASE,
+)
+
 GAP_MIN_PT     = 8   # minimum column gap width in PDF points
 MIN_CELLS_BODY = 8   # pages with fewer cells → cover or back-page
 
@@ -673,7 +694,9 @@ def build_structure(pages_data):
     current_part        = None
     current_chapter     = None   # chapter within a part (PART → CHAPTER hierarchy)
     current_subdivision = None   # division/centered-heading within chapter or part
-    current_section     = None
+    current_section           = None
+    current_amendment_section = None   # nested amendment content inside current_section
+    _in_amendment_context     = False  # current section is amending another act's text
     _awaiting_title_obj = None   # dict whose 'title' needs to be set from next line
     in_schedule      = False
     _seen_sec_nums   = {}
@@ -770,9 +793,25 @@ def build_structure(pages_data):
     def open_section(number, short_title, part_number):
         return {'number': number, 'short_title': short_title, 'part': part_number, 'body': []}
 
-    def flush():
-        nonlocal current_section, _max_sec_num
+    def flush_amendment():
+        nonlocal current_amendment_section
+        if current_amendment_section is None:
+            return
+        if current_section is not None:
+            current_section['body'].append({
+                'type':        'amendment_section',
+                'number':      current_amendment_section['number'],
+                'short_title': current_amendment_section.get('short_title'),
+                'body':        current_amendment_section['body'],
+            })
+        current_amendment_section = None
         _reset_labels()
+
+    def flush():
+        nonlocal current_section, _max_sec_num, _in_amendment_context
+        flush_amendment()
+        _reset_labels()
+        _in_amendment_context = False
         if not current_section:
             return
         num  = current_section['number']
@@ -797,13 +836,19 @@ def build_structure(pages_data):
         current_section = None
 
     def add_to_body(node):
-        if current_section is not None:
+        if current_amendment_section is not None:
+            current_amendment_section['body'].append(node)
+        elif current_section is not None:
             current_section['body'].append(node)
 
     def last_body_node(of_type=None):
-        if not current_section:
+        body = None
+        if current_amendment_section is not None:
+            body = current_amendment_section['body']
+        elif current_section is not None:
+            body = current_section['body']
+        if not body:
             return None
-        body = current_section['body']
         for node in reversed(body):
             if of_type is None or node['type'] == of_type:
                 return node
@@ -839,7 +884,13 @@ def build_structure(pages_data):
             if RE_PRINT_REF.match(elem['text'].strip()):
                 continue
 
-            kind, num, rest_text = classify(elem['text'])
+            # Strip leading quote character so classify() can parse items like
+            # '”(7) Whenever...”' or '”(b) ...”' that appear as quoted replacement text
+            # in amendment sections. Only applies when inside amendment context.
+            _classify_text = elem['text']
+            if current_amendment_section is not None or _in_amendment_context:
+                _classify_text = _classify_text.strip().lstrip('”').lstrip('”').lstrip()
+            kind, num, rest_text = classify(_classify_text)
 
             # ── Unknown-structural rest-collection mode ───────────────────────
             if _collecting_unk:
@@ -941,6 +992,58 @@ def build_structure(pages_data):
                     container.setdefault('subdivisions', []).append(current_subdivision)
 
             elif kind == 'section_opener':
+                _cur_num = str(current_section['number']) if current_section else None
+                try:
+                    _n_int = int(num)
+                    _is_collision  = str(num) in sections or _cur_num == str(num)
+                    _is_regression = _max_sec_num > 10 and _n_int < _max_sec_num * 0.5
+                    _is_jump       = _n_int > _max_sec_num + 30
+                except (ValueError, TypeError):
+                    _n_int         = None
+                    _is_collision  = str(num) in sections or _cur_num == str(num)
+                    _is_regression = False
+                    _is_jump       = False
+
+                # Layout signal: is this element indented relative to the main body?
+                # Amendment replacement text sits narrower / further right than body.
+                _body_left  = body_cx - body_max_w / 2 if body_max_w else 0
+                _is_indented = elem.get('x0', _body_left) > _body_left + 20
+
+                # Open a nested amendment_section when:
+                #   • the current section is in amendment context (from text/marginal), AND
+                #   • the element is indented OR the section number jumps significantly.
+                # Sequential non-indented openers exit amendment context (new real section).
+                if _in_amendment_context and current_section is not None:
+                    if _is_indented or _is_jump:
+                        flush_amendment()
+                        try:
+                            amend_num = int(num)
+                        except (ValueError, TypeError):
+                            amend_num = num
+                        amend_short = marginal_at(marg_elems, elem['y_top'], elem['y_bot'])
+                        current_amendment_section = {
+                            'number':      amend_num,
+                            'short_title': amend_short,
+                            'body':        [],
+                        }
+                        if rest_text:
+                            current_amendment_section['body'].append(
+                                {'type': 'text', 'text': rest_text}
+                            )
+                        continue
+                    else:
+                        # Sequential non-indented → real next section; exit amendment mode.
+                        _in_amendment_context = False
+
+                # Reject duplicates, regressions, and unlabelled large jumps.
+                if _is_collision or _is_regression:
+                    add_to_body({'type': 'text', 'text': elem['text'].strip()})
+                    continue
+                if _is_jump:
+                    # Large upward jump with no amendment context → schedule/table row.
+                    add_to_body({'type': 'text', 'text': elem['text'].strip()})
+                    continue
+
                 flush()
                 short = marginal_at(marg_elems, elem['y_top'], elem['y_bot'])
                 try:
@@ -951,6 +1054,9 @@ def build_structure(pages_data):
                     sec_num, short,
                     current_part['number'] if current_part else None,
                 )
+                # Marginal note "Amendment of section N" immediately signals context.
+                if short and RE_AMENDMENT.search(short):
+                    _in_amendment_context = True
                 if current_part:
                     current_part['sections'].append(sec_num)
                 if current_chapter is not None:
@@ -977,6 +1083,9 @@ def build_structure(pages_data):
                         add_to_body({'type': 'proviso', 'text': r2})
                     else:
                         add_to_body({'type': 'text', 'text': rest_text})
+                    # Amendment language in the inline rest_text sets context immediately.
+                    if not _in_amendment_context and RE_AMENDMENT.search(rest_text):
+                        _in_amendment_context = True
 
             elif kind == 'subsection':
                 _reset_labels()
@@ -1009,6 +1118,12 @@ def build_structure(pages_data):
 
             else:
                 add_to_body({'type': 'text', 'text': rest_text})
+                # Detect amendment language in body text — subsequent section-like
+                # openers in this section are replacement content for another act.
+                if (not _in_amendment_context
+                        and current_section is not None
+                        and RE_AMENDMENT.search(rest_text)):
+                    _in_amendment_context = True
 
     flush()
     flush_unk()

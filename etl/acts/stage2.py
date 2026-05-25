@@ -12,8 +12,8 @@ Usage:
   .venv/bin/python3 etl/acts/stage2.py --flagged       # reprocess after parser fix
   .venv/bin/python3 etl/acts/stage2.py --act-id 42
 
-Status transitions: docling_done → extracted | flagged
-Re-run:            flagged      → extracted
+Status transitions: docling_done → extracted
+Re-run:            flagged=true → extracted  (re-parse after parser fix)
 """
 
 import argparse
@@ -126,9 +126,37 @@ def _act_status(conn, act_id) -> tuple[str, list]:
     return (row[0], row[1]) if row else ("?", [])
 
 
-def batch_process(conn, statuses: list[str], years=None):
+def batch_process(conn, statuses: list[str], years=None, use_flagged_col=False, reparse_all=False):
     with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-        if years:
+        if reparse_all:
+            if years:
+                cur.execute(
+                    "SELECT id, act_number, docling_json FROM acts"
+                    " WHERE docling_json IS NOT NULL AND year = ANY(%s)"
+                    " ORDER BY year, act_number",
+                    (list(years),),
+                )
+            else:
+                cur.execute(
+                    "SELECT id, act_number, docling_json FROM acts"
+                    " WHERE docling_json IS NOT NULL"
+                    " ORDER BY year, act_number",
+                )
+        elif use_flagged_col:
+            if years:
+                cur.execute(
+                    "SELECT id, act_number, docling_json FROM acts"
+                    " WHERE flagged=true AND docling_json IS NOT NULL AND year = ANY(%s)"
+                    " ORDER BY year, act_number",
+                    (list(years),),
+                )
+            else:
+                cur.execute(
+                    "SELECT id, act_number, docling_json FROM acts"
+                    " WHERE flagged=true AND docling_json IS NOT NULL"
+                    " ORDER BY year, act_number",
+                )
+        elif years:
             cur.execute(
                 "SELECT id, act_number, docling_json FROM acts"
                 " WHERE status = ANY(%s) AND year = ANY(%s)"
@@ -176,9 +204,10 @@ def batch_process(conn, statuses: list[str], years=None):
 def parse_args():
     p = argparse.ArgumentParser(description="Stage 2 — structure building for acts")
     g = p.add_mutually_exclusive_group()
-    g.add_argument("--act-id",  type=int, help="Process a single act by DB id")
-    g.add_argument("--all",     action="store_true", help="Process all docling_done acts")
-    g.add_argument("--flagged", action="store_true", help="Reprocess stopped/flagged acts (status=stopped or status=flagged)")
+    g.add_argument("--act-id",     type=int, help="Process a single act by DB id")
+    g.add_argument("--all",        action="store_true", help="Process all docling_done acts")
+    g.add_argument("--flagged",    action="store_true", help="Reprocess acts with flagged=true")
+    g.add_argument("--reparse-all", action="store_true", help="Reprocess every act that has docling_json (after parser changes)")
     p.add_argument("--year",    type=int, help="Limit to a single year (use with --all)")
     return p.parse_args()
 
@@ -187,8 +216,8 @@ def main():
     args = parse_args()
     setup_logging()
 
-    if not any([args.act_id, args.all, args.flagged]):
-        sys.exit("Provide --act-id N, --all, or --flagged")
+    if not any([args.act_id, args.all, args.flagged, args.reparse_all]):
+        sys.exit("Provide --act-id N, --all, --flagged, or --reparse-all")
 
     conn = get_conn()
 
@@ -209,10 +238,13 @@ def main():
         conn.close()
         sys.exit(0 if ok else 1)
 
-    # "stopped" = new name; "flagged" = old status value before migration
-    statuses = ["stopped", "flagged"] if args.flagged else ["docling_done"]
-    years    = [args.year] if args.year else None
-    batch_process(conn, statuses, years)
+    years = [args.year] if args.year else None
+    if args.reparse_all:
+        batch_process(conn, [], years, reparse_all=True)
+    elif args.flagged:
+        batch_process(conn, [], years, use_flagged_col=True)
+    else:
+        batch_process(conn, ["docling_done"], years)
     conn.close()
 
 
