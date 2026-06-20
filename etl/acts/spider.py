@@ -244,7 +244,9 @@ def download_pdf(conn, session, act, pdf_dir):
 
 def extract_pass1(conn, converter, act):
     """Run docling on the PDF, serialise all cluster data → docling_json.
-    Status → 'docling_done'. Does NOT delete the PDF (caller handles that)."""
+    Status → 'docling_done'. Does NOT delete the PDF (caller handles that).
+    Returns (success, conn) — conn may be a fresh connection if the original
+    timed out during the long docling run."""
     act_id   = act["id"]
     pdf_path = Path(act["pdf_path"])
 
@@ -269,7 +271,11 @@ def extract_pass1(conn, converter, act):
 
     except Exception as exc:
         mark_failed(conn, act_id, f"docling: {exc}")
-        return False
+        return False, conn
+
+    # Reconnect before writing — the DB connection may have timed out during
+    # a long docling run (some PDFs take 3+ minutes to process).
+    conn = reconnect_if_needed(conn)
 
     try:
         with conn.cursor() as cur:
@@ -282,9 +288,9 @@ def extract_pass1(conn, converter, act):
     except Exception as exc:
         conn.rollback()
         mark_failed(conn, act_id, f"db write pass1: {exc}")
-        return False
+        return False, conn
 
-    return True
+    return True, conn
 
 
 # ── Pass 2 — Document build ───────────────────────────────────────────────────
@@ -406,7 +412,7 @@ def main():
         if not ok:
             sys.exit("Download failed")
         act = _refetch(conn, act["id"])
-        ok = extract_pass1(conn, converter, act)
+        ok, conn = extract_pass1(conn, converter, act)
         if not ok:
             sys.exit("Pass 1 failed")
         act = _refetch(conn, act["id"])
@@ -460,7 +466,7 @@ def main():
                     time.sleep(CRAWL_DELAY)
 
                 # Pass 1: docling → docling_json
-                ok = extract_pass1(conn, converter, act)
+                ok, conn = extract_pass1(conn, converter, act)
                 if not ok:
                     log.info("  [%4d/%d] %-12s  pass1 FAIL", i, len(pending), label)
                     continue
@@ -502,7 +508,7 @@ def main():
         for i, act in enumerate(pending, 1):
             conn = reconnect_if_needed(conn)
 
-            ok = extract_pass1(conn, converter, act)
+            ok, conn = extract_pass1(conn, converter, act)
             if not ok:
                 log.info("  [%4d/%d] %-12s  pass1 FAIL", i, len(pending), act["act_number"])
                 continue
@@ -544,7 +550,7 @@ def main():
                 act = _refetch(conn, act["id"])
                 time.sleep(CRAWL_DELAY)
 
-                ok = extract_pass1(conn, converter, act)
+                ok, conn = extract_pass1(conn, converter, act)
                 if not ok:
                     log.info("  [%4d/%d] %-12s  pass1 FAIL", i, len(pending), label)
                     continue

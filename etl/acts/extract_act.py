@@ -64,10 +64,13 @@ RE_TITLE_PAGE = re.compile(
 
 # Structural patterns we don't yet handle — route content to rest
 RE_STRUCTURAL_ALARM = re.compile(
-    r'^SECTION\s+\d'               # written-out SECTION 5
-    r'|^ARTICLE\s+\d',             # ARTICLE heading
-    re.IGNORECASE,
+    r'^SECTION\s+\d',              # written-out SECTION 5 (all-caps only)
 )
+
+# "Article N" structural heading — used in treaty/convention acts instead of sections.
+# Distinguishes headings ("Article 5 - Cargo") from inline refs ("Article 65 of the Constitution").
+RE_ARTICLE = re.compile(r'^Article\s+(\d+[A-Z]?)\s*[—–\-]?\s*(.*)', re.IGNORECASE | re.DOTALL)
+RE_ARTICLE_INLINE = re.compile(r'^of\s+the\b|^of\s+this\b|^,\s|\bConstitution\b', re.IGNORECASE)
 
 # Amendment language — when a section's body or marginal note matches this,
 # subsequent section-like openers inside that section are replacement text
@@ -84,7 +87,7 @@ RE_AMENDMENT = re.compile(
     r'|\bby\s+the\s+repeal\b'
     r'|\brepeal\s+of\s+(?:section|subsection)\b'
     r'|\bfollowing\s+(?:section|subsection|paragraph)\s+(?:is|are)\s+(?:substituted|added|inserted)\b'
-    r'|\bamendment\s+of\s+(?:section|subsection)\b'
+    r'|\bamendment\s+of\b'
     r'|\breplacement\s+of\s+(?:section|subsection)\b'
     r'|\bsubstitution\s+therefor\b',
     re.IGNORECASE,
@@ -598,6 +601,14 @@ def classify(text):
     if RE_STRUCTURAL_ALARM.match(t):
         return 'unknown', None, t
 
+    m = RE_ARTICLE.match(t)
+    if m:
+        num, rest = m.group(1), m.group(2).strip()
+        # Inline references ("Article 65 of the Constitution") stay as text.
+        if RE_ARTICLE_INLINE.match(rest):
+            return 'text', None, t
+        return 'article_opener', num, rest
+
     return 'text', None, t
 
 
@@ -684,6 +695,7 @@ def build_structure(pages_data):
     """
     parts               = []
     sections            = {}
+    articles            = {}   # treaty/convention acts use Article N instead of Section N
     schedules           = []
     rest                = []
     _unk_buf            = []
@@ -695,6 +707,7 @@ def build_structure(pages_data):
     current_chapter     = None   # chapter within a part (PART → CHAPTER hierarchy)
     current_subdivision = None   # division/centered-heading within chapter or part
     current_section           = None
+    current_article           = None   # for treaty acts that use Article N structure
     current_amendment_section = None   # nested amendment content inside current_section
     _in_amendment_context     = False  # current section is amending another act's text
     _awaiting_title_obj = None   # dict whose 'title' needs to be set from next line
@@ -807,9 +820,18 @@ def build_structure(pages_data):
         current_amendment_section = None
         _reset_labels()
 
+    def flush_article():
+        nonlocal current_article
+        if current_article is None:
+            return
+        articles[str(current_article['number'])] = current_article
+        current_article = None
+        _reset_labels()
+
     def flush():
         nonlocal current_section, _max_sec_num, _in_amendment_context
         flush_amendment()
+        flush_article()
         _reset_labels()
         _in_amendment_context = False
         if not current_section:
@@ -840,6 +862,8 @@ def build_structure(pages_data):
             current_amendment_section['body'].append(node)
         elif current_section is not None:
             current_section['body'].append(node)
+        elif current_article is not None:
+            current_article['body'].append(node)
 
     def last_body_node(of_type=None):
         body = None
@@ -847,6 +871,8 @@ def build_structure(pages_data):
             body = current_amendment_section['body']
         elif current_section is not None:
             body = current_section['body']
+        elif current_article is not None:
+            body = current_article['body']
         if not body:
             return None
         for node in reversed(body):
@@ -894,7 +920,7 @@ def build_structure(pages_data):
 
             # ── Unknown-structural rest-collection mode ───────────────────────
             if _collecting_unk:
-                if kind in ('section_opener', 'part_header', 'chapter_header', 'division_header'):
+                if kind in ('section_opener', 'part_header', 'chapter_header', 'division_header', 'article_opener'):
                     flush_unk()
                     # fall through to normal dispatch below
                 else:
@@ -906,7 +932,8 @@ def build_structure(pages_data):
             # ── Normal dispatch ───────────────────────────────────────────────
 
             if not body_started and page_type == 'text' and kind in (
-                'section_opener', 'part_header', 'chapter_header', 'division_header'
+                'section_opener', 'part_header', 'chapter_header', 'division_header',
+                'article_opener',
             ):
                 body_started = True
 
@@ -925,6 +952,14 @@ def build_structure(pages_data):
                 continue
 
             if kind == 'unknown':
+                # All-caps "SECTION N" — preserve content under current section as text,
+                # flag for inspection but don't route to rest (content would be lost).
+                _sec_word_m = re.match(r'^SECTION\s+(\d+)', elem['text'].strip())
+                if _sec_word_m and (current_section is not None or current_article is not None):
+                    add_to_body({'type': 'text', 'text': elem['text'].strip()})
+                    flags.append(f"unstructured:SECTION_{_sec_word_m.group(1)}")
+                    continue
+
                 flags.append(f"rest:unknown_structural:{elem['text'].strip()[:60]}")
                 flush()
                 flush_schedule()
@@ -940,7 +975,9 @@ def build_structure(pages_data):
 
             # Centered ALL-CAPS heading between sections → subdivision marker.
             # Flush the current section first so it doesn't absorb the heading.
-            if kind == 'text' and _is_subdivision_heading(elem, body_cx, body_max_w):
+            # Skip when in amendment context — quoted replacement text (e.g. "GROUP B")
+            # is all-caps but is body content, not a structural heading.
+            if kind == 'text' and not _in_amendment_context and _is_subdivision_heading(elem, body_cx, body_max_w):
                 flush()
                 flush_unk()
                 t = elem['text'].strip()
@@ -1116,6 +1153,22 @@ def build_structure(pages_data):
             elif kind == 'proviso':
                 add_to_body({'type': 'proviso', 'text': rest_text})
 
+            elif kind == 'article_opener':
+                flush()
+                flush_unk()
+                try:
+                    art_num = int(num)
+                except (ValueError, TypeError):
+                    art_num = num
+                short = marginal_at(marg_elems, elem['y_top'], elem['y_bot'])
+                current_article = {
+                    'number':      art_num,
+                    'short_title': short or rest_text or None,
+                    'body':        [],
+                }
+                if rest_text and rest_text != current_article['short_title']:
+                    current_article['body'].append({'type': 'text', 'text': rest_text})
+
             else:
                 add_to_body({'type': 'text', 'text': rest_text})
                 # Detect amendment language in body text — subsequent section-like
@@ -1126,10 +1179,11 @@ def build_structure(pages_data):
                     _in_amendment_context = True
 
     flush()
+    flush_article()
     flush_unk()
     flush_schedule()
 
-    return parts, sections, schedules, rest, flags
+    return parts, sections, articles, schedules, rest, flags
 
 
 # ── Cover metadata ────────────────────────────────────────────────────────────
@@ -1289,7 +1343,7 @@ def build_document(docling_json):
             main_e, _ = page_elements_d(clusters_d, table_lookup)
             pages_data.append((main_e, [], 'other'))
 
-    parts, sections, schedules, rest, flags = build_structure(pages_data)
+    parts, sections, articles, schedules, rest, flags = build_structure(pages_data)
 
     title_page = tp if tp["lines"] else None
 
@@ -1302,6 +1356,7 @@ def build_document(docling_json):
         "total_pages": docling_json.get("total_pages"),
         "parts":       parts,
         "sections":    sections,
+        "articles":    articles,
         "schedules":   schedules,
         "rest":        rest,
         "flags":       flags,
