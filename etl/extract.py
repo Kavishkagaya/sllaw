@@ -4,6 +4,7 @@
   python3 -m etl.extract --limit 50     # pilot
   python3 -m etl.extract                # everything fetched but not yet extracted
   python3 -m etl.extract --no-chandra   # only files docling can do alone (no vLLM server up)
+  python3 -m etl.extract --before 2000 --limit 5   # scans only (Chandra pilot)
 
 Per unique file (sha256): read the PDF from R2, count text-layer characters per
 page, then route:
@@ -18,7 +19,7 @@ row with that sha256. What is stored is the engines' own output, untouched:
 A file is written only when every page succeeded, so raw is never partial.
 Bump VERSION when an engine or its parameters change; old raw stays in R2.
 """
-import argparse, gzip, io, json, os, tempfile
+import argparse, gzip, io, json, os, tempfile, time
 from importlib.metadata import version
 
 import psycopg2
@@ -99,14 +100,16 @@ def chandra(pdf, pages):
                        "image_size": o.page_box[2:]} for p, o in zip(pages, out)]}
 
 
-def run(limit=None, use_chandra=True):
+def run(limit=None, use_chandra=True, before=None):
     s3, bucket = r2(), os.environ["R2_BUCKET"]
     conn = psycopg2.connect(os.environ["DATABASE_URL"])
     cur = conn.cursor()
     cur.execute("SELECT sha256, min(r2_key) FROM documents WHERE r2_key IS NOT NULL AND raw_key IS NULL "
-                "GROUP BY sha256 ORDER BY min(id) LIMIT %s", (limit,))
+                "AND (%s::text IS NULL OR doc_date < %s) GROUP BY sha256 ORDER BY min(id) LIMIT %s",
+                (before, before, limit))
     rows, ok, bad, skipped = cur.fetchall(), 0, 0, 0
     for i, (sha, key) in enumerate(rows, 1):
+        t0 = time.time()
         try:
             pdf = s3.get_object(Bucket=bucket, Key=key)["Body"].read()
             pages = text_layer(pdf)
@@ -125,7 +128,8 @@ def run(limit=None, use_chandra=True):
             cur.execute("UPDATE documents SET raw_key=%s, extracted_at=NOW(), error=NULL, updated_at=NOW() "
                         "WHERE sha256=%s", (rkey, sha))
             ok += 1
-            msg = f"ok {len(pages)} pages ({len(scan)} via Chandra)"
+            s = time.time() - t0
+            msg = f"ok {len(pages)} pages ({len(scan)} via Chandra) in {s:.0f}s, {len(pages) / s:.2f} pages/s"
         except Exception as e:
             conn.rollback()
             cur.execute("UPDATE documents SET error=%s, updated_at=NOW() WHERE sha256=%s",
@@ -142,8 +146,9 @@ def main():
     a = argparse.ArgumentParser()
     a.add_argument("--limit", type=int, help="extract at most N files (pilot)")
     a.add_argument("--no-chandra", action="store_true", help="skip files that have pages without a text layer")
+    a.add_argument("--before", help="only documents dated before this, e.g. 2000 (pilot on scans)")
     args = a.parse_args()
-    run(args.limit, not args.no_chandra)
+    run(args.limit, not args.no_chandra, args.before)
 
 
 if __name__ == "__main__":
