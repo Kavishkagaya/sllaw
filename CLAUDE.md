@@ -45,7 +45,7 @@ cp .env.example .env                     # fill DATABASE_URL and R2_*
 
 Fetching and extraction run on **ada**, never locally: no source files on this machine. Use the `/ada-ssh` skill.
 
-- ada: 3× NVIDIA RTX 6000 Ada (49 GB each). Conda env `~/miniconda3/envs/sllaw` (docling, surya, torch+CUDA). Project dir `~/sllaw/`.
+- ada: 3× NVIDIA RTX 6000 Ada (49 GB each), **shared with other users**: check `nvidia-smi` and pick the idle card. Project dir `~/sllaw/` with `.venv`. There is no conda env and no sudo. Chandra server: `etl/chandra_server.sh` (GPU/MEM/PORT env vars), port 8011.
 
 ## Sources, scope and decisions
 
@@ -87,6 +87,6 @@ Needs `DATABASE_URL` in `viewer/.env.local`. It currently reads the legacy `chun
 ## Known issues
 
 - **docling `max_num_pages` marks PDF invalid**: use `page_range=(1, N)` instead of `max_num_pages=N`.
-- **docling default backend fails on gazette PDFs**: use `backend=PyPdfiumDocumentBackend` explicitly in `PdfFormatOption`.
+- **docling default backend (docling_parse) once failed on gazette PDFs** (older docling). With 2.104 it works on Acts and keeps word cells and fonts, which pypdfium doesn't. `etl/extract.py` uses it and falls back to pypdfium per file.
 - **transformers 5.x breaks surya**: `SuryaDecoderConfig` is missing `pad_token_id`. Downgrade to 4.57.6 and add `kwargs.setdefault("pad_token_id", 2)` before `super().__init__()` in `surya/common/surya/decoder/config.py`.
 - **Surya on CPU gives 1 box/page**: always run it on ada.

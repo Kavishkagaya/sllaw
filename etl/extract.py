@@ -13,7 +13,8 @@ page, then route:
   pages with neither (blank)      -> nothing; recorded in `pages` only
 Writes raw/<VERSION>/<sha256>.json.gz to R2 and sets raw_key/extracted_at on every
 row with that sha256. What is stored is the engines' own output, untouched:
-  docling: DoclingDocument dict, plus per page the parsed cells and layout predictions
+  docling: DoclingDocument dict, plus per page word/line cells (with font names) and layout
+           predictions incl. empty clusters; backend docling_parse, pypdfium fallback
   chandra: per page the model's raw HTML (data-label / data-bbox on a 0..bbox_scale
            grid of the rendered image), token count and image size
 A file is written only when every page succeeded, so raw is never partial.
@@ -30,7 +31,7 @@ from dotenv import load_dotenv
 from etl.fetch import r2
 
 load_dotenv()
-VERSION = "v1"
+VERSION = "v2"   # v1 (pilot, 20 files): pypdfium backend, no word cells or fonts
 # A page goes to Chandra only if it has (almost) no text layer AND carries an image, i.e.
 # it is a scan. Blank versos in digital Acts have neither and are left alone: the 2026-10-04
 # pilot showed 1-2 such pages in nearly every digital Act.
@@ -50,27 +51,44 @@ def text_layer(pdf):
     return out
 
 
-_docling = None
-def docling(pdf, name):
-    global _docling
+_docling = {}
+def docling(pdf, name, digital_pages):
+    """docling_parse backend: word cells with font names (bold/italic, FM-font detection).
+    Falls back to pypdfium (line cells only, no fonts) if it raises or comes back empty on
+    pages that have a text layer; CLAUDE.md records docling_parse failing on gazette PDFs."""
+    from docling.backend.docling_parse_backend import DoclingParseDocumentBackend
     from docling.backend.pypdfium2_backend import PyPdfiumDocumentBackend
     from docling.datamodel.base_models import DocumentStream, InputFormat
-    from docling.datamodel.pipeline_options import PdfPipelineOptions
+    from docling.datamodel.pipeline_options import LayoutOptions, PdfPipelineOptions
     from docling.document_converter import DocumentConverter, PdfFormatOption
-    params = {"do_ocr": False, "generate_parsed_pages": True}
-    if _docling is None:
-        # PyPdfium backend: the default backend fails on gazette PDFs (CLAUDE.md known issues)
-        _docling = DocumentConverter(format_options={InputFormat.PDF: PdfFormatOption(
-            pipeline_options=PdfPipelineOptions(**params), backend=PyPdfiumDocumentBackend)})
-    res = _docling.convert(DocumentStream(name=f"{name}.pdf", stream=io.BytesIO(pdf)))
-    missing = [p.page_no for p in res.pages if p.parsed_page is None]
-    if missing:
-        raise RuntimeError(f"docling kept no parsed cells for pages {missing[:5]}")
-    return {"version": version("docling"), "params": {**params, "backend": "pypdfium2"},
-            "status": str(res.status), "document": res.document.export_to_dict(),
+    params = {"do_ocr": False, "generate_parsed_pages": True, "keep_empty_clusters": True}
+    res = None
+    for backend_name, backend in (("docling_parse", DoclingParseDocumentBackend),
+                                  ("pypdfium", PyPdfiumDocumentBackend)):
+        if backend_name not in _docling:
+            _docling[backend_name] = DocumentConverter(format_options={InputFormat.PDF: PdfFormatOption(
+                pipeline_options=PdfPipelineOptions(do_ocr=False, generate_parsed_pages=True,
+                                                    layout_options=LayoutOptions(keep_empty_clusters=True)),
+                backend=backend)})
+        try:
+            res = _docling[backend_name].convert(DocumentStream(name=f"{name}.pdf", stream=io.BytesIO(pdf)))
+        except Exception as e:
+            fallback_reason = f"{backend_name} raised: {e}"[:300]
+            continue
+        cells = {p.page_no: len(p.parsed_page.word_cells) + len(p.parsed_page.textline_cells)
+                 for p in res.pages if p.parsed_page}
+        empty = [n for n in digital_pages if not cells.get(n)]
+        if not empty:
+            break
+        fallback_reason = f"{backend_name}: no cells on text pages {empty[:5]}"
+    else:
+        raise RuntimeError(fallback_reason)
+    return {"version": version("docling"), "backend": backend_name,
+            "fallback_reason": None if backend_name == "docling_parse" else fallback_reason,
+            "params": params, "status": str(res.status), "document": res.document.export_to_dict(),
             "pages": [{"page_no": p.page_no,
                        "size": p.size.model_dump(mode="json") if p.size else None,
-                       "parsed_page": p.parsed_page.model_dump(mode="json"),
+                       "parsed_page": p.parsed_page.model_dump(mode="json") if p.parsed_page else None,
                        "predictions": p.predictions.model_dump(mode="json")} for p in res.pages]}
 
 
@@ -120,7 +138,7 @@ def run(limit=None, use_chandra=True, before=None):
                 print(f"[{i}/{len(rows)}] {sha[:12]}: skip, {len(scan)} pages need Chandra", flush=True)
                 continue
             raw = {"sha256": sha, "version": VERSION, "pages": pages,
-                   "docling": docling(pdf, sha) if digital else None,
+                   "docling": docling(pdf, sha, [p["page_no"] for p in digital]) if digital else None,
                    "chandra": chandra(pdf, scan) if scan else None}
             rkey = f"raw/{VERSION}/{sha}.json.gz"
             s3.put_object(Bucket=bucket, Key=rkey, ContentType="application/gzip",
