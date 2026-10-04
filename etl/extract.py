@@ -7,8 +7,9 @@
 
 Per unique file (sha256): read the PDF from R2, count text-layer characters per
 page, then route:
-  pages with a text layer -> docling (whole file, OCR off)
-  pages without one       -> Chandra 2 through its vLLM server (on ada)
+  any page with a text layer      -> docling (whole file, OCR off)
+  pages with no text but an image -> Chandra 2 through its vLLM server (on ada)
+  pages with neither (blank)      -> nothing; recorded in `pages` only
 Writes raw/<VERSION>/<sha256>.json.gz to R2 and sets raw_key/extracted_at on every
 row with that sha256. What is stored is the engines' own output, untouched:
   docling: DoclingDocument dict, plus per page the parsed cells and layout predictions
@@ -22,24 +23,27 @@ from importlib.metadata import version
 
 import psycopg2
 import pypdfium2 as pdfium
+import pypdfium2.raw as pdfium_c
 from dotenv import load_dotenv
 
 from etl.fetch import r2
 
 load_dotenv()
 VERSION = "v1"
-# ponytail: >=20 text-layer chars = digital page. Cover/back pages of digital Acts are
-# sparse but non-zero; scans are 0. Retune from the pilot if blank versos misroute.
+# A page goes to Chandra only if it has (almost) no text layer AND carries an image, i.e.
+# it is a scan. Blank versos in digital Acts have neither and are left alone: the 2026-10-04
+# pilot showed 1-2 such pages in nearly every digital Act.
 MIN_CHARS = 20
 
 
 def text_layer(pdf):
-    """Per page: text-layer character count and size in PDF points."""
+    """Per page: text-layer character count, image-object count, size in PDF points."""
     doc, out = pdfium.PdfDocument(pdf), []
     for i in range(len(doc)):
         page = doc[i]
         w, h = page.get_size()
         out.append({"page_no": i + 1, "chars": len(page.get_textpage().get_text_range().strip()),
+                    "images": len(list(page.get_objects(filter=[pdfium_c.FPDF_PAGEOBJ_IMAGE]))),
                     "width_pt": w, "height_pt": h})
     doc.close()
     return out
@@ -106,13 +110,14 @@ def run(limit=None, use_chandra=True):
         try:
             pdf = s3.get_object(Bucket=bucket, Key=key)["Body"].read()
             pages = text_layer(pdf)
-            scan = [p["page_no"] - 1 for p in pages if p["chars"] < MIN_CHARS]
+            scan = [p["page_no"] - 1 for p in pages if p["chars"] < MIN_CHARS and p["images"]]
+            digital = [p for p in pages if p["chars"] >= MIN_CHARS]
             if scan and not use_chandra:
                 skipped += 1
                 print(f"[{i}/{len(rows)}] {sha[:12]}: skip, {len(scan)} pages need Chandra", flush=True)
                 continue
             raw = {"sha256": sha, "version": VERSION, "pages": pages,
-                   "docling": docling(pdf, sha) if len(scan) < len(pages) else None,
+                   "docling": docling(pdf, sha) if digital else None,
                    "chandra": chandra(pdf, scan) if scan else None}
             rkey = f"raw/{VERSION}/{sha}.json.gz"
             s3.put_object(Bucket=bucket, Key=rkey, ContentType="application/gzip",
