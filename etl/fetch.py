@@ -15,7 +15,7 @@ import argparse, hashlib, os, time
 import boto3
 import psycopg2
 from dotenv import load_dotenv
-from psycopg2.extras import Json
+from psycopg2.extras import Json, execute_values
 
 from etl.spiders import acts
 
@@ -26,18 +26,18 @@ DELAY = 0.5   # seconds between downloads; documents.gov.lk is a small govt serv
 def discover_acts(cur):
     """Upsert one row per (act, language) file. The listing record is kept
     verbatim in meta so nothing from the source is lost."""
-    n = 0
-    for rec in acts.crawl():
-        for c in rec.get("contents") or []:
-            cur.execute(
-                """INSERT INTO documents (source, source_url, title, doc_date, meta)
-                   VALUES ('acts', %s, %s, %s, %s)
-                   ON CONFLICT (source, source_url) DO UPDATE
-                   SET meta = documents.meta || EXCLUDED.meta, updated_at = NOW()""",
-                (acts.pdf_url(c["uploadedFile"]), rec.get("descriptionEnglish"), rec.get("date"),
-                 Json({"act_no": rec.get("actNoText"), "lang": c["language"], "listing": rec})))
-            n += 1
-    return n
+    # one batched statement: row-by-row inserts cost a Neon round trip each (minutes from ada).
+    # dict dedupes by URL: one VALUES list can't upsert the same key twice.
+    rows = {acts.pdf_url(c["uploadedFile"]): (
+                "acts", acts.pdf_url(c["uploadedFile"]), rec.get("descriptionEnglish"), rec.get("date"),
+                Json({"act_no": rec.get("actNoText"), "lang": c["language"], "listing": rec}))
+            for rec in acts.crawl() for c in rec.get("contents") or []}
+    execute_values(cur,
+        """INSERT INTO documents (source, source_url, title, doc_date, meta) VALUES %s
+           ON CONFLICT (source, source_url) DO UPDATE
+           SET meta = documents.meta || EXCLUDED.meta, updated_at = NOW()""",
+        list(rows.values()), page_size=1000)
+    return len(rows)
 
 
 def r2():
