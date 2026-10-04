@@ -7,8 +7,8 @@
 # Extracted JSON outputs (build artifacts)
 *.json
 # But track the viewer's npm manifests
-!etl/viewer/package.json
-!etl/viewer/package-lock.json
+!viewer/package.json
+!viewer/package-lock.json
 
 # Layout debug image output directories
 layout_output*/
@@ -19,3 +19,9 @@ __pycache__/
 *.pyo
 .env
 
+
+# Test / experiment outputs (never committed)
+legacy/ocr_results/
+legacy/pipeline/out/
+legacy/pipeline/chunks_out/
+pilot/

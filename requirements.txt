@@ -1,0 +1,8 @@
+# Step 1: fetch + DB
+boto3==1.43.108          # Cloudflare R2 via the S3 API
+psycopg2-binary==2.9.12
+python-dotenv==1.2.2
+
+# Step 2: extract (run on ada)
+docling==2.104.0         # API used by etl/extract.py verified against this version
+chandra-ocr==0.2.0       # client only; the model runs in a vLLM server (see CLAUDE.md setup)

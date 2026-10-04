@@ -2,129 +2,91 @@
 
 ## What this project is
 
-ETL pipeline for Sri Lankan government legal documents (acts, consolidated statutes). Scrapes, downloads, extracts structured components (parts, sections, marginal notes), and stores in Neon PostgreSQL.
+A corpus of Sri Lankan law: Constitution, Acts, consolidated statutes and regulations first, then judgments. The pipeline fetches every source file once into R2, extracts it once (docling for text-layer PDFs, Chandra for scans), and keeps the raw output unchanged. All structuring (sections, schedules, knowledge graph) runs afterwards from that raw output.
 
-## Stack
+## Layout
 
-- **docling 2.93.0** — PDF parsing and layout detection (runs on CPU, fast)
-- **surya-ocr 0.17.1** — vision-based layout detection (needs GPU for quality results)
-- **pypdfium2 4.30.0** — PDF rendering to images (pinned by surya-ocr)
-- **transformers 4.57.6** — pinned down from 5.x due to surya-ocr compatibility
-- **Python 3.13** in `.venv/`
-
-## Remote GPU
-
-Work that needs Surya or long-running spiders runs on **ada** — use the `/ada-ssh` skill.
-
-- 3× NVIDIA RTX 6000 Ada Generation (49 GB each)
-- Conda env: `~/miniconda3/envs/sllaw` (surya, docling, torch+CUDA all installed)
-- Project dir on ada: `~/sllaw/`
-- Work dir (layout experiments): `~/sllaw_layout/`
-
-## ETL pipelines
-
-See [`etl/CLAUDE.md`](etl/CLAUDE.md) for the full pipeline architecture, `doc_json` schema, parser internals, and common tasks.
-
-### Acts (`etl/acts/`)
-
-Scrapes `documents.gov.lk/view/act/` for acts from 2006 onwards. Two-stage pipeline:
-
-```bash
-.venv/bin/python3 etl/migrate.py
-.venv/bin/python3 etl/acts/spider.py                   # stage 1: all years
-.venv/bin/python3 etl/acts/spider.py --year 2024
-.venv/bin/python3 etl/acts/stage2.py --all             # stage 2: structure extraction
-.venv/bin/python3 etl/acts/stage2.py --flagged         # re-parse stopped acts
-.venv/bin/python3 etl/acts/spider.py --stats
+```
+CLAUDE.md          this guide
+requirements.txt   pinned Python deps
+.env.example       DATABASE_URL (Neon) + R2_* (Cloudflare)
+docs/
+  SOURCES.md       scope, every source site, coverage, blockers, open datasets, prior art
+  PIPELINE.md      decisions (extract once, router, engines), validation rules, measurements
+  LAYOUT.md        how Act PDFs are laid out (columns, marginal notes, page types)
+etl/               the pipeline: one file per step
+  fetch.py         step 1: list sources → PDFs into R2 → rows in Neon
+  extract.py       step 2: router → docling (text layer) / Chandra (scans) → raw JSON into R2
+  migrate.py       applies etl/migrations/*.sql in order
+  migrations/
+  spiders/acts.py  documents.gov.lk listing (Next.js Server Action)
+viewer/            Next.js app for browsing documents from Neon
+legacy/            archive of the previous pipelines; read-only, not imported
 ```
 
-**DB tables:** `acts`  
-**Stage 1:** discover → download PDF → docling serialise → delete PDF → `status=docling_done`  
-**Stage 2:** `docling_json` → structured `doc_json` → `status=extracted`
+Next step, a new file in `etl/` when built: per-engine adapters that turn docling and Chandra raw output into one common block shape.
 
-### Consolidated Statutes (`etl/consolidated/`)
-
-Scrapes lankalaw.net for consolidated statutes. Two collections:
-
-| Collection | Index URL | Content | Count |
-|---|---|---|---|
-| `2006` | `lankalaw.net/…/consolidated-statutes-upto-2006/` | HTML only | ~1490 |
-| `2024` | `lankalaw.net/…/consolidated-acts-2024/` | HTML + PDF | 85 HTML + 304 PDF |
+## Setup (ada or local)
 
 ```bash
-.venv/bin/python3 etl/consolidated/spider.py --collection 2006
-.venv/bin/python3 etl/consolidated/spider.py --collection 2024 --skip-html-dupes
-.venv/bin/python3 etl/consolidated/spider.py --stats
+git clone https://github.com/Kavishkagaya/sllaw.git && cd sllaw
+python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
+cp .env.example .env                     # fill DATABASE_URL and R2_*
+.venv/bin/python3 etl/migrate.py         # apply pending migrations (--status to list)
+.venv/bin/python3 -m etl.fetch acts --limit 20   # pilot: 20 files into R2
+.venv/bin/python3 -m etl.fetch acts              # everything; re-run to resume or retry
+
+# step 2 needs Chandra's vLLM server for scanned pages. `chandra_vllm --gpu l40s` (48 GB, closest
+# to ada's RTX 6000 Ada) runs it through `sudo docker`; without docker, run the same flags via
+# `vllm serve datalab-to/chandra-ocr-2 --served-model-name chandra …` (see chandra/scripts/vllm.py).
+.venv/bin/python3 -m etl.extract --no-chandra --limit 20   # docling-only files, no server needed
+.venv/bin/python3 -m etl.extract --limit 50                # pilot, with the server on :8000
 ```
 
-**DB tables:** `consolidated_statutes`, `consolidated_parts`, `consolidated_sections`
+Fetching and extraction run on **ada**, never locally: no source files on this machine. Use the `/ada-ssh` skill.
 
-**HTML pipeline:** fetch HTML → BeautifulSoup → store  
-**PDF pipeline:** download → docling (global column-gap detection) → store → delete
+- ada: 3× NVIDIA RTX 6000 Ada (49 GB each). Conda env `~/miniconda3/envs/sllaw` (docling, surya, torch+CUDA). Project dir `~/sllaw/`.
 
-Consolidated PDFs use a two-column layout (marginal notes left, body right) with gap centre ≈ 159 pt. A global pass across all pages is done first to find the median gap — individual pages often have stray cells bridging the gap, so per-page detection alone fails on ~70% of pages.
+## Sources, scope and decisions
 
-Known limitations:
-- Date is always `None` (no "Certified on" line in consolidated PDFs)
-- Alphanumeric amendment sections (e.g. `1A.`, `1B.`) are absorbed into the preceding numeric section's body
+Read [`docs/SOURCES.md`](docs/SOURCES.md) before probing any website or re-checking coverage, and [`docs/PIPELINE.md`](docs/PIPELINE.md) before changing how extraction works. If the answer is there, use it and don't test again.
 
-## Document Viewer (`etl/viewer/`)
+## Documenting findings and decisions
 
-Next.js 16 app for browsing extracted documents directly from the Neon DB.
+Investigations are expensive, so never run the same one twice. Whenever a session finds out or decides something that isn't obvious from the code, write it down in the same session:
 
-```bash
-cd etl/viewer
-npm install        # first time
-npm run dev        # http://localhost:3000
-```
+- **Findings about sources** (an endpoint, record counts, a year range, a file format, a login wall, Cloudflare, a dead site) go in `docs/SOURCES.md`, in the row or table for that source.
+- **Scope decisions** (what we collect, which text is authoritative) go in the Scope or Authority section of `docs/SOURCES.md`, along with the reason.
+- **Pipeline decisions and measurements** (engines, routing, storage, validation results) go in `docs/PIPELINE.md`.
+- **PDF layout facts** go in `docs/LAYOUT.md`.
+- **Fixes for known issues** go in "Known issues" below.
 
-**Pages:**
+Rules:
+- Date every finding (`Surveyed YYYY-MM-DD`) and give numbers, not adjectives ("301 PDFs in 2024", not "many").
+- If a site has changed, update the existing row rather than adding a contradicting one, and note the date.
+- Record dead ends and blockers too ("403", "subscription only", "do not bypass"). They're what stops the next person searching again.
+- Record what was *not* checked, so a gap doesn't read as "no data".
 
-| Route | Description |
-|---|---|
-| `/` | Listing — tabbed Acts / Consolidated Statutes, server-side search, paginated 60/page |
-| `/act/[id]` | Act detail — split PDF + JSON tree |
-| `/statute/[id]` | Consolidated statute detail — split PDF + JSON tree |
+## Database
 
-**Stack:** Next.js App Router (server components) · Drizzle ORM (`node-postgres`) · Tailwind v4
-
-**PDF viewer:** PDFs are proxied through `/api/pdf?url=<encoded>` to bypass iframe embedding restrictions on `documents.gov.lk`. Consolidated HTML-only statutes show JSON only.
-
-**JSON tree:** Recursive collapsible tree. Nodes with > 15 children or depth ≥ 2 start collapsed, so `sections` (100+ keys) is collapsed by default.
-
-**Data source:** Reads `raw_json` from `acts` / `consolidated_statutes`; falls back to structured parts + sections rows when `raw_json` is null.
-
-Requires `DATABASE_URL` in `etl/viewer/.env.local`.
-
-## Database migrations
+Neon Postgres. `documents` is the only table: one row per source file (listing record verbatim in `meta`, `sha256`, `r2_key`). Schema: `etl/migrations/001_documents.sql`.
 
 ```bash
 .venv/bin/python3 etl/migrate.py           # apply pending
 .venv/bin/python3 etl/migrate.py --status  # show applied / pending
 ```
 
-Migrations live in `etl/migrations/` and are applied in filename order.
+## Viewer (`viewer/`)
 
-## Scripts
+```bash
+cd viewer && npm install && npm run dev    # http://localhost:3000
+```
 
-| File | What it does |
-|---|---|
-| `detect_docling.py` | Docling layout detection on `document.pdf`, first 5 pages → `layout_output_docling/` |
-| `detect_consolidated.py` | Layout visualiser for consolidated PDFs — shows cluster boxes and column gap |
-| `detect_layout.py` | Surya layout detection (CPU, sparse) → `layout_output/` |
-| `detect_surya_gpu.py` | Surya layout detection on ada (GPU) → `layout_output_surya/` |
+Needs `DATABASE_URL` in `viewer/.env.local`. It currently reads the legacy `chunks` rows.
 
-## Known issues / fixes applied
+## Known issues
 
-- **transformers 5.x breaks surya** — `SuryaDecoderConfig` missing `pad_token_id`. Fixed by downgrading to 4.57.6 and patching `.venv/lib/python3.13/site-packages/surya/common/surya/decoder/config.py` to add `kwargs.setdefault("pad_token_id", 2)` before `super().__init__()`.
-- **docling `max_num_pages` marks PDF invalid** — use `page_range=(1, N)` instead of `max_num_pages=N`.
-- **docling default backend fails on gazette PDFs** — use `backend=PyPdfiumDocumentBackend` explicitly in `PdfFormatOption`.
-- **Surya on CPU gives 1 box/page** — always run Surya on ada.
-- **Consolidated PDF PART headings** — PDF renderer drops space: `"PARTI"` instead of `"PART I"`. Fixed by regex normalisation in `extract_statute.py`.
-- **Consolidated PDF column gap** — per-page gap detection fails on ~70% of pages due to bridging cells. Fixed with a global median gap computed in pass 1 before extraction.
-
-## Test PDF
-
-`document.pdf` — Sri Lanka Agrarian Development Act No. 46 of 2000  
-Source: `https://documents.gov.lk/view/act/2000/8/46-2000_E.pdf`  
-84 pages, 256 KB, PDF points page size 384×552 pt
+- **docling `max_num_pages` marks PDF invalid**: use `page_range=(1, N)` instead of `max_num_pages=N`.
+- **docling default backend fails on gazette PDFs**: use `backend=PyPdfiumDocumentBackend` explicitly in `PdfFormatOption`.
+- **transformers 5.x breaks surya**: `SuryaDecoderConfig` is missing `pad_token_id`. Downgrade to 4.57.6 and add `kwargs.setdefault("pad_token_id", 2)` before `super().__init__()` in `surya/common/surya/decoder/config.py`.
+- **Surya on CPU gives 1 box/page**: always run it on ada.
