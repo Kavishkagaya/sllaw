@@ -10,7 +10,8 @@ keyed by content hash, source/<sha256>.pdf, so re-runs and duplicates never
 write twice and nothing is overwritten. The queue is `r2_key IS NULL`: a crash
 or a failed download just means run it again.
 """
-import argparse, hashlib, os, time
+import argparse, hashlib, os
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import boto3
 import psycopg2
@@ -20,7 +21,8 @@ from psycopg2.extras import Json, execute_values
 from etl.spiders import acts
 
 load_dotenv()
-DELAY = 0.5   # seconds between downloads; documents.gov.lk is a small govt server
+WORKERS = 8   # parallel downloads; documents.gov.lk is a small govt server, don't go much higher
+BATCH = 50    # results per Neon write
 
 
 def discover_acts(cur):
@@ -48,35 +50,55 @@ def r2():
         aws_secret_access_key=os.environ["R2_SECRET_ACCESS_KEY"])
 
 
+def download(s3, bucket, stored, did, url):
+    """One file: download, hash, put to R2 unless already stored. Runs in a worker thread."""
+    try:
+        blob = acts._get(url)
+        if not blob.startswith(b"%PDF"):
+            raise ValueError("not a PDF: " + blob[:80].decode("utf8", "replace"))
+        sha = hashlib.sha256(blob).hexdigest()
+        key = f"source/{sha}.pdf"
+        # two workers racing on the same sha both put the same bytes to the same key: harmless
+        if sha not in stored:
+            s3.put_object(Bucket=bucket, Key=key, Body=blob, ContentType="application/pdf")
+            stored.add(sha)
+        return did, sha, key, len(blob), None
+    except (Exception, SystemExit) as e:   # acts._get raises SystemExit on HTTP errors
+        return did, None, None, None, f"fetch: {e}"[:500]
+
+
+def save(cur, results):
+    ok = [r[:4] for r in results if not r[4]]
+    bad = [(r[0], r[4]) for r in results if r[4]]
+    if ok:
+        execute_values(cur, """UPDATE documents d SET sha256=v.sha, r2_key=v.key, bytes=v.n,
+            fetched_at=NOW(), error=NULL, updated_at=NOW()
+            FROM (VALUES %s) AS v(id, sha, key, n) WHERE d.id = v.id""", ok)
+    if bad:
+        execute_values(cur, """UPDATE documents d SET error=v.err, updated_at=NOW()
+            FROM (VALUES %s) AS v(id, err) WHERE d.id = v.id""", bad)
+
+
 def fetch(conn, source, limit=None):
     s3, bucket, cur = r2(), os.environ["R2_BUCKET"], conn.cursor()
+    # hashes already in R2, loaded once: Neon round trips from ada cost more than the downloads
+    cur.execute("SELECT DISTINCT sha256 FROM documents WHERE r2_key IS NOT NULL")
+    stored = {r[0] for r in cur.fetchall()}
     cur.execute("SELECT id, source_url FROM documents WHERE source = %s AND r2_key IS NULL "
                 "ORDER BY id LIMIT %s", (source, limit))
-    rows, ok, bad = cur.fetchall(), 0, 0
-    for i, (did, url) in enumerate(rows, 1):
-        try:
-            blob = acts._get(url)
-            if not blob.startswith(b"%PDF"):
-                raise ValueError("not a PDF: " + blob[:80].decode("utf8", "replace"))
-            sha = hashlib.sha256(blob).hexdigest()
-            key = f"source/{sha}.pdf"
-            # dedupe via the DB, not a HEAD request: Neon is free, R2 ops are not
-            cur.execute("SELECT 1 FROM documents WHERE sha256 = %s AND r2_key IS NOT NULL LIMIT 1", (sha,))
-            if not cur.fetchone():
-                s3.put_object(Bucket=bucket, Key=key, Body=blob, ContentType="application/pdf")
-            cur.execute("UPDATE documents SET sha256=%s, r2_key=%s, bytes=%s, fetched_at=NOW(), "
-                        "error=NULL, updated_at=NOW() WHERE id=%s", (sha, key, len(blob), did))
-            ok += 1
-            msg = f"ok {len(blob) // 1024} KB"
-        except (Exception, SystemExit) as e:   # acts._get raises SystemExit on HTTP errors
-            conn.rollback()
-            cur.execute("UPDATE documents SET error=%s, updated_at=NOW() WHERE id=%s",
-                        (f"fetch: {e}"[:500], did))
-            bad += 1
-            msg = f"FAIL {e}"[:100]
-        conn.commit()
-        print(f"[{i}/{len(rows)}] doc {did}: {msg}", flush=True)
-        time.sleep(DELAY)
+    rows, ok, bad, done = cur.fetchall(), 0, 0, []
+    with ThreadPoolExecutor(WORKERS) as pool:
+        for n, r in enumerate(as_completed([pool.submit(download, s3, bucket, stored, *row)
+                                            for row in rows]), 1):
+            did, _, _, size, err = r.result()
+            done.append(r.result())
+            ok, bad = ok + (not err), bad + bool(err)
+            print(f"[{n}/{len(rows)}] doc {did}: {f'FAIL {err}'[:100] if err else f'ok {size // 1024} KB'}",
+                  flush=True)
+            if len(done) >= BATCH or n == len(rows):
+                save(cur, done)
+                conn.commit()
+                done = []
     print(f"\n{ok} fetched, {bad} failed (failed rows stay queued; re-run to retry)")
 
 
