@@ -35,7 +35,8 @@ def discover_acts(cur):
     rows = {acts.pdf_url(c["uploadedFile"]): (
                 "acts", acts.pdf_url(c["uploadedFile"]), rec.get("descriptionEnglish"), rec.get("date"),
                 Json({"act_no": rec.get("actNoText"), "lang": c["language"], "listing": rec}))
-            for rec in acts.crawl() for c in rec.get("contents") or []}
+            for rec in acts.crawl() for c in rec.get("contents") or []
+            if c["language"] != "TAMIL"}   # Tamil out of scope (user, 2026-10-06)
     execute_values(cur,
         """INSERT INTO documents (source, source_url, title, doc_date, meta) VALUES %s
            ON CONFLICT (source, source_url) DO UPDATE

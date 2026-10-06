@@ -18,6 +18,8 @@ The goal is the law as it stands now. Phases, in order:
 
 Model: starting text (a consolidation) plus Acts after it as amendments, checked against the 2024 consolidation.
 
+**Tamil is out of scope (user, 2026-10-06).** All 1174 Tamil `documents` rows (702 MB of PDFs, 978 with raw extraction) were deleted from Neon and their 2150 R2 objects removed; `etl.fetch acts` no longer lists Tamil files. One Tamil file had the same sha256 as a non-Tamil row, so its R2 objects were kept. To bring Tamil back, drop the filter in `discover_acts` and re-run fetch.
+
 ## Open datasets (surveyed 2026-10-04)
 
 Use these before scraping. They are already downloaded mirrors, served from GitHub raw or Hugging Face with no rate limits or Cloudflare.
