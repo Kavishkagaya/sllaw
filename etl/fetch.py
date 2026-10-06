@@ -66,7 +66,9 @@ def discover_lankalaw(cur):
              Json({"act_no": r["act_no"], "lang": "ENGLISH", "format": r["format"], "date_precision": "year",
                    "listing": r}))
             # 1980 onwards only (decision 2026-10-05): pre-1980 law waits
-            for r in lankalaw.crawl(range(1980, 2027)) if r["act_no"] not in have and 1980 <= int(r["act_no"].split("/")[1]) <= 2026]
+            for r in lankalaw.crawl(range(1980, 2027)) if r["act_no"] not in have
+            and not r["url"].endswith(("_S.pdf", "_T.pdf"))   # documents.gov.lk Sinhala/Tamil, listed as English
+            and 1980 <= int(r["act_no"].split("/")[1]) <= 2026]
     execute_values(cur,
         """INSERT INTO documents (source, source_url, title, doc_date, meta) VALUES %s
            ON CONFLICT (source, source_url) DO UPDATE
@@ -85,7 +87,10 @@ def r2():
 def download(s3, bucket, stored, did, url):
     """One file: download, hash, put to R2 unless already stored. Runs in a worker thread."""
     try:
-        blob = acts._get(url)
+        try:
+            blob = acts._get(url)
+        except (Exception, SystemExit):   # dead host, expired cert, 404: closest raw Wayback snapshot
+            blob = acts._get(f"https://web.archive.org/web/2id_/{url}")
         html = url.lower().endswith((".html", ".htm"))    # lankalaw serves some Acts as HTML pages
         if html and b"<" not in blob[:2000]:
             raise ValueError("not HTML: " + blob[:80].decode("utf8", "replace"))
