@@ -98,6 +98,8 @@ Files: `https://documents.gov.lk/api/content-file-proxy?file=/<uploadedFile>`.
 | 1999–2026 | ~990 | ~98% |
 
 - 27 records before 1999 have no file at all.
+- **2008 English PDFs are mostly scans** (sample of 22, 2026-10-04): 3 born-digital A4, 10 image-only scans at about 388–438 × 558–608 pt, and 9 scans carrying a third-party OCR text layer in `*`-named fonts, whose text is poor. 2009 onwards (sampled) is born-digital A4. 2000–2007 is not checked yet.
+- Worst years (Acts listed vs highest act no., from Neon 2026-10-04): 1989 6/18, 1991 10/53, 1995 6/37, 1985 29/54, 1982 35/52. 1980: 56/62, English 54, Sinhala 26, Tamil 5. Gaps fill from lk_datasets (+144 files), SinhaLegal (Sinhala 1981–2014), and the 1980 Revised Edition for pre-1980 law.
 - Constitution amendments are listed as act no `0/YYYY`, but only the **17th (Sinhala only) through 22nd**. The 1978 base text is not on this site.
 
 ### Blockers
@@ -112,12 +114,12 @@ Private site. robots.txt allows everything, and PDFs (`/wp-content/uploads/…`)
 
 | Collection | Path | Format | Notes |
 |---|---|---|---|
-| Legislative Enactments 1980 Revised Edition | `/legislative-enactments/ceylon-legislative-enactments-1980/` | One PDF per chapter (`sog93171.pdf` = Sale of Goods, Cap. 93) | Last **official** consolidation; the 1980 baseline |
+| Legislative Enactments 1980 Revised Edition | `/legislative-enactments/ceylon-legislative-enactments-1980/` | One PDF per chapter (`sog93171.pdf` = Sale of Goods, Cap. 93) | Last **official** consolidation; the 1980 baseline. One HTML table lists everything: 519 rows with a PDF, **516 distinct PDFs**, chapter numbers up to 636, so chapters without a PDF exist (surveyed 2026-10-04). Spider: `etl/spiders/le1980.py`; `etl.fetch le1980`. Not fetched yet |
 | Legislative Enactments 1956, 1656–1956 | `/ceylon-legislative-enactments-1956/` | One PDF per chapter | Historical |
 | Consolidated statutes up to 2006 | `/consolidated-statutes-upto-2006/` | HTML, ~1,490 | Already in `consolidated_statutes`; the 2006 baseline |
 | Consolidated acts 2024 | `/legislations/acts-and-laws/consolidated-acts-2024/` | HTML and PDF | Already scraped; a checkpoint to test against |
 | Consolidated acts 2025 | `/consolidated-acts-2025/` | — | **Login wall. Do not bypass.** |
-| Acts by year 1956–2026 | `/sri-lanka-acts-<year>/` | Mostly PDF, some HTML | Fills the 1980–98 English gap (1985: 56 listed) |
+| Acts by year 1956–2026 | `/sri-lanka-acts-<year>/` | Mostly PDF, some HTML | Fills the 1980–98 English gap. Table rows are `NN/YYYY : <a href=…pdf\|html>Title</a>`, so they match our `act_no`. Probed 2026-10-05: **1985: 56 rows, 41 PDF links** (documents.gov.lk has 0 English for 1985); **1991: 30 PDF links** (documents.gov.lk lists only 10 of 53 Acts). Language of the PDFs not checked yet (titles are English). 1956–1979 pages would give pre-1980 Acts by number, which the 1980 Revised Edition files under chapter numbers instead |
 | Core legislation | site nav | — | Constitution, Penal Code, CPC, Evidence Ordinance, Judicature Act. The likely source for the **1978 Constitution base text**; not yet checked |
 
 ## parliament.lk

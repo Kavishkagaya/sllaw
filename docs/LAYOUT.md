@@ -271,6 +271,9 @@ The print format changed at some point between 2003 and 2010:
 |---|---|---|
 | Pre-~2007 | 384×552 pt (small booklet) | doc1 (2000), doc3 (2003) |
 | ~2007 onward | 595×842 pt (A4) | doc4 (2010), doc2 (2012), doc5 (2018) |
+| late 2025 onward | 420×595 pt (A5) | Appropriation 23/2025; 5/2026, 6/2026, 10/2026 (checked 2026-10-04) |
+
+**The body column is 240 pt wide in every format** (39–278, 106–346, 144–384, 211–451, 131–374), so `etl/structure.py` finds it from the right edge alone. The 2024 A4 Acts in the 2026-10-04 sample are still 595×842; the exact switch date to A5 is not measured.
 
 The two-column main+marginal layout is **identical in both eras** — only the absolute x positions differ because the page is wider.
 

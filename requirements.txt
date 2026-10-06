@@ -5,4 +5,6 @@ python-dotenv==1.2.2
 
 # Step 2: extract (run on ada)
 docling==2.104.0         # API used by etl/extract.py verified against this version
-chandra-ocr==0.2.0       # client only; the model runs in a vLLM server (see CLAUDE.md setup)
+docling-surya==0.1.0     # Surya OCR inside docling for scanned pages (replaced Chandra, 2026-10-06)
+surya-ocr==0.17.1        # the line-level OCR the plugin needs; 0.22+ is a VLM without surya.foundation
+transformers==4.57.6     # surya 0.17 breaks on transformers 5.x (CLAUDE.md known issues)

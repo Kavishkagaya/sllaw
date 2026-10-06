@@ -17,14 +17,19 @@ docs/
 etl/               the pipeline: one file per step
   fetch.py         step 1: list sources → PDFs into R2 → rows in Neon
   extract.py       step 2: router → docling (text layer) / Chandra (scans) → raw JSON into R2
+  structure.py     step 3: raw → blocks (docling adapter) → Act JSON (sections, notes, quotes, schedules)
+  label.py         experiment: Jev/Clef block labeller (not adopted, see PIPELINE.md)
+  graph.py         step 4: structured Acts + amendment edges into Neon; `walk` = section as of a year
   migrate.py       applies etl/migrations/*.sql in order
   migrations/
   spiders/acts.py  documents.gov.lk listing (Next.js Server Action)
+  spiders/lankalaw.py  lankalaw.net Acts by year (fills gaps; PDF and HTML)
+  spiders/le1980.py    lankalaw.net Legislative Enactments 1980 (pre-1980 chapters)
 viewer/            Next.js app for browsing documents from Neon
 legacy/            archive of the previous pipelines; read-only, not imported
 ```
 
-Next step, a new file in `etl/` when built: per-engine adapters that turn docling and Chandra raw output into one common block shape.
+Structuring is code-based and English-only (decision 2026-10-04); Sinhala/Tamil go to an agent with the whole Act when needed. Next: apply migration 002 on Neon and run `etl.graph build` on ada (not done yet); test 2000–2008 once extracted; a Chandra adapter for pre-2000 scans. `etl/label.py` (Jev/Clef labeller) is kept as an experiment, not used. See PIPELINE.md.
 
 ## Setup (ada or local)
 
@@ -45,7 +50,9 @@ cp .env.example .env                     # fill DATABASE_URL and R2_*
 
 Fetching and extraction run on **ada**, never locally: no source files on this machine. Use the `/ada-ssh` skill.
 
-- ada: 3× NVIDIA RTX 6000 Ada (49 GB each), **shared with other users**: check `nvidia-smi` and pick the idle card. Project dir `~/sllaw/` with `.venv`. There is no conda env and no sudo. Chandra server: `etl/chandra_server.sh` (GPU/MEM/PORT env vars), port 8011.
+- ada: 3× NVIDIA RTX 6000 Ada (49 GB each), **shared with other users**: check `nvidia-smi` and pick the idle card. Project dir `~/sllaw/`. There is no conda env and no sudo. Chandra server: `etl/chandra_server.sh` (GPU/MEM/PORT env vars), port 8011.
+- **Run Python on ada from `/tmp/e19309/sllaw_venv/bin/python`, not `~/sllaw/.venv`.** The home directory is NFS (`/new-home`, 8 KB reads); loading docling/torch from it took over 25 minutes on 2026-10-05, against 27 seconds from local disk. `/tmp` is wiped when ada reboots (it did on 2026-10-05 09:40 UTC, killing extraction and Chandra): run `CHANDRA_GPU=<idlest card> DOCLING_GPU=<other> bash ~/sllaw/etl/ada_setup.sh` in tmux. It rebuilds both venvs, starts Chandra (re-downloading its 16 GB of weights) and starts 3 English extraction workers; failed and unfinished files are still queued, so nothing is redone needlessly.
+- Store nothing else on ada: jobs stream R2 → memory → R2/Neon. Logs go to `~/sllaw/logs/`.
 
 ## Sources, scope and decisions
 
