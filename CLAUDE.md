@@ -16,13 +16,17 @@ docs/
   LAYOUT.md        how Act PDFs are laid out (columns, marginal notes, page types)
 etl/               the pipeline: one file per step
   fetch.py         step 1: list sources → PDFs into R2 → rows in Neon
-  extract.py       step 2: docling (text layer, HTML) → raw JSON into R2; scans go to ocr.py
-  structure.py     step 3: raw → blocks (docling adapter) → Act JSON (sections, notes, quotes, schedules)
-  ocr.py           step 2b: LightOnOCR-3-0.8B on scanned pages (pre-2000) → raw/lighton/ in R2
+  extract.py       step 2: docling (text layer, HTML) → raw JSON into R2; --ocr-api sends scans to LightOn in the same pass
+  structure.py     step 3: raw → blocks (docling adapter) → Act JSON (sections, notes, quotes, schedules);
+                   `build` = R2 raws → Neon acts + sections
+  ocr.py           step 2b: LightOnOCR-3-0.8B on scanned pages → raw/lighton/ in R2 (queue: files extracted without --ocr-api)
   ocr_ada.sh       starts 2 vLLM servers + 4 ocr workers on ada (from /var/tmp/e19309)
   ocr_lighton.py   experiment: LightOn vs Chandra/Surya/text layer comparison (PIPELINE.md)
   label.py         experiment: Jev/Clef block labeller (not adopted, see PIPELINE.md)
-  graph.py         step 4: structured Acts + amendment edges into Neon; `link` = same_as between old laws,
+  docs.py          documents model (2026-10-10): text (LightOn / HTML) -> docs + chunks + links; `docs_ada.sh` runs it on ada
+  db_ada.sh        the project Postgres on ada (init/start; /var/tmp/e19309/pgdata, localhost:5433)
+  backup.py        tables -> gzipped CSV in R2 (backups/), read back and counted
+  graph.py         step 4: edges from acts.doc (Neon only, ~45 s, all rebuilt); `link` = same_as between old laws,
                    chapters and editions; `walk` = section as of a year
   migrate.py       applies etl/migrations/*.sql in order
   migrations/
@@ -31,11 +35,12 @@ etl/               the pipeline: one file per step
   spiders/le1980.py    lankalaw.net Legislative Enactments 1980 (pre-1980 chapters; cap:N)
   spiders/le1956.py    lankalaw.net Legislative Enactments 1956 (HTML chapters; cap1956:N)
   spiders/commonlii.py CommonLII numbered Acts via the Wayback Machine (only laws we hold no file for)
+  spiders/parliament.py parliament.lk Acts listing: official English PDFs 1956– (preferred over lankalaw)
 viewer/            Next.js app for browsing documents from Neon
 legacy/            archive of the previous pipelines; read-only, not imported
 ```
 
-Structuring is code-based and English-only (decision 2026-10-04); Sinhala/Tamil go to an agent with the whole Act when needed. Scanned pages before 2000 are read by LightOnOCR-3-0.8B (`etl/ocr.py`, decision 2026-10-09); the graph is built on Neon (BUILD 2026-10-09.5). Pre-1980 law is in (lankalaw 1956–79 Acts, 1956 and 1980 Revised Editions) and `etl.graph link` ties old laws, chapters and editions together: 98.9% of change edges reach their target (92 left: laws with no file anywhere we can reach). Next: verify edge precision (judge model + gold set), LightOn on the 119 post-2000 files with scanned pages (1,708 pages), schedules split into items, the vector layer (pgvector) for search + graph walk. `etl/label.py` (Jev/Clef labeller) is kept as an experiment, not used. See PIPELINE.md.
+Structuring is code-based and English-only (decision 2026-10-04); Sinhala/Tamil go to an agent with the whole Act when needed. Scanned pages before 2000 are read by LightOnOCR-3-0.8B (`etl/ocr.py`, decision 2026-10-09); the graph is built on Neon (BUILD 2026-10-10.2). Pre-1980 law is in (lankalaw 1956–79 Acts, 1956 and 1980 Revised Editions) and `etl.graph link` ties old laws, chapters and editions together: parliament.lk's official PDFs (1956 on) replace lankalaw's copies (2026-10-10); 99.36% of change edges reach their target (78 left: laws with no file anywhere we can reach); CommonLII is the last resort (32 laws no official source has). Laws are keyed `law:`, Acts `act:`. Current model (2026-10-10): `etl/docs.py`, documents → chunks → links between documents (PIPELINE.md, "Documents, chunks and links"); Neon's transfer quota was hit, so never bulk-read doc or chunk text out of Neon. Next: verify edge precision (judge model + gold set), LightOn on the 119 post-2000 files with scanned pages (1,708 pages), schedules split into items, the vector layer (pgvector) for search + graph walk. `etl/label.py` (Jev/Clef labeller) is kept as an experiment, not used. See PIPELINE.md.
 
 ## Setup (ada or local)
 
@@ -83,7 +88,13 @@ Rules:
 
 ## Database
 
-Neon Postgres. `documents` is the only table: one row per source file (listing record verbatim in `meta`, `sha256`, `r2_key`). Schema: `etl/migrations/001_documents.sql`.
+**Since 2026-10-10 the working database is Postgres on ada** (`etl/db_ada.sh`: Postgres 16 + pgvector from the
+pgserver wheel, data in `/var/tmp/e19309/pgdata`, `localhost:5433`, URL `DB_LOCAL_URL` in ada's `~/sllaw/.env`;
+from here: `ssh -L 5433:localhost:5433 ada`). Neon's free transfer quota (5 GB egress/month) was hit; Neon keeps
+the old copy and gets a dump later. Backups: `python -m etl.backup <table>` -> `backups/<table>_<time>.csv.gz` in R2
+(`documents`, the one table nothing rebuilds: 6,496 rows on 2026-10-10).
+
+Neon Postgres (until 2026-10-10). Tables: `docs`, `chunks`, `links` (migration 003, the current model); `acts`, `sections`, `edges` (002, the earlier section model, kept); `documents`, the file inventory: one row per source file (listing record verbatim in `meta`, `sha256`, `r2_key`). Schema: `etl/migrations/001_documents.sql`.
 
 ```bash
 .venv/bin/python3 etl/migrate.py           # apply pending
@@ -104,4 +115,5 @@ Needs `DATABASE_URL` in `viewer/.env.local`. It currently reads the legacy `chun
 - **docling default backend (docling_parse) once failed on gazette PDFs** (older docling). With 2.104 it works on Acts and keeps word cells and fonts, which pypdfium doesn't. `etl/extract.py` uses it and falls back to pypdfium per file.
 - **transformers 5.x breaks surya**: `SuryaDecoderConfig` is missing `pad_token_id`. Downgrade to 4.57.6 and add `kwargs.setdefault("pad_token_id", 2)` before `super().__init__()` in `surya/common/surya/decoder/config.py`.
 - **Surya on CPU gives 1 box/page**: always run it on ada.
+- **ada's DNS sometimes fails to resolve the database host** for a minute or so (three times on 2026-10-10; once it killed all four OCR workers at start): connect with `etl.fetch.pg_connect()`, which retries for ~5 minutes.
 - **docling `PARTIAL_SUCCESS` drops pages** when Surya fails on some of them (15/1991 kept 1 of 7). `etl/extract.py` raises on it so the row stays queued; never store a partial raw.

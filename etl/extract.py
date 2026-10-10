@@ -6,12 +6,14 @@
   python3 -m etl.extract --no-ocr       # only files with a text layer (no OCR)
   python3 -m etl.extract --before 2000 --limit 5   # scans only (OCR pilot)
   python3 -m etl.extract --recheck-ocr  # re-queue files whose OCR-layer pages were not OCR'd
+  python3 -m etl.extract --ocr-api http://localhost:8013/v1   # scanned pages to LightOn right away
   (start it N times to run N workers side by side: each claims files from the shared queue)
 
 Per unique file (sha256): read the PDF from R2, count text-layer characters per
 page, then route:
   any page with a text layer      -> docling (whole file, OCR off)
-  pages with no text but an image -> no OCR here: etl.ocr (LightOnOCR-3) afterwards, into raw/lighton
+  pages with no text but an image -> LightOnOCR-3 into raw/lighton: with --ocr-api (a vLLM server, see
+                                     etl/ocr_ada.sh) in the same pass, else etl.ocr afterwards
                                      (Surya inside docling 2026-10-06..09, Chandra before)
   pages whose text is an OCR layer over an image (fonts named '*Minion Pro-21633', 2008 scans)
                                   -> the same: that OCR is poor ("Rath11t1jotlzi")
@@ -75,6 +77,7 @@ def is_scan(p):
     return bool(p["images"]) and (p["chars"] < MIN_CHARS or p.get("ocr_layer", False))
 
 
+_ocr = None      # (api, etl.ocr module, page pool) when run with --ocr-api
 _docling = {}
 def docling(pdf, name, digital_pages, ocr=None):
     """docling_parse backend: word cells with font names (bold/italic, FM-font detection).
@@ -185,11 +188,17 @@ def claim(before, lang, tried, me):
     return row
 
 
-def run(limit=None, use_ocr=True, before=None, lang="ENGLISH"):
+def run(limit=None, use_ocr=True, before=None, lang="ENGLISH", ocr_api=None):
     """lang: only files in this language (decision 2026-10-05: English only; None = all). Runs until
     the shared queue is empty, so files fetched meanwhile are picked up and any number of workers can
-    run side by side."""
+    run side by side. ocr_api: a LightOn vLLM server; scanned pages go to it in the same pass (2026-10-10:
+    a separate etl.ocr run after extraction was an extra step for no gain)."""
+    global _ocr
     s3, bucket = r2(), os.environ["R2_BUCKET"]
+    if ocr_api:
+        from concurrent.futures import ThreadPoolExecutor
+        from etl import ocr as lighton      # requests + pypdfium2 only; the model runs in the vLLM server
+        _ocr = (ocr_api, lighton, ThreadPoolExecutor(24))   # pages in flight, as etl.ocr
     me = f"{os.uname().nodename}:{os.getpid()}"
     tried, counts = set(), [0, 0, 0]
     while (not limit or len(tried) < limit) and (row := claim(before, lang, tried, me)):
@@ -245,8 +254,17 @@ def run_batch(rows, s3, bucket, use_ocr, counts, label=None):
             write("UPDATE documents SET raw_key=%s, extracted_at=NOW(), error=NULL, updated_at=NOW() "
                   "WHERE sha256=%s", (rkey, sha))
             ok += 1
+            done = "for etl.ocr"
+            if scan and _ocr:
+                # raw/v2 is already stored: if this fails the file just waits in etl.ocr's queue
+                api, lighton, pool = _ocr
+                try:
+                    cut = lighton.ocr_file(api, sha, pdf, [n + 1 for n in scan], pool, s3, bucket)
+                    done = f"OCR'd{f', {cut} cut off' if cut else ''}"
+                except Exception as e:
+                    done = f"OCR failed, left for etl.ocr: {e}"[:120]
             s = time.time() - t0
-            msg = f"ok {len(pages)} pages ({len(scan)} scanned, for etl.ocr) in {s:.0f}s, {len(pages) / s:.2f} pages/s"
+            msg = f"ok {len(pages)} pages ({len(scan)} scanned, {done}) in {s:.0f}s, {len(pages) / s:.2f} pages/s"
         except Exception as e:
             try:
                 write("UPDATE documents SET error=%s, updated_at=NOW() WHERE sha256=%s", (f"extract: {e}"[:500], sha))
@@ -307,12 +325,14 @@ def main():
     a.add_argument("--no-ocr", action="store_true", help="skip files that have pages needing OCR")
     a.add_argument("--before", help="only documents dated before this, e.g. 2000 (pilot on scans)")
     a.add_argument("--lang", default="ENGLISH", help="ENGLISH (default), SINHALA, TAMIL, or all")
+    a.add_argument("--ocr-api", help="LightOn vLLM server, e.g. http://localhost:8013/v1: OCR scanned pages now")
     a.add_argument("--recheck-ocr", action="store_true",
                    help="re-queue extracted files whose OCR-layer scan pages went to docling, then exit")
     args = a.parse_args()
     if args.recheck_ocr:
         return recheck()
-    run(args.limit, not args.no_ocr, args.before, None if args.lang.lower() == "all" else args.lang.upper())
+    run(args.limit, not args.no_ocr, args.before, None if args.lang.lower() == "all" else args.lang.upper(),
+        args.ocr_api)
 
 
 if __name__ == "__main__":

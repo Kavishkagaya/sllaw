@@ -6,7 +6,8 @@
 #   sllaw_venv  requirements.txt: docling + Surya OCR (extract), graph
 #   hf, cache   model weights and caches                  pip_cache
 # Env: WORKERS (default 3: one per card); GPU to pin all workers to one card (default: own card each, freest first).
-# Scanned pages are OCR'd by Surya inside docling (replaced Chandra and its vLLM server, 2026-10-06).
+# OCR_API=http://localhost:8013/v1: scanned pages go to that LightOn server in the same pass (start it first:
+# etl/ocr_ada.sh); without it they wait for a separate etl.ocr run.
 set -euxo pipefail
 T=/var/tmp/e19309; R=~/sllaw
 mkdir -p $T/hf $T/pip_cache $T/cache $R/logs
@@ -36,7 +37,7 @@ N=${WORKERS:-3}; S=$(date +%Y%m%d_%H%M); THREADS=${THREADS:-8}
 for i in $(seq 0 $((N - 1))); do
     G=${GPU:-${GPUS[$((i % ${#GPUS[@]}))]}}
     tmux has-session -t extract$i 2>/dev/null || tmux new-session -d -s extract$i \
-        "cd $R && CUDA_VISIBLE_DEVICES=$G HF_HOME=$T/hf XDG_CACHE_HOME=$T/cache OMP_NUM_THREADS=$THREADS MKL_NUM_THREADS=$THREADS $T/sllaw_venv/bin/python -u -m etl.extract --lang ENGLISH > logs/extract_${S}_w$i.log 2>&1"
+        "cd $R && CUDA_VISIBLE_DEVICES=$G HF_HOME=$T/hf XDG_CACHE_HOME=$T/cache OMP_NUM_THREADS=$THREADS MKL_NUM_THREADS=$THREADS $T/sllaw_venv/bin/python -u -m etl.extract --lang ENGLISH ${OCR_API:+--ocr-api $OCR_API} > logs/extract_${S}_w$i.log 2>&1"
     echo "worker $i on GPU $G"
 done
 echo SETUP_DONE

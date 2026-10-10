@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-"""Step 4: structured English Acts + the amendment graph in Neon, and the post-retrieval walk.
+"""Step 4: the amendment graph in Neon, built from the structured Acts (step 3, etl.structure build),
+and the post-retrieval walk.
 
-  python3 -m etl.graph build [--limit N] [--full]   # new/changed English Acts -> acts, sections, edges
+  python3 -m etl.graph build                        # every Act's acts.doc -> edges (all rebuilt), then link
   python3 -m etl.graph walk 14/2002 22 --year 2023  # a section as it stood: original + changes up to then
   python3 -m etl.graph missing                      # targets edges point at that are not built, and why
 
@@ -17,51 +18,32 @@ Edges are read from text the structure step already isolates, not guessed:
 The walk is for retrieval: it doesn't apply amendments, it lists them in date order so the
 reader (an LLM) gets the original wording plus every later change up to the year asked.
 """
-import argparse, gzip, json, os, re
+import argparse, json, os, re
 from collections import Counter
-from concurrent.futures import ProcessPoolExecutor
-from pathlib import Path
 
 import psycopg2
 from dotenv import load_dotenv
-from psycopg2.extras import Json, execute_values
+from psycopg2.extras import execute_values
 
-from etl.fetch import r2
-from etl.structure import act, blocks
+from etl.structure import is_law_year, sched_name, text_of
 
 load_dotenv()
-# Bump when etl/structure.py or the edge rules change, so `build` redoes every Act; otherwise it only
-# builds Acts that are new or were re-extracted (their raw_key or extracted_at changed).
-BUILD = "2026-10-09.5"  # 07: Surya text, non-English skipped, printed date = year; 09: LightOn pages (old if better), notes, openers
 CIT = re.compile(r"\b(Act|Law|Ordinance),?\s*No\.?\s*(\d+)\s+of\s+(\d{4})", re.I)
 CHAP = re.compile(r"\b(?:Chapter|Cap\.?)\s*(\d+[A-Z]?)\b")        # digits only: this Act's own CHAPTERs are roman
 NOTE = re.compile(r"^(Amendment|Replacement|Substitution|Repeal|Insertion|Addition)s?\b(.*)$", re.I)
+# "(hereinafter referred to as the 'principal enactment')", also unquoted, with a space inside the quote
+# (law:12/1976 '" principal enactment "') or "the principal Act"
+PRINCIPAL = re.compile(r"referred\s+to\s+as\s+(?:the\s+)?['‘’\"“”]{0,2}\s*(?:the\s+)?principal\s+(?:enactment|Act|Law|Ordinance)\b", re.I)
 KIND = {"amendment": "amends", "replacement": "replaces", "substitution": "replaces",
         "repeal": "repeals", "insertion": "inserts", "addition": "inserts"}
-
-
-ORDINAL = "first second third fourth fifth sixth seventh eighth ninth tenth eleventh twelfth".split()
-
-
-def sched_name(t):
-    """'FIRST SCHEDULE', 'the First Schedule', 'SCHEDULE A (Section 2)', 'SCHEDULE' -> 'First Schedule',
-    'Schedule A', 'Schedule': the same name for a schedule's own row and for edges pointing at it."""
-    m = re.search(rf"\b(?:({'|'.join(ORDINAL)})\s+)?(SCHEDULES?)\b(?:\s+(?!(?:in|to|of|the|and)\b)([A-Z0-9]{{1,3}})\b(?!\s*\())?",
-                  t, re.I)
-    if not m:
-        return None
-    if m[1]:
-        return f"{m[1].title()} Schedule"
-    if m[2].lower() == "schedules":
-        return "Schedules"                                 # "Repeal of Schedules" = all of them
-    return f"Schedule {m[3].upper()}" if m[3] else "Schedule"
 
 
 # "Chapter N" is ambiguous: later Acts cite pre-1980 law by its 1956 Revised Edition chapter as often as by
 # its 1980 one ("section 53 of the Penal Code (Chapter 19)", 10/2018; Chapter 19 in 1980 is Courts' Records).
 # The law's name is not ambiguous, so a chapter citation resolves by the name printed before it.
-CHAPTERS = {}            # normalised 1980 chapter title -> its acts key; loaded per worker (load_chapters)
-_cite = {"local": {}, "le": False}   # per Act being built: chapter number -> key resolved by name; in a 1980 chapter?
+CHAPTERS = {}            # normalised 1980 chapter title -> its acts key (load_chapters, once per build)
+TITLES = {}              # normalised title of a principal Act/Law -> its key (load_chapters)
+_cite = {"local": {}, "le": False, "old": False}   # per Act: chapter number -> key by name; in a 1980 chapter? before 1959?
 
 
 def norm_name(t):
@@ -87,24 +69,54 @@ def load_chapters(cur):
             seen.setdefault(n, set()).add(k)
     CHAPTERS.clear()
     CHAPTERS.update({n: next(iter(ks)) for n, ks in seen.items() if len(ks) == 1})
+    # ...and every principal Act or Law by its title ("the Banking Act" = act:30/1988), for a principal enactment
+    # named without a usable number; amending Acts are left out, a title two laws share decides nothing
+    cur.execute("SELECT key, title FROM acts WHERE key ~ '^(act|law):' AND title !~* 'amendment|appropriation'")
+    seen = {}
+    for k, t in cur.fetchall():
+        n = norm_name(re.sub(r",?\s*No\.?\s*\d+\s+of\s+\d{4}.*$", "", t or "", flags=re.I))
+        if n:
+            seen.setdefault(n, set()).add(k)
+    TITLES.clear()
+    TITLES.update({n: next(iter(ks)) for n, ks in seen.items() if len(ks) == 1})
+
+
+def law_by_name(text, acts=False):
+    """The chapter whose title ends `text` ("Section 4 of the Maternity Benefits Ordinance"), longest
+    name first; with acts=True also a principal Act's title ("Section 2 of the Banking Act"). None if none."""
+    words = re.findall(r"[A-Za-z’'-]+", text[-160:])
+    for k in range(min(12, len(words)), 0, -1):
+        n = norm_name(" ".join(words[-k:]))
+        if (hit := CHAPTERS.get(n) or (acts and k > 1 and TITLES.get(n))):
+            return hit
+    return None
+
+
+def younger(target, key):
+    """Is `target` a numbered law dated after `key`? Then it can't be what `key` amends (a misprinted year)."""
+    y = lambda k: int(k[-4:]) if k and re.search(r"/\d{4}$", k) else None
+    return y(target) is not None and y(key) is not None and y(target) > y(key)
 
 
 def chapter_by_name(m):
-    """The chapter whose title ends the text just before "(Chapter N)", longest name first; None if none."""
-    words = re.findall(r"[A-Za-z’'-]+", m.string[max(0, m.start() - 160):m.start()])
-    for k in range(min(12, len(words)), 0, -1):
-        if (hit := CHAPTERS.get(norm_name(" ".join(words[-k:])))):
-            return hit
-    return None
+    """The chapter whose title ends the text just before "(Chapter N)"."""
+    return law_by_name(m.string[max(0, m.start() - 160):m.start()])
 
 
 def key_of(m):
     """A citation match -> node key: act:14/2002, law:1/1975, ordinance:5/1950, cap:107 (a 1980 chapter),
     chapter:19 (a chapter number whose law isn't named, so the edition is unknown)."""
     if m.re is CHAP:
+        # in a 1980 chapter: 1980 numbers. Acts up to 1958 still cite the 1938 edition's numbers (2026-10-10: every
+        # named "X (Chapter N)" in 1956-58 Acts, 5 of 5, is not X's 1956 number; from 1961, 15 of 18 are): a bare
+        # one there is left unlinked (chapter1938:N) rather than tied to the wrong 1956 chapter (3/1956's Income Tax
+        # "Chapter 188" was linked to the 1956 Antiquities Ordinance)
         return (chapter_by_name(m) or _cite["local"].get(m[1])
-                or (f"cap:{m[1]}" if _cite["le"] else f"chapter:{m[1]}"))   # in a 1980 chapter: 1980 numbers
-    return f"{m[1].lower()}:{int(m[2])}/{m[3]}"
+                or (f"cap:{m[1]}" if _cite["le"] else f"chapter1938:{m[1]}" if _cite["old"] else f"chapter:{m[1]}"))
+    kind, no = m[1].lower(), f"{int(m[2])}/{m[3]}"
+    if kind == "law" and not 1972 <= int(no[-4:]) <= 1978:
+        kind = "act"         # Laws were passed only 1972-78: "Village Councils Law, No. 6 of 1964" is an Act
+    return f"{'law' if kind == 'act' and is_law_year(no) else kind}:{no}"   # "Act No. 2 of 1974" = Law 2/1974
 
 
 def first_target(text):
@@ -112,35 +124,26 @@ def first_target(text):
     return key_of(hits[0]) if hits else None
 
 
-def text_of(s, quoted=None):
-    return "\n".join(((p["label"] + " ") if p["label"] else "") + p["text"] for p in s["paras"]
-                     if quoted is None or bool(p.get("quoted")) == quoted)
+ORDS = "first second third fourth fifth sixth seventh eighth ninth tenth eleventh twelfth"
+LIST = r"(?:\s*,\s*(?:and\s+)?|\s+and\s+)"
 
 
-def provisions(doc, key):
-    """Rows for `sections`: the preamble, every section, every schedule, in the Act's order."""
-    head = lambda h, word: h and " ".join(filter(None, [word, h["num"], h["title"]]))
-    rows = []
-    pre = "\n".join(filter(None, [doc["long_title"], *doc["preamble"], doc["enacting"]]))
-    if pre:
-        rows.append(("Preamble", "preamble", None, None, None, None, pre))
-    for s in doc["sections"]:
-        rows.append((s["num"], "section", s["note"], head(s["part"], "PART"), head(s["chapter"], "CHAPTER"),
-                     s.get("heading"), text_of(s)))
-    seen = set()
-    for sc in doc["schedules"]:
-        name = sched_name(sc["heading"] or "") or "Schedule"
-        n, i = name, 2
-        while n in seen:                           # two headings both read "SCHEDULE"
-            n, i = f"{name} ({i})", i + 1
-        seen.add(n)
-        # "[Section 41]", "(sections 5, 6 and 9)", "section 3(1)": the sections the schedule belongs to
-        ref = next((p["text"] for p in sc["paras"][:2]
-                    if re.fullmatch(r"[\[(]?\s*sections?\s+[\w(), ]{1,40}[\])]?\.?", p["text"].strip(), re.I)), None)
-        body = "\n".join("\n".join(" | ".join(c for c in r if c) for r in p["rows"]) if p.get("rows") else p["text"]
-                         for p in sc["paras"])
-        rows.append((n, "schedule", ref, None, None, None, "\n".join(filter(None, [sc["heading"], body]))))
-    return [(key, num, kind, i, *rest) for i, (num, kind, *rest) in enumerate(rows)]
+def sched_names(t):
+    """Every schedule a note names: "the First and Second Schedules", "Schedules I, II, III,IV, IVA and V"
+    -> one name each (one edge each; the first form gave only the Second, the second none, 2026-10-10)."""
+    if (m := re.search(rf"\b((?:(?:{ORDS.replace(' ', '|')}){LIST})+(?:{ORDS.replace(' ', '|')}))\s+Schedules\b", t, re.I)):
+        return [f"{w.title()} Schedule" for w in re.findall(rf"\b(?:{ORDS.replace(' ', '|')})\b", m[1], re.I)]
+    if (m := re.search(rf"\bSchedules\s+((?:[IVX]+[A-Z]?|[A-Z]|\d+){LIST}(?:(?:[IVX]+[A-Z]?|[A-Z]|\d+){LIST})*(?:[IVX]+[A-Z]?|[A-Z]|\d+))\b", t)):
+        return [f"Schedule {x}" for x in re.split(LIST, m[1])]
+    return [n] if (n := sched_name(t)) else []
+
+
+QOPEN = re.compile(r"^[\"'‘’“”]{0,2}\s*(\d{1,3}[A-Z]{0,5})\s*\.\s+\S")
+
+
+def quoted_sections(s):
+    """Section numbers a section's quoted text opens, in order: "“25A. (1) ...", "25B. Where ..." -> 25A, 25B."""
+    return list(dict.fromkeys(m[1] for p in s["paras"] if p.get("quoted") and (m := QOPEN.match(p["text"]))))
 
 
 def edges(doc, key, date):
@@ -148,33 +151,76 @@ def edges(doc, key, date):
     lt = doc["long_title"] or ""
     # a bare "Chapter 19" means the law this Act names as Chapter 19 elsewhere ("the Penal Code (Chapter 19)")
     _cite["le"], _cite["local"] = key.startswith("cap:"), {}
+    _cite["old"] = bool(re.search(r"/19[0-5]\d$", key)) and int(key[-4:]) <= 1958
     for m in CHAP.finditer(" ".join([lt] + [text_of(s) for s in doc["sections"]])):
         if m[1] not in _cite["local"] and (hit := chapter_by_name(m)):
             _cite["local"][m[1]] = hit
     lt_target = first_target(lt)
-    if lt_target and re.match(r"AN\s+ACT\s+TO\s+(AMEND|REPEAL|PROVIDE FOR THE REPEAL)", lt, re.I):
+    # the long title naming the Act itself or a younger law (misprint, "TO AMEND THE BANKING ACT, NO. 33 OF 1995" in
+    # 33/1995): the law by its name instead
+    if lt_target and (lt_target == key or younger(lt_target, key)):
+        lt_target = law_by_name(re.sub(r",?\s*No\.?\s*\d+\s+of\s+\d{4}.*$", "", lt, flags=re.I | re.S), acts=True)
+    # one law named without a number, "AN ACT TO AMEND THE MATERNITY BENEFITS ORDINANCE." (24/1962): its
+    # chapter by exact title
+    if not lt_target and (m := re.match(r"\s*AN?\s+(?:ACT|LAW)\s+TO\s+(?:AMEND|REPEAL)\s+THE\s+([A-Z ,'’()&-]+?"
+                                        r"(?:ACT|ORDINANCE|LAW|CODE))\s*[.§Â]*\s*$", lt, re.I)):
+        lt_target = CHAPTERS.get(norm_name(m[1]))
+    # "AN ACT TO AMEND THE CONSTITUTION OF THE DEMOCRATIC SOCIALIST REPUBLIC OF SRI LANKA" (0/YYYY, amendment:N);
+    # the 1978 base text is not in the corpus yet, so these edges wait for it
+    if not lt_target and re.match(r"AN\s+ACT\s+TO\s+AMEND\s+THE\s+CONSTITUTION\b", lt, re.I):
+        lt_target = "constitution"
+    if lt_target and re.match(r"AN?\s+(?:ACT|LAW)\s+TO\s+(AMEND|REPEAL|PROVIDE FOR THE REPEAL)", lt, re.I):
         kind = "repeals_act" if re.search(r"\bREPEAL\b", lt[:40], re.I) and "AMEND" not in lt[:20].upper() else "amends_act"
-        for t in dict.fromkeys(key_of(x) for r in (CIT, CHAP) for x in r.finditer(lt)):   # all laws it names
+        for t in dict.fromkeys(key_of(x) for r in (CIT, CHAP) for x in r.finditer(lt)) or [lt_target]:   # all laws it names
             out.append((None, kind, t, None, None, lt))
+    # the long title names one law (in words too: 33/1968 names an Ordinance without a number and Finance
+    # 11/1963): a surer principal than one note when the text's number is wrong
+    named = len(re.findall(r"\b(?:ACT|ORDINANCE|LAW|CODE)\b", re.sub(r"^\s*AN?\s+(?:ACT|LAW)\b", "", lt, flags=re.I), re.I))
+    lt_one = lt_target if named == 1 else None
     principal = None
     for s in doc["sections"]:
         own = text_of(s, quoted=False)
-        if not principal and (m := re.search(r"referred to as (?:the\s+)?['‘’\"“”]{1,2}(?:the\s+)?principal (?:enactment|Act|Law)", own)):
+        note = s["note"] or ""
+        if not principal and (m := PRINCIPAL.search(own)):
             # the law named just before the phrase, skipping "... as last amended by Act, No. 24 of 1999",
             # which names an amending Act, not the principal one (6 wrong aliases on the first Neon build)
-            before = sorted([x for r in (CIT, CHAP) for x in r.finditer(own[:m.start()])
-                             if not re.search(r"amended\s+by\s*(?:the\s+)?$", own[max(0, x.start() - 40):x.start()], re.I)],
+            pre = own[:m.start()]
+            # ...and no law younger than this one: CommonLII's law:30/1978 says "Inland Revenue Act, No. 4 of
+            # 1983" for 4/1963 (its long title is right), which sent 46 edges into a 1983 Act
+            year = int(key[-4:]) if re.search(r"/\d{4}$", key) else 9999
+            before = sorted([x for r in (CIT, CHAP) for x in r.finditer(pre)
+                             if not re.search(r"amended\s+by\s*(?:the\s+)?$", own[max(0, x.start() - 40):x.start()], re.I)
+                             and not (x.re is CIT and int(x[3]) > year) and key_of(x) != key],
                             key=lambda x: x.start())
-            principal = key_of(before[-1]) if before else None
-        note = s["note"] or ""
+            if before:
+                principal = key_of(before[-1])
+            else:
+                # named without a number, "Section 4 of the Maternity Benefits Ordinance (hereinafter ...)":
+                # by its chapter title, else the one law the long title names, else what this section's own
+                # note names ("... of Chapter 140."; 2,522 principal-enactment notes in 286 laws had no edge
+                # before, 2026-10-10)
+                name = re.sub(r"here(?:in)?-?\s*after(?!.*here(?:in)?-?\s*after).*$", "", pre, flags=re.I | re.S)
+                name = re.sub(r"[\s(,]*(?:as\s+(?:last\s+)?amended\s+by\b.*)?[\s(,]*$", "", name, flags=re.I | re.S)
+                name = re.sub(r",?\s*No\.?\s*\d+\s+of\s+\d{4}\s*$", "", name, flags=re.I)   # its (misprinted) number
+                principal = law_by_name(name, acts=True) or lt_one
+                nm = NOTE.match(note.strip())
+                if principal:      # the note's bare "Chapter 140" is this law too (1956 or 1980 number)
+                    for c in CHAP.finditer(nm[2] if nm else ""):
+                        _cite["local"].setdefault(c[1], principal)
+                else:
+                    principal = first_target(nm[2]) if nm else None
         if (m := NOTE.match(note.strip())):
             rest = m[2]
             # a note without its own target means the principal enactment ("Replacement of Form F of
             # the Second Schedule", 47/2011)
-            target = first_target(rest) or principal or lt_target
+            note_law = first_target(rest)
+            if note_law and (note_law == key or younger(note_law, key)):   # "Act No. 30 of 1998" in a 1995 Act (33/1995): misprint
+                note_law = None
+            target = note_law or ("constitution" if re.search(r"\bConstitution\b", rest) else None) or principal or lt_target
             # what is changed: "section 22", "sections 12A, 12B and 12C", "the First Schedule"
-            sm = re.search(r"\bsections?\s*((?:\d+[A-Z]*)(?:\s*(?:,|and|to)\s*\d+[A-Z]*)*)", rest, re.I)  # "sections12A" (9/2018)
-            sched = sched_name(rest)
+            # ...or the Constitution's "Article 91", "Articles 104A and 104B"
+            sm = re.search(r"\b(?:sections?|articles?)\s*((?:\d+[A-Z]*)(?:\s*(?:,|and|to)\s*\d+[A-Z]*)*)", rest, re.I)  # "sections12A" (9/2018)
+            scheds = sched_names(rest)
             kind = KIND[m[1].lower()]
             if kind == "repeals" and re.search(r"replace|substitut", rest, re.I):
                 kind = "replaces"
@@ -183,11 +229,20 @@ def edges(doc, key, date):
                 for n in re.findall(r"\d+[A-Za-z]*", sm[1]):       # "161c" (8/2022)
                     n = n.upper()
                     out.append((s["num"], kind, target, n, new, note))
-            elif target and sched:
-                out.append((s["num"], kind, target, sched, new, note))
-            elif kind == "repeals":                           # "Repeal and savings": the laws its text names
-                for t in {key_of(x) for r in (CIT, CHAP) for x in r.finditer(own)} - {key}:
-                    out.append((s["num"], "repeals_act", t, None, None, note))
+            elif target and scheds:
+                for sched in scheds:
+                    out.append((s["num"], kind, target, sched, new, note))
+            elif target and (pm := re.search(r"\b(Part|Chapter)\s+([IVXL]+[A-Z]?)\b", rest)):
+                # "Insertion of new Part VIIIA": the link names the Part; the inserted text is in the source chunk
+                out.append((s["num"], kind, target, f"{pm[1].title()} {pm[2]}", new, note))
+            elif kind == "repeals":     # "Repeal of Chapter 170." / "Repeal and savings": the laws the note, else the text, names
+                # ...but "Part IX of the Medical Ordinance (Chapter 105) is hereby repealed" (19/1988) repeals a part of
+                # it, not the law: kept as a repeal with no section, which the walk doesn't apply to every section
+                part = re.search(r"\b(?:Parts?|sections?|sub-?sections?|paragraphs?|Schedules?|Chapter\s+[IVXL]+)\b[^.;]{0,80}?\bof\b",
+                                 own[:own.find("repealed")] if "repealed" in own else own, re.I)
+                for t in ({key_of(x) for r in (CIT, CHAP) for x in r.finditer(rest)}
+                          or {key_of(x) for r in (CIT, CHAP) for x in r.finditer(own)}) - {key}:
+                    out.append((s["num"], "repeals" if part else "repeals_act", t, None, None, note))
             elif target:
                 out.append((s["num"], kind, target, None, new, note))
         for t in {key_of(x) for r in (CIT, CHAP) for x in r.finditer(own)} - {key}:
@@ -198,201 +253,29 @@ def edges(doc, key, date):
     pairs = {(key_of(a), key_of(b)) for a in CIT.finditer(text) for b in CHAP.finditer(text)
              if 0 <= b.start() - a.end() <= 12}
     lt_all = {key_of(x) for r in (CIT, CHAP) for x in r.finditer(lt)}
-    # ...only if the long title names one law in words too: 21/2012 amends two Ordinances named
+    # ...only if the long title names one law in words too (`named`): 21/2012 amends two Ordinances named
     # without numbers and Act 15/1987, which is not Chapter 252
-    named = len(re.findall(r"\b(?:ACT|ORDINANCE|LAW)\b", re.sub(r"^AN\s+ACT\b", "", lt, flags=re.I), re.I))
     if principal and len(lt_all) == 1 and named == 1 and principal not in lt_all:
         pairs.add((next(iter(lt_all)), principal))
     out += [(None, "same_as", a, None, None, f"also {b}") for a, b in pairs if a != b]
-    return [(key, *e[:4], date, *e[4:]) for e in out]          # date: the Act's commencement
+    # an Act doesn't amend itself: its own number in the long title (33/1995) or principal (48/1999)
+    return [(key, *e[:4], date, *e[4:]) for e in out if e[2] != key]          # date: the Act's commencement
 
 
-MONTHS = {m: i for i, m in enumerate("january february march april may june july august september "
-                                     "october november december".split(), 1)}
-
-
-def parse_date(t):
-    """'January 1, 2011' | '1st January, 2011' | 'the 1st day of April, 2011' -> '2011-01-01'."""
-    mon = "|".join(MONTHS)
-    for pat, order in ((rf"({mon})\s+(\d{{1,2}})(?:st|nd|rd|th)?,?\s+(\d{{4}})", "mdy"),
-                       # "8th September. 1948." (1980 Revised Edition OCR: a full stop for the comma)
-                       (rf"(\d{{1,2}})(?:st|nd|rd|th)?\s+(?:day\s+of\s+)?({mon})[,.]?\s+(\d{{4}})", "dmy")):
-        if (m := re.search(pat, t, re.I)):
-            mo, d, y = (m[1], m[2], m[3]) if order == "mdy" else (m[2], m[1], m[3])
-            return f"{y}-{MONTHS[mo.lower()]:02d}-{int(d):02d}"
-    return None
-
-
-def commencement(doc, certified):
-    """When the whole Act came into force, from s.1 or a section noted 'date of operation' /
-    'commencement' / 'retrospective'. Only the Act-wide sentence counts, not provisos for parts.
-    -> (date the walk uses, {kind, text}). kind: date | deemed (retrospective) | certified
-    (Speaker's certificate) | appointed (by a Gazette Order, not in the corpus) | unstated."""
-    cands = doc["sections"][:1] + [s for s in doc["sections"][1:]
-                                    if re.search(r"operation|commence|retrospect", s["note"] or "", re.I)]
-    for s in cands:
-        text = " ".join(p["text"] for p in s["paras"] if not p.get("quoted"))
-        m = re.search(r"(?:this Act|provisions of this Act(?:,? other than this section)?)(?:[^.;:]|\bNo\.){0,120}?"
-                      r"shall\s+(be\s+deemed\s+to\s+have\s+)?come\s+into\s+(?:operation|force)\s+"
-                      r"(?:on|from|with\s+effect\s+from)\s+([^.;:]{0,140})", text, re.I)
-        if not m:
-            continue
-        sentence, tail = m[0], m[2]
-        if re.match(r"(?:such\s+)?date\s+as\s+the\s+Minister|such\s+date", tail, re.I):
-            return certified, {"kind": "appointed", "text": sentence}
-        if re.match(r"the\s+date\s+on\s+which\s+the\s+certificate", tail, re.I):
-            return certified, {"kind": "certified", "text": sentence}
-        if (d := parse_date(tail)):
-            return d, {"kind": "deemed" if m[1] else "date", "text": sentence}
-    return certified, {"kind": "unstated", "text": None}
-
-
-def act_key(meta, doc=None):
-    if meta.get("cap"):
-        # Legislative Enactments 1980 chapter: the number the PDF prints, else lankalaw's listing
-        # (which lists both Customs and Masters Attendant as 235, 2026-10-07)
-        return f"cap:{(doc or {}).get('cap') or meta['cap']}"
-    if meta.get("cap1956"):
-        return f"cap1956:{meta['cap1956']}"       # 1956 Revised Edition chapter (other numbers than 1980's)
-    no = meta.get("act_no") or ""
-    if meta.get("kind") in ("law", "ordinance") and re.fullmatch(r"[1-9]\d*/\d{4}", no):
-        return f"{meta['kind']}:{no}"             # CommonLII says which (law:19/1978 beside act:19/1978)
-    if re.fullmatch(r"[1-9]\d*/\d{4}", no):
-        # 1972-78 National State Assembly Laws: lankalaw lists them by number like Acts, amending Acts
-        # cite them as "Law No. 5 of 1972" (law:5/1972); the file says which it is
-        if 1972 <= int(no[-4:]) <= 1978 and re.search(r"\bLAW\b,?\s*No", (doc or {}).get("title") or ""):
-            return f"law:{no}"
-        return f"act:{no}"
-    return f"other:{meta['listing']['id']}"       # 0/YYYY = Constitution amendments, several per year
-
-
-_w = {}
-
-
-def _init(local):
-    """One per worker process: its own Neon connection and R2 client (or local raw files)."""
-    _w["conn"] = psycopg2.connect(os.environ["DATABASE_URL"])
-    if local:
-        files = {json.load(gzip.open(f))["sha256"]: f for f in Path(local).glob("*.json.gz")}
-        _w["load"] = lambda sha, _: json.load(gzip.open(files[sha]))
-    else:
-        s3, bucket = r2(), os.environ["R2_BUCKET"]
-        get = lambda k: json.loads(gzip.decompress(s3.get_object(Bucket=bucket, Key=k)["Body"].read()))
-
-        def load(sha, k):
-            """raw/v2 plus, for scans, LightOnOCR-3's pages (raw/lighton, etl.ocr) when they exist."""
-            raw = get(k)
-            try:
-                raw["lighton"] = get(f"raw/lighton/{sha}.json.gz")
-            except s3.exceptions.NoSuchKey:
-                pass
-            return raw
-        _w["load"] = load
-    with _w["conn"], _w["conn"].cursor() as cur:   # ponytail: chapters built before this run; new ones resolve on the next
-        load_chapters(cur)
-
-
-def gaps(doc):
-    """Section numbers missing between 1 and the highest one found."""
-    nums = {int(s["num"]) for s in doc["sections"] if s["num"].isdigit()}
-    return sum(1 for i in range(1, max(nums, default=0) + 1) if i not in nums)
-
-
-def structure(raw, le1980=False):
-    """The Act from LightOnOCR-3's pages where it has them, unless the old engine's pages (Chandra or
-    Surya) give more sections with no more numbering gaps. On the full build of 2026-10-09 LightOn gave
-    169 pre-2000 Acts more sections and 52 fewer: a separately boxed note inside quoted text (50/1981)
-    can put a scanned page's margin on the wrong side, and some noisy pages read worse (21/1981)."""
-    doc = act(blocks(raw, le1980=le1980))
-    if raw.get("lighton") and not le1980:
-        old = act(blocks({k: v for k, v in raw.items() if k != "lighton"}))
-        if len(old["sections"]) > len(doc["sections"]) and gaps(old) <= gaps(doc):
-            return {**old, "ocr": "old"}
-        doc["ocr"] = "lighton"
-    return doc
-
-
-def build_one(row):
-    """Read the raw into memory, structure it, write the Act, its provisions and edges; nothing goes
-    to disk. Each worker process does the whole Act: the build waits on R2 and Neon round trips
-    (us-east-1), not on CPU, so Acts go in parallel (one process, serial writes: 27 Acts/min,
-    2026-10-07). -> ("ok" | "skip" | "fail", message)"""
-    doc_id, sha, raw_key, meta, doc_date = row
-    try:
-        doc = structure(_w["load"](sha, raw_key), le1980=bool(meta.get("cap")))
-        if doc["warnings"][:1] and doc["warnings"][0].startswith("not English"):   # listed as English, isn't
-            return "skip", f"skip {meta.get('act_no')}: {doc['warnings'][0]}"
-        key, certified = act_key(meta, doc), (doc_date or "")[:10] or None
-        if meta.get("cap"):
-            # two chapters under one number (Customs and Masters Attendant, both 235, 2026-10-07): the
-            # first-listed keeps cap:N, the other cap:N@<document id>. ponytail: listing order, not which is right
-            cur = _w["conn"].cursor()
-            cur.execute("SELECT min(id) FROM documents WHERE source = 'le1980' AND meta->>'cap' = %s", (key[4:],))
-            first = cur.fetchone()[0]
-            _w["conn"].rollback()
-            if first is not None and first != doc_id:
-                doc["warnings"].append(f"Chapter {key[4:]} is also document {first}: keyed {key}@{doc_id}")
-                key = f"{key}@{doc_id}"
-            if key.split("@")[0] != f"cap:{meta['cap']}":
-                doc["warnings"].append(f"listed as Chapter {meta['cap']}, prints Chapter {key[4:]}")
-            # no "CHAPTER N" line of its own on page 1: lankalaw's title, "Vehicles (Chapter 534)"
-            doc["title"] = doc["title"] or re.sub(r"\s*\(Chapter[^)]*\)?\s*$", "", meta["listing"]["title"])
-        if meta.get("date_precision") == "year":   # lankalaw rows: only the year; the Act prints its date
-            printed = parse_date(doc["certified"] or "")
-            if printed and printed[:4] == key[-4:]:
-                certified = printed
-            elif printed:       # OCR misread (1465) or lankalaw linked another Act's file (5 Acts, 2026-10-07)
-                doc["warnings"].append(f"printed date {printed} is not in {key[-4:]}: kept the year only")
-        if meta.get("cap"):     # 1980 Revised Edition: the date under the long title, the law's first enactment
-            certified = parse_date(doc["certified"] or "")
-        date, comm = commencement(doc, certified)
-        conn = _w["conn"]
-        with conn, conn.cursor() as cur:         # one transaction per Act
-            cur.execute("DELETE FROM acts WHERE key = %s", (key,))
-            cur.execute("""INSERT INTO acts (key, document_id, raw_key, built_with, title, long_title, certified,
-                           commenced, commencement, warnings, doc) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
-                        (key, doc_id, raw_key, BUILD, doc["title"], doc["long_title"], certified, date, Json(comm),
-                         Json(doc["warnings"]), Json(doc)))
-            execute_values(cur, "INSERT INTO sections (act_key, num, kind, seq, note, part, chapter, heading, text) "
-                                "VALUES %s ON CONFLICT DO NOTHING", provisions(doc, key))
-            es = edges(doc, key, date)
-            if es:
-                execute_values(cur, "INSERT INTO edges (src_act, src_section, kind, dst_act, dst_section, date, "
-                                    "new_text, evidence) VALUES %s", es)
-        return "ok", ""
-    except Exception as e:
-        try:
-            _w["conn"].rollback()
-        except Exception:
-            _w["conn"] = psycopg2.connect(os.environ["DATABASE_URL"])   # dropped connection
-        return "fail", f"FAIL {sha[:12]}: {e}"[:300]
-
-
-def build(limit=None, workers=16, local=None, full=False):
-    """local: a directory of raw .json.gz files to use instead of R2 (testing); only the
-    documents rows whose sha256 is among them are built."""
-    conn = psycopg2.connect(os.environ["DATABASE_URL"])
-    cur = conn.cursor()
-    shas = [json.load(gzip.open(f))["sha256"] for f in Path(local).glob("*.json.gz")] if local else None
-    cur.execute("""SELECT DISTINCT ON (d.sha256) d.id, d.sha256, d.raw_key, d.meta, d.doc_date FROM documents d
-                   WHERE d.raw_key IS NOT NULL AND d.meta->>'lang' = 'ENGLISH'
-                     AND (%s::text[] IS NULL OR d.sha256 = ANY(%s))
-                     AND (%s OR NOT EXISTS (SELECT 1 FROM acts a WHERE a.document_id = d.id AND a.raw_key = d.raw_key
-                                            AND a.built_with = %s AND a.structured_at >= d.extracted_at))
-                   ORDER BY d.sha256, d.id LIMIT %s""", (shas, shas, full, BUILD, limit))
-    rows = cur.fetchall()
-    conn.close()
-    print(f"{len(rows)} Acts to build ({'all' if full else 'new, re-extracted or built with older code'})", flush=True)
-    n = {"ok": 0, "skip": 0, "fail": 0}
-    with ProcessPoolExecutor(workers, initializer=_init, initargs=(local,)) as ex:
-        for i, (status, msg) in enumerate(ex.map(build_one, rows, chunksize=4), 1):
-            n[status] += 1
-            if msg:
-                print(f"[{i}/{len(rows)}] {msg}", flush=True)
-            if i % 25 == 0 or i == len(rows):
-                print(f"[{i}/{len(rows)}] {n['ok']} structured, {n['skip']} skipped, {n['fail']} failed", flush=True)
+def build():
+    """Every edge again, from the acts.doc that step 3 stored: regex over text already isolated, so a full
+    rebuild is cheap and an edge-rule change never needs a re-structure. One transaction: readers see
+    the old edges until it commits. Chapter names (load_chapters) are read after step 3 has finished,
+    so a chapter structured in the same run resolves at once."""
     conn = psycopg2.connect(os.environ["DATABASE_URL"])
     with conn, conn.cursor() as cur:
+        load_chapters(cur)
+        cur.execute("SELECT key, doc, commenced FROM acts")
+        es = [e for key, doc, date in cur.fetchall() for e in edges(doc, key, date)]
+        cur.execute("DELETE FROM edges")
+        execute_values(cur, "INSERT INTO edges (src_act, src_section, kind, dst_act, dst_section, date, "
+                            "new_text, evidence) VALUES %s", es, page_size=2000)
+        print(f"{len(es)} edges:", dict(Counter(e[2] for e in es)), flush=True)
         link(cur)
     conn.close()
 
@@ -409,13 +292,13 @@ def title_key(t):
 
 def link(cur):
     """same_as between a pre-1980 law and the 1980 Revised Edition chapter that consolidates it, so edges
-    into either key reach the text (walk follows same_as); and 1972-78 Laws' law: keys (below). Two signals:
+    into either key reach the text (walk follows same_as). Signals:
       * the chapter's front lists the laws it consolidates, principal first ("Acts Nos.33 of 1961 17 of 1964",
         cap 203; OCR'd as "Acis"): only the first is linked, the later ones are mostly amending Acts whose
         section numbers are not the chapter's
       * a pre-1980 Act or Law (not an amending one) whose title is exactly one chapter's title, and that
         chapter's only match (Code of Criminal Procedure = 15/1979 = cap 26)
-    Re-run after every build: rebuilding a chapter drops its edges. Marked new_text = 'link'."""
+    Run by every build (and after it: rebuilding edges drops these). Marked new_text = 'link'."""
     cur.execute("DELETE FROM edges WHERE kind = 'same_as' AND new_text = 'link'")
     cur.execute("SELECT a.key, a.title, d.title, a.doc->'front', a.doc->>'long_title' FROM acts a "
                 "JOIN documents d ON d.id = a.document_id")
@@ -448,21 +331,13 @@ def link(cur):
         c56, c80 = [c for c in cs if c.startswith("cap1956:")], [c for c in cs if c.startswith("cap:")]
         if len(c56) == 1 and len(c80) == 1:
             pairs.setdefault((c56[0], c80[0]), "editions")
-    # 1972-78 National State Assembly Laws are built under lankalaw's number as act:N/YYYY; amending Acts
-    # cite them as "Law No. 5 of 1972" (law:5/1972, 680 unresolved edges on 2026-10-09). The file says
-    # which it is: a long title "A LAW TO ..." or "Law" in its title
-    # 1973-77 had only Laws, so "Act No. 2 of 1974" can only mean that Law: always the same node. 1972 and
-    # 1978 had both, numbered separately (Act 5/1972 Agrarian Research ≠ Law 5/1972 Co-operative Societies),
-    # so there only the file's own word counts
-    for key, title, listed_title, front, lt in rows:
-        if re.fullmatch(r"act:\d+/197[3-7]", key) or (re.fullmatch(r"act:\d+/197[28]", key) and
-                (re.match(r"\s*A\s+LAW\b", lt or "", re.I) or re.search(r"\bLAW\b", f"{title} {listed_title}", re.I))):
-            pairs[(key, "law:" + key[4:])] = "law"
     # a cited law we hold no file for, by the name the citing text gives it: 1972 and 1978 have an Act and a
     # Law under the same number ("THE CO-OPERATIVE SOCIETIES LAW, No. 5 OF 1972" is not Act 5/1972, the
     # Agrarian Research and Training Institute Act), and lankalaw lists one file per number; the Law sits in
     # the 1980 Revised Edition under its name. The longest tail of the cited name that is exactly one
-    # chapter's title (1980 edition first) wins; a name more than one key claims decides nothing.
+    # chapter's title (1980 edition first) wins; a name more than one key claims decides nothing. Citing texts
+    # that disagree are outvoted when one chapter has more than all others together: law:18/1976 prints
+    # "CEILING ON HOUSING PROPERTY LAW, NO. 1 OF 1972" (that Law is 1/1973) against 4 texts naming Land Reform.
     built = {r[0] for r in rows}
     cur.execute("SELECT DISTINCT dst_act, evidence FROM edges WHERE evidence IS NOT NULL AND kind <> 'same_as'")
     cited = {}
@@ -477,18 +352,19 @@ def link(cur):
                 tail = " ".join(words[i:])
                 hit = sorted(caps.get(tail, ()), key=lambda c: c.startswith("cap1956:"))
                 if hit and sum(c.split(":")[0] == hit[0].split(":")[0] for c in hit) == 1:
-                    cited.setdefault(dst, set()).add(hit[0])
+                    cited.setdefault(dst, Counter())[hit[0]] += 1
                     break
     linked = {law for _, law in pairs}
     for dst, cs in cited.items():
-        if len(cs) == 1 and dst not in linked:
-            pairs[(next(iter(cs)), dst)] = "cited name"
+        (top, n), *rest = cs.most_common()
+        if n > sum(m for _, m in rest) and dst not in linked:
+            pairs[(top, dst)] = "cited name"
     execute_values(cur, "INSERT INTO edges (src_act, kind, dst_act, new_text, evidence) VALUES %s",
                    [(cap, "same_as", law, "link", f"also {cap}") for (cap, law) in pairs])
     by = Counter(pairs.values())
     print(f"linked {len(pairs)}: {by['listed']} laws to their chapter from the chapter's list, {by['title']} by title, "
           f"{by['editions']} 1956 chapters to 1980 ones by title, {by['1956']} chapter:N to cap1956:N, "
-          f"{by['law']} 1972-78 Laws to their law: key, {by['cited name']} cited laws to a chapter by the name cited", flush=True)
+          f"{by['cited name']} cited laws to a chapter by the name cited", flush=True)
 
 
 def why_missing(cur, key):
@@ -520,7 +396,7 @@ def why_missing(cur, key):
         return "English file failed extraction"
     if not en_raw:
         return "English file not extracted yet"
-    return "extracted but not built yet (run etl.graph build)"
+    return "extracted but not structured yet (run etl.structure build, then etl.graph build)"
 
 
 def missing():
@@ -563,9 +439,15 @@ def walk(target, section, year):
                               s.text, a.commencement
                        FROM edges e JOIN acts a ON a.key = e.src_act
                        LEFT JOIN sections s ON s.act_key = e.src_act AND s.num = e.src_section
-                       WHERE e.dst_act = ANY(%s) AND (e.dst_section = %s OR (%s AND e.kind = 'repeals_act'))
+                       WHERE e.dst_act = ANY(%s) AND (e.dst_section = %s OR (%s AND e.kind = 'repeals_act')
+                                                      -- "Amendment of Schedules.": every schedule of the law
+                                                      OR (%s AND e.dst_section = 'Schedules')
+                                                      -- a partial repeal ("Part IX of ... is hereby repealed"): the
+                                                      -- reader decides from the amending text whether it covers this one
+                                                      OR (%s AND e.kind = 'repeals' AND e.dst_section IS NULL))
                          AND e.kind <> 'cites' AND (e.date IS NULL OR e.date <= make_date(%s, 12, 31))
-                       ORDER BY e.date NULLS LAST, e.src_act, e.src_section""", (acts, sec, whole_act, year))
+                       ORDER BY e.date NULLS LAST, e.src_act, e.src_section""",
+                    (acts, sec, whole_act, "Schedule" in (sec or ""), whole_act, year))
         out = [dict(zip(("date", "by_act", "by_title", "by_section", "kind", "section", "new_text", "evidence",
                          "amending_text", "commencement"), r)) for r in cur.fetchall()]
         for c in out:
@@ -591,11 +473,7 @@ def walk(target, section, year):
 def main():
     a = argparse.ArgumentParser()
     sub = a.add_subparsers(dest="cmd", required=True)
-    b = sub.add_parser("build")
-    b.add_argument("--limit", type=int)
-    b.add_argument("--workers", type=int, default=16)
-    b.add_argument("--local", help="directory of raw .json.gz to use instead of R2 (testing)")
-    b.add_argument("--full", action="store_true", help="rebuild every Act, not only new or changed ones")
+    sub.add_parser("build", help="every edge again from acts.doc (step 3 output), then link")
     sub.add_parser("missing", help="Acts that edges point at but that are not built, with the reason")
     sub.add_parser("link", help="same_as between pre-1980 laws and their 1980 chapters (also run by build)")
     w = sub.add_parser("walk")
@@ -604,7 +482,7 @@ def main():
     w.add_argument("--year", type=int, default=9999)
     args = a.parse_args()
     if args.cmd == "build":
-        build(args.limit, args.workers, args.local, args.full)
+        build()
     elif args.cmd == "link":
         conn = psycopg2.connect(os.environ["DATABASE_URL"])
         with conn, conn.cursor() as cur:

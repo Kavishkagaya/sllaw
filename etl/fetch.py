@@ -7,13 +7,14 @@
   python3 -m etl.fetch le1980               # Legislative Enactments 1980 (lankalaw.net), one row per chapter
   python3 -m etl.fetch le1956               # Legislative Enactments 1956 (lankalaw.net), HTML, one row per chapter
   python3 -m etl.fetch lankalaw             # lankalaw.net Acts by year, only those filling a gap
+  python3 -m etl.fetch parliament           # parliament.lk official PDFs, 1956 on, not already from documents.gov.lk
 
 One documents row per file (an act in three languages = three rows). Files are
 keyed by content hash, source/<sha256>.pdf, so re-runs and duplicates never
 write twice and nothing is overwritten. The queue is `r2_key IS NULL`: a crash
 or a failed download just means run it again.
 """
-import argparse, hashlib, os
+import argparse, hashlib, os, re, time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import boto3
@@ -21,14 +22,27 @@ import psycopg2
 from dotenv import load_dotenv
 from psycopg2.extras import Json, execute_values
 
-from etl.spiders import acts, lankalaw, le1956, le1980
+from etl.spiders import acts, lankalaw, le1956, le1980, parliament
 
 load_dotenv()
 WORKERS = 8   # parallel downloads; documents.gov.lk is a small govt server, don't go much higher
 BATCH = 50    # results per Neon write
 
 
-def discover_acts(cur):
+def pg_connect(tries=30, wait=10):
+    """psycopg2.connect, retried on connection errors (ada's DNS failed to resolve Neon's host for a minute or so
+    three times on 2026-10-10; the first time it killed all four OCR workers at start)."""
+    for i in range(tries):
+        try:
+            return psycopg2.connect(os.environ["DATABASE_URL"], connect_timeout=30)
+        except psycopg2.OperationalError as e:
+            if i == tries - 1:
+                raise
+            print(f"database not reachable ({str(e).strip()[:80]}), retry in {wait}s", flush=True)
+            time.sleep(wait)
+
+
+def discover_acts(db):
     """Upsert one row per (act, language) file. The listing record is kept
     verbatim in meta so nothing from the source is lost."""
     # one batched statement: row-by-row inserts cost a Neon round trip each (minutes from ada).
@@ -38,6 +52,7 @@ def discover_acts(cur):
                 Json({"act_no": rec.get("actNoText"), "lang": c["language"], "listing": rec}))
             for rec in acts.crawl() for c in rec.get("contents") or []
             if c["language"] != "TAMIL"}   # Tamil out of scope (user, 2026-10-06)
+    cur = db()                        # connect only now: Neon drops a connection idle through a crawl
     execute_values(cur,
         """INSERT INTO documents (source, source_url, title, doc_date, meta) VALUES %s
            ON CONFLICT (source, source_url) DO UPDATE
@@ -46,10 +61,11 @@ def discover_acts(cur):
     return len(rows)
 
 
-def discover_le1980(cur):
+def discover_le1980(db):
     """One row per chapter PDF; meta.cap is the chapter number (graph node cap:N)."""
     rows = [("le1980", r["url"], r["title"], None,
              Json({"cap": r["cap"], "lang": "ENGLISH", "listing": r})) for r in le1980.crawl()]
+    cur = db()                        # connect only now: Neon drops a connection idle through a crawl
     execute_values(cur,
         """INSERT INTO documents (source, source_url, title, doc_date, meta) VALUES %s
            ON CONFLICT (source, source_url) DO UPDATE
@@ -57,10 +73,11 @@ def discover_le1980(cur):
     return len(rows)
 
 
-def discover_le1956(cur):
+def discover_le1956(db):
     """Legislative Enactments 1956 Revised Edition (lankalaw.net), one HTML page per chapter: 481 on 2026-10-09."""
     rows = [("le1956", r["url"], r["title"], None,
              Json({"cap1956": r["cap"], "lang": "ENGLISH", "format": "html", "listing": r})) for r in le1956.crawl()]
+    cur = db()                        # connect only now: Neon drops a connection idle through a crawl
     execute_values(cur,
         """INSERT INTO documents (source, source_url, title, doc_date, meta) VALUES %s
            ON CONFLICT (source, source_url) DO UPDATE
@@ -68,23 +85,53 @@ def discover_le1956(cur):
     return len(rows)
 
 
-def discover_lankalaw(cur):
+def discover_lankalaw(db):
     """lankalaw.net rows only for Acts with no English file from documents.gov.lk (listed without
     English, or not listed at all), 1956 onwards: 731 files from 1980 on 2026-10-05 (573 PDF, 158 HTML),
     612 before 1980 on 2026-10-09 (593 HTML, 19 PDF). Same act_no, so the same
     graph node. doc_date is the year's 1 January until the Act's own "[Certified on ...]" is read."""
-    # crawl before touching Neon: 71 year pages take minutes, and Neon closes an idle connection (2026-10-09)
+    # 71 year pages take minutes, and Neon closes an idle connection (2026-10-09; parliament.lk's 467 pages, 2026-10-10)
     listed = lankalaw.crawl(range(1956, 2027))
+    cur = db()                        # connect only now: Neon drops a connection idle through a crawl
     cur.execute("SELECT DISTINCT meta->>'act_no' FROM documents WHERE source = 'acts' AND meta->>'lang' = 'ENGLISH'")
     have = {r[0] for r in cur.fetchall()}
+    # nor what parliament.lk's official files cover (their unused lankalaw rows were deleted 2026-10-10, user);
+    # lankalaw lists one file per number: the Law in 1973-77, else the Act
+    cur.execute("""SELECT meta->>'kind', meta->>'act_no' FROM documents WHERE source = 'parliament' AND raw_key IS NOT NULL
+                   AND NOT meta ? 'wrong_file'""")
+    official = set(cur.fetchall())
+    kind = lambda no: "law" if 1973 <= int(no[-4:]) <= 1977 else "act"
     rows = [("lankalaw", r["url"], r["title"], f"{r['act_no'].split('/')[1]}-01-01",
              Json({"act_no": r["act_no"], "lang": "ENGLISH", "format": r["format"], "date_precision": "year",
                    "listing": r}))
             # 1956 onwards (2026-10-09; 1980 onwards from 2026-10-05): pre-1980 Acts and 1972-77 Laws are
             # almost all HTML there, and are what most unresolved amendment edges point at (SOURCES.md)
-            for r in listed if r["act_no"] not in have
+            for r in listed if r["act_no"] not in have and (kind(r["act_no"]), r["act_no"]) not in official
             and not r["url"].endswith(("_S.pdf", "_T.pdf"))   # documents.gov.lk Sinhala/Tamil, listed as English
             and 1956 <= int(r["act_no"].split("/")[1]) <= 2026]
+    execute_values(cur,
+        """INSERT INTO documents (source, source_url, title, doc_date, meta) VALUES %s
+           ON CONFLICT (source, source_url) DO UPDATE
+           SET meta = documents.meta || EXCLUDED.meta, updated_at = NOW()""", rows, page_size=1000)
+    return len(rows)
+
+
+def discover_parliament(db):
+    """parliament.lk official English PDFs, 1956 onwards (user, 2026-10-10), for Acts and 1972-78 Laws with no
+    documents.gov.lk English file: 1,147 on 2026-10-10 (244 we held no file for, 553 byte-identical to
+    lankalaw's PDFs, 349 replacing lankalaw HTML). A CommonLII copy doesn't count as held (user, 2026-10-10):
+    it is retyped 2007 text, kept only for laws no official source has; build prefers this file over it. meta.kind 'law' for the
+    "(L)" rows, so graph.act_key gives law:N/YYYY. graph.build prefers these rows over lankalaw's."""
+    listed = parliament.crawl()
+    cur = db()                        # connect only now: Neon drops a connection idle through a crawl
+    cur.execute("SELECT DISTINCT meta->>'act_no' FROM documents WHERE source = 'acts' AND meta->>'lang' = 'ENGLISH'")
+    have = {("act", r[0]) for r in cur.fetchall()}
+    # one spelling on both sides: parliament.lk lists "05/1972", our rows "5/1972"
+    norm = lambda k, n: (k, f"{int(n.split('/')[0])}/{n.split('/')[1]}") if n and re.fullmatch(r"\d+/\d{4}", n) else (k, n)
+    have = {norm(*h) for h in have}
+    rows = [("parliament", r["url"], r["title"], r["date"],
+             Json({"act_no": r["act_no"], "kind": r["kind"], "lang": "ENGLISH", "listing": r}))
+            for r in listed if int(r["act_no"][-4:]) >= 1956 and (r["kind"], r["act_no"]) not in have]
     execute_values(cur,
         """INSERT INTO documents (source, source_url, title, doc_date, meta) VALUES %s
            ON CONFLICT (source, source_url) DO UPDATE
@@ -130,6 +177,10 @@ def save(cur, results):
         execute_values(cur, """UPDATE documents d SET sha256=v.sha, r2_key=v.key, bytes=v.n,
             fetched_at=NOW(), error=NULL, updated_at=NOW()
             FROM (VALUES %s) AS v(id, sha, key, n) WHERE d.id = v.id""", ok)
+        # a file another source already gave us (parliament.lk PDFs lankalaw re-hosts): reuse its raw
+        cur.execute("""UPDATE documents d SET raw_key = o.raw_key, extracted_at = o.extracted_at, updated_at = NOW()
+            FROM documents o WHERE d.id = ANY(%s) AND d.raw_key IS NULL
+            AND o.sha256 = d.sha256 AND o.raw_key IS NOT NULL""", ([r[0] for r in ok],))
     if bad:
         execute_values(cur, """UPDATE documents d SET error=v.err, updated_at=NOW()
             FROM (VALUES %s) AS v(id, err) WHERE d.id = v.id""", bad)
@@ -140,8 +191,9 @@ def fetch(conn, source, limit=None):
     # hashes already in R2, loaded once: Neon round trips from ada cost more than the downloads
     cur.execute("SELECT DISTINCT sha256 FROM documents WHERE r2_key IS NOT NULL")
     stored = {r[0] for r in cur.fetchall()}
+    # Sinhala rows are kept as listing records but not fetched (user, 2026-10-10)
     cur.execute("SELECT id, source_url FROM documents WHERE source = %s AND r2_key IS NULL "
-                "ORDER BY id LIMIT %s", (source, limit))
+                "AND meta->>'lang' = 'ENGLISH' ORDER BY id LIMIT %s", (source, limit))
     rows, ok, bad, done = cur.fetchall(), 0, 0, []
     with ThreadPoolExecutor(WORKERS) as pool:
         for n, r in enumerate(as_completed([pool.submit(download, s3, bucket, stored, *row)
@@ -160,18 +212,31 @@ def fetch(conn, source, limit=None):
 
 def main():
     a = argparse.ArgumentParser()
-    a.add_argument("source", choices=["acts", "le1956", "le1980", "lankalaw"])
+    a.add_argument("source", choices=["acts", "le1956", "le1980", "lankalaw", "parliament"])
     a.add_argument("--limit", type=int, help="fetch at most N files (pilot)")
     a.add_argument("--no-discover", action="store_true", help="skip listing, only drain the queue")
     args = a.parse_args()
 
-    conn = psycopg2.connect(os.environ["DATABASE_URL"])
+    conn = None
+
+    def db():     # opened on first use, after the source's listing is crawled
+        nonlocal conn
+        for i in range(5):    # ada's DNS fails now and then (2026-10-10): don't lose a 10-minute crawl to it
+            try:
+                conn = conn or psycopg2.connect(os.environ["DATABASE_URL"])
+                break
+            except psycopg2.OperationalError:
+                if i == 4:
+                    raise
+                time.sleep(30)
+        return conn.cursor()
+
     if not args.no_discover:
-        with conn.cursor() as cur:
-            discover = {"acts": discover_acts, "le1956": discover_le1956, "le1980": discover_le1980,
-                        "lankalaw": discover_lankalaw}[args.source]
-            print(f"discovered {discover(cur)} files")
+        discover = {"acts": discover_acts, "le1956": discover_le1956, "le1980": discover_le1980,
+                    "lankalaw": discover_lankalaw, "parliament": discover_parliament}[args.source]
+        print(f"discovered {discover(db)} files")
         conn.commit()
+    db()
     fetch(conn, args.source, args.limit)
     conn.close()
 

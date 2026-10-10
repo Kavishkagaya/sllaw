@@ -4,6 +4,8 @@
   python3 -m etl.ocr --count                                 # files and pages to do
   python3 -m etl.ocr --api http://localhost:8012/v1 --shard 0/4
   python3 -m etl.ocr --retry-cut                             # pages that ran into max_tokens
+  New files need no separate run: `etl.extract --ocr-api URL` OCRs their scanned pages as it extracts
+  them (2026-10-10). This queue is for files extracted without it, or whose OCR call failed.
   (one process per shard; two per vLLM server, each server on its own card)
 
 Queue: English files dated before --before (default 2000) whose raw/v2 has scanned pages (an image
@@ -26,12 +28,13 @@ from concurrent.futures import ThreadPoolExecutor
 import psycopg2, pypdfium2, requests
 from dotenv import load_dotenv
 
-from etl.fetch import r2
+from etl.fetch import pg_connect, r2
 
 MODEL = "lightonai/LightOnOCR-3-0.8B"
 PARAMS = {"prompt": "grounding", "dpi": 400, "max_side": 2048, "temperature": 0.2, "top_p": 0.9}
 RETRIES = [("repetition_penalty 1.05", {"repetition_penalty": 1.05}), ("temperature 0.7", {"temperature": 0.7}),
            ("repetition_penalty 1.15", {"repetition_penalty": 1.15})]
+MAX_TOKENS = 8192              # Appropriation tables run past 4096 (61/1993)
 _render = threading.Lock()     # pdfium is not thread-safe
 
 
@@ -67,6 +70,28 @@ def ocr(api, png_b64, max_tokens, extra=None):
             time.sleep(10)
 
 
+def ocr_file(api, sha, pdf_bytes, want, pool, s3, bucket, max_tokens=MAX_TOKENS):
+    """OCR pages `want` of one PDF (pages in flight on `pool`) and write raw/lighton/<sha256>.json.gz,
+    only once every page came back. Also called by etl.extract --ocr-api. -> pages cut off (not "stop")."""
+    pdf = pypdfium2.PdfDocument(pdf_bytes)
+    res = [f.result() for f in [pool.submit(lambda n: ocr(api, render(pdf, n), max_tokens), n) for n in want]]
+    out = {"sha256": sha, "model": MODEL, "params": {**PARAMS, "max_tokens": max_tokens},
+           "pages": [{"page_no": n, "md": md, "tokens": t, "finish": fin} for n, (md, t, fin) in zip(want, res)]}
+    s3.put_object(Bucket=bucket, Key=f"raw/lighton/{sha}.json.gz", ContentType="application/gzip",
+                  Body=gzip.compress(json.dumps(out, ensure_ascii=False).encode()))
+    touch(sha)
+    return sum(fin != "stop" for _, _, fin in res)
+
+
+def touch(sha):
+    """New OCR for a file: mark it re-extracted, so the next incremental `etl.structure build` rebuilds it.
+    Without this, Acts built before their LightOn pages existed stayed empty (11/1994, 25/1993, 2026-10-10)."""
+    conn = pg_connect()
+    with conn, conn.cursor() as cur:
+        cur.execute("UPDATE documents SET extracted_at = NOW() WHERE sha256 = %s AND raw_key IS NOT NULL", (sha,))
+    conn.close()
+
+
 def not_english(md):
     return len(re.findall(r'[^\x00-\x7F\u2018-\u201d\u2013\u2014\u2026]', md)) > len(re.findall(r'[A-Za-z]', md))
 
@@ -74,7 +99,7 @@ def not_english(md):
 def retry_cut(api, s3, bucket, keys):
     """Re-ask the pages that ran into max_tokens, with RETRIES in order; rewrites raw/lighton objects."""
     load = lambda k: json.loads(gzip.decompress(s3.get_object(Bucket=bucket, Key=k)["Body"].read()))
-    conn = psycopg2.connect(os.environ["DATABASE_URL"])
+    conn = pg_connect()
 
     def one(k):
         j = load(k)
@@ -97,6 +122,7 @@ def retry_cut(api, s3, bucket, keys):
         j["params"]["retries"] = [n for n, _ in RETRIES]
         s3.put_object(Bucket=bucket, Key=k, ContentType="application/gzip",
                       Body=gzip.compress(json.dumps(j, ensure_ascii=False).encode()))
+        touch(j["sha256"])
         print(f"{j['sha256'][:12]}: " + ", ".join(f"p{p['page_no']} {p['finish']}{' (' + p['retry'] + ')' if p.get('retry') else ''}"
                                                    for p in cut), flush=True)
 
@@ -107,7 +133,7 @@ def retry_cut(api, s3, bucket, keys):
 
 def queue(before, shard):
     i, n = map(int, shard.split("/"))
-    conn = psycopg2.connect(os.environ["DATABASE_URL"])
+    conn = pg_connect()
     with conn, conn.cursor() as cur:
         cur.execute("""SELECT DISTINCT ON (sha256) sha256, r2_key, raw_key FROM documents
                        WHERE raw_key IS NOT NULL AND r2_key LIKE '%%.pdf' AND meta->>'lang' = 'ENGLISH'
@@ -132,15 +158,26 @@ def main():
     a.add_argument("--before", default="2000")
     a.add_argument("--pages", type=int, default=24, help="pages in flight to the server")
     a.add_argument("--files", type=int, default=6, help="files in progress at once")
-    a.add_argument("--max-tokens", type=int, default=8192, help="Appropriation tables run past 4096 (61/1993)")
+    a.add_argument("--max-tokens", type=int, default=MAX_TOKENS)
     a.add_argument("--retry-cut", action="store_true", help="re-ask pages that ran into max_tokens (RETRIES)")
     a.add_argument("--count", action="store_true", help="only count files and scanned pages left to do")
+    a.add_argument("--sha", help="file of sha256s, one a line: OCR every page of these, any date (text-layer PDFs whose "
+                                 "layout docling misread; etl.structure keeps whichever reading gives the better Act)")
     args = a.parse_args()
     s3, bucket = r2(), os.environ["R2_BUCKET"]
     done = done_keys(s3, bucket)
     if args.retry_cut:
         return retry_cut(args.api, s3, bucket, [f"raw/lighton/{sha}.json.gz" for sha in done])
-    rows = [r for r in queue(args.before, args.shard) if r[0] not in done]
+    if args.sha:
+        shas = [x.strip() for x in open(args.sha) if x.strip()]
+        conn = pg_connect()
+        with conn, conn.cursor() as cur:
+            cur.execute("""SELECT DISTINCT ON (sha256) sha256, r2_key, raw_key FROM documents
+                           WHERE sha256 = ANY(%s) AND raw_key IS NOT NULL AND r2_key LIKE '%%.pdf' ORDER BY sha256""", (shas,))
+            rows = [r for r in cur.fetchall() if int(r[0], 16) % int(args.shard.split("/")[1]) == int(args.shard.split("/")[0])]
+        conn.close()
+    else:
+        rows = [r for r in queue(args.before, args.shard) if r[0] not in done]
     load = lambda k: json.loads(gzip.decompress(s3.get_object(Bucket=bucket, Key=k)["Body"].read()))
     if args.count:
         with ThreadPoolExecutor(16) as ex:
@@ -156,17 +193,11 @@ def main():
         i, (sha, key, rkey) = job
         t0 = time.time()
         try:
-            want = scan_pages(load(rkey))
+            want = [p["page_no"] for p in load(rkey)["pages"]] if args.sha else scan_pages(load(rkey))
             if not want:
                 return
-            pdf = pypdfium2.PdfDocument(s3.get_object(Bucket=bucket, Key=key)["Body"].read())
-            futs = [pages_ex.submit(lambda n: ocr(args.api, render(pdf, n), args.max_tokens), n) for n in want]
-            res = [f.result() for f in futs]
-            out = {"sha256": sha, "model": MODEL, "params": {**PARAMS, "max_tokens": args.max_tokens},
-                   "pages": [{"page_no": n, "md": md, "tokens": t, "finish": fin} for n, (md, t, fin) in zip(want, res)]}
-            s3.put_object(Bucket=bucket, Key=f"raw/lighton/{sha}.json.gz", ContentType="application/gzip",
-                          Body=gzip.compress(json.dumps(out, ensure_ascii=False).encode()))
-            cut = sum(fin != "stop" for _, _, fin in res)
+            cut = ocr_file(args.api, sha, s3.get_object(Bucket=bucket, Key=key)["Body"].read(), want,
+                           pages_ex, s3, bucket, args.max_tokens)
             with lock:
                 stats["ok"] += 1
                 stats["pages"] += len(want)

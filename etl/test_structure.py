@@ -6,6 +6,8 @@ assert TERM.match("'bank' means a bank licensed under")
 assert TERM.match("'executive' when used with reference to a trade union")
 assert TERM.match("'public finance 'includes -")
 assert not TERM.match("'3. (1) The 'principal' enactment")
+assert TERM.match("“individual”—") and TERM.match("'net income':") and not quote_delta("“individual”—", False)
+assert not quote_delta("“net income”, in relation to any individual, means the balance of his assessable income", False)
 assert not quote_delta("'bank' means a bank licensed;", False)
 assert quote_delta("'Provided that, notwithstanding the provisions of subsection (2)-", False)
 assert not quote_delta("''Minister' means the Minister of Finance;';", False)        # opens and closes
@@ -32,7 +34,9 @@ assert not unsure({**a, "quoted": 0.95}) and unsure({**a, "quoted": 0.5}) and un
 print("ok labels")
 
 # amendment edges (etl/graph.py)
+import etl.graph as g
 from etl.graph import edges
+g.CHAPTERS.update({"bribery": "cap:26", "school teachers pension": "cap:432"})   # chapter numbers resolve by name
 def sec(num, note, *paras):
     return {"num": num, "note": note, "paras": [{"label": None, "text": t, "quoted": q} for t, q in paras]}
 doc = {"long_title": "AN ACT TO AMEND THE VALUE ADDED TAX ACT, NO. 14 OF 2002", "sections": [
@@ -66,7 +70,7 @@ d3 = {**d2, "long_title": "AN ACT TO AMEND THE MUNICIPAL COUNCILS ORDINANCE AND 
 assert not [e for e in edges(d3, "act:21/2012", None) if e[2] == "same_as"]               # two laws named
 print("ok aliases")
 # commencement
-from etl.graph import commencement, parse_date
+from etl.structure import commencement, parse_date
 assert parse_date("January 1, 2011 unless") == "2011-01-01" and parse_date("the 1st day of April, 2011") == "2011-04-01"
 assert parse_date("01st April 2012") == "2012-04-01"
 c1 = lambda t: commencement({"sections": [sec("1", "Short title", (t, False))]}, "2020-05-05")
@@ -83,3 +87,92 @@ d4 = {"long_title": "AN ACT TO AMEND THE FINANCE ACT, NO. 38 OF 2000", "sections
 E4 = {(e[2], e[3], e[4]) for e in edges(d4, "act:19/2003", None)}
 assert ("amends", "act:38/2000", "5") in E4 and not [e for e in E4 if e[0] == "same_as"]
 print("ok principal")
+# principal enactment named by title only, "Chapter N" in the defining note (30/1987, 24/1962)
+g.CHAPTERS.update({"medical": "cap:105x", "ceylon state mortgage bank": "cap:398x"})
+d5 = {"long_title": "AN ACT TO AMEND THE MEDICAL ORDINANCE", "sections": [
+    sec("2", "Amendment of section 5 of Chapter 105.", ("Section 5 of the Medical Ordinance (hereinafter referred to as "
+        "the \u201cprincipal enactment\u201d) is hereby amended", False)),
+    sec("3", "Amendment of section 29 of the principal enactment.", ("Section 29 of the principal enactment ...", False))]}
+E5 = {(e[2], e[3], e[4]) for e in edges(d5, "act:30/1987", None)}
+assert {("amends", "cap:105x", "5"), ("amends", "cap:105x", "29"), ("amends_act", "cap:105x", None)} <= E5, E5
+# unquoted definition, "hereafter"; a long title naming two laws (one without a number) is no principal
+d6 = {"long_title": "AN ACT TO AMEND THE CEYLON STATE MORTGAGE BANK ORDINANCE, AND THE FINANCE ACT, No. 11 OF 1963.",
+      "sections": [sec("2", "Amendment of section 3 of Chapter 398.", ("Section 2 of the Ceylon State Mortgage Bank Ordinance, "
+                       "hereafter in this Act referred to as the principal enactment, is hereby amended", False)),
+                   sec("3", "Amendment of section 9 of the principal enactment.", ("...", False))]}
+assert ("amends", "cap:398x", "9") in {(e[2], e[3], e[4]) for e in edges(d6, "act:33/1968", None)}
+# a number in the text younger than the Act itself is a typo: the long title's law wins (CommonLII law:30/1978)
+d7 = {"long_title": "A LAW TO AMEND THE INLAND REVENUE ACT, No. 4 OF 1963", "sections": [
+    sec("2", "Amendment of section 3 of Act No. 4 of 1968", ('Section 3 of the Inland Revenue Act, No. 4 of 1983, (hereinafter '
+        'referred to as the " principal enactment ") is hereby amended', False)),
+    sec("3", "Amendment of section 4 of the principal enactment", ("...", False)),
+    sec("4", "Repeal of Chapter 170.", ("Chapter 170 is hereby repealed.", False))]}
+E7 = {(e[2], e[3], e[4]) for e in edges(d7, "law:30/1978", None)}
+assert ("amends", "act:4/1963", "4") in E7 and not [e for e in E7 if e[1] == "act:4/1983" and e[0] != "cites"], E7
+assert ("repeals_act", "chapter:170", None) in E7
+print("ok principal by name")
+# Constitution amendments: documents.gov.lk lists them as 0/YYYY
+from etl.structure import act_key
+amd = lambda t: {"sections": [sec("1", "Short title", (t, False))]}
+assert act_key({"act_no": "0/2010", "listing": {"id": "x"}}, amd("This Act may be cited as the Eighteenth Amendment to the Constitution.")) == "amendment:18"
+assert act_key({"act_no": "0/2022", "listing": {"id": "x"}}, amd("This Act may be cited as the Twenty First Amendment to the Constitution.")) == "amendment:21"
+assert act_key({"act_no": "0/2022", "listing": {"id": "x"}}, amd("This Act may be cited as X.")) == "other:x"
+print("ok amendments")
+d8 = {"long_title": "AN ACT TO AMEND THE CONSTITUTION OF THE DEMOCRATIC SOCIALIST REPUBLIC OF SRI LANKA", "sections": [
+    sec("8", "Amendment of Article 91 of the Constitution", ("Article 91 of the Constitution is hereby amended", False)),
+    sec("9", "Insertion of new Articles 104A and 104B in the Constitution", ("...", False))]}
+E8 = {(e[2], e[3], e[4]) for e in edges(d8, "amendment:21", None)}
+assert {("amends_act", "constitution", None), ("amends", "constitution", "91"), ("inserts", "constitution", "104B")} <= E8, E8
+print("ok constitution edges")
+from etl.structure import SCHED_HEAD
+assert SCHED_HEAD.match("[SECTION 6 (2)] FIRST SCHEDULE") and SCHED_HEAD.match("THIRD SCHEDULE [Section 7 (1) (b)]")
+assert SCHED_HEAD.match("SCHEDULE I [Section 2(4)]")
+print("ok schedule headings")
+from etl.graph import sched_names
+assert sched_names("Replacement of the First and Second Schedules to the principal enactment.") == ["First Schedule", "Second Schedule"]
+assert sched_names("Replacement of Schedules I, II, III,IV, IVA and V of the principal") == [f"Schedule {x}" for x in ("I", "II", "III", "IV", "IVA", "V")]
+assert sched_names("Amendment of the Second Schedule") == ["Second Schedule"] and sched_names("Repeal of Schedules in the principal") == ["Schedules"]
+print("ok schedule lists")
+assert not quote_delta("'preceding year') had any profits and income, other than the net annual value", False)
+assert quote_delta("'3. (1) The Minister may (by Order) make regulations", False)    # a real quotation still opens
+print("ok carried-over terms")
+qs = lambda *t: {"num": "9", "paras": [{"label": None, "text": x, "quoted": True} for x in t]}
+d9 = {"long_title": "AN ACT TO AMEND THE VALUE ADDED TAX ACT, NO. 14 OF 2002", "sections": [
+    {**qs("“25A. (1) Every person ...", "25B. Where ..."), "note": "Insertion of new Chapter IIIA in the principal enactment"},
+    {**qs("1. Name ...", "2. Address ..."), "num": "10", "note": "Replacement of the Schedule to the principal enactment"}]}
+E9 = {(e[2], e[3], e[4]) for e in edges(d9, "act:7/2003", None)}
+assert {("inserts", "act:14/2002", "Chapter IIIA"), ("replaces", "act:14/2002", "Schedule")} <= E9, E9
+print("ok inserted Parts")
+g.TITLES.update({"banking": "act:30/1988"})
+d10 = {"long_title": "AN ACT TO AMEND THE BANKING ACT, NO. 33 OF 1995", "sections": [
+    sec("2", "Replacement of the long title of Act No. 30 of 1998.", ("The long title of the Banking Act, No. 33 of 1995 (hereinafter "
+        "referred to as the “principal enactment”) is hereby repealed", False)),
+    sec("3", "Amendment of section 2 of the principal enactment.", ("Section 2 of the principal enactment is hereby amended", False))]}
+E10 = {(e[2], e[3], e[4]) for e in edges(d10, "act:33/1995", None)}
+assert ("amends", "act:30/1988", "2") in E10 and not [e for e in E10 if e[1] == "act:30/1998" and e[0] != "cites"], E10
+print("ok misprinted numbers")
+d11 = {"long_title": "AN ACT TO AMEND THE INCOME TAX ORDINANCE.", "sections": [
+    sec("7", "Amendment of section 10 of Chapter 188.", ("Section 10 of the principal enactment is hereby amended", False))]}
+assert ("amends", "chapter1938:188", "10") in {(e[2], e[3], e[4]) for e in edges(d11, "act:3/1956", None)}
+assert ("amends", "chapter:188", "10") in {(e[2], e[3], e[4]) for e in edges(d11, "act:3/1965", None)}
+print("ok 1938 chapter numbers")
+d12 = {"long_title": "AN ACT TO PROVIDE FOR THE ESTABLISHMENT OF THE SRI LANKA NURSES COUNCIL", "sections": [
+    sec("27", "Repeal", ("(1) Part IX of the Medical Ordinance (Chapter 105) is hereby repealed.", False)),
+    sec("28", "Repeal", ("The Nurses Ordinance (Chapter 106) is hereby repealed.", False))]}
+E12 = {(e[2], e[3], e[4]) for e in edges(d12, "act:19/1988", None)}
+assert not [e for e in E12 if e[0] == "repeals_act" and "105" in e[1]] and [e for e in E12 if e[0] == "repeals" and "105" in e[1]], E12
+assert ("repeals_act", "chapter:106", None) in E12
+print("ok partial repeals")
+from etl.structure import section_table
+assert section_table([["Repeal of Article 155G of the Constitution.", "48. Article 155G of the Constitution is hereby repealed."]])
+assert not section_table([["Column I", "Column II"], ["ENACTMENTS", "AMENDMENTS"], ["6. The Rubber Control Act", "1. For section 16, substitute"]])
+assert not section_table([["Sum invested", "Period in years"], ["30", "5"]])
+print("ok section tables")
+from etl.structure import provisions
+dt = {"long_title": "AN ACT", "preamble": [], "enacting": None, "schedules": [{"heading": "FIRST SCHEDULE", "paras": [
+      {"text": "x", "rows": [["Column I", "Column II"], ["a", "b"]]}]}],
+      "sections": [{"num": "20", "note": "Rates.", "part": None, "chapter": None, "paras": [
+          {"label": None, "text": "Rates are-"}, {"label": None, "text": "t", "rows": [["Sum", "Rate"], ["30", "5%"]]}]}]}
+R = {r[1]: (r[2], r[-1]) for r in provisions(dt, "act:1/2000")}
+assert R["20 Table 1"] == ("table", "Sum | Rate\n30 | 5%") and R["First Schedule Table 1"][0] == "table" and "20" in R
+print("ok table rows")

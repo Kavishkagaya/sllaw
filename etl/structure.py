@@ -1,7 +1,11 @@
 #!/usr/bin/env python3
 """Step 3: raw extraction -> blocks -> structured Act. Cheap and repeatable; never edits raw.
 
-  python3 -m etl.structure raw.json.gz [...] [--out DIR]   # local raw files (testing)
+  python3 -m etl.structure build [--limit N] [--full]       # new/changed English raws (R2) -> Neon acts, sections
+  python3 -m etl.structure file raw.json.gz [...] [--out DIR]   # local raw files (testing)
+
+Edges are step 4 (etl.graph build): it reads acts.doc from Neon, so changing an edge rule never
+needs a re-structure. Run it after every structure build (deleting an Act's row drops its edges).
 
 blocks(raw): the docling adapter. One block per layout cluster, split at the margin gap:
   {page, bbox [x0,y0,x1,y1] in PDF points (top-left origin), label, role, text}
@@ -18,14 +22,24 @@ ponytail: docling only. Chandra raw (scans, pre-2000) needs its own adapter into
 block shape; add when the scan extraction runs. Sinhala/Tamil legacy fonts (FM*, GPRasanji)
 need font->Unicode first, so only English structures cleanly for now.
 """
-import argparse, gzip, html, json, re, sys
+import argparse, gzip, html, json, os, re, sys
 from collections import Counter
+from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
+
+import psycopg2
+from dotenv import load_dotenv
+from psycopg2.extras import Json, execute_values
+
+load_dotenv()
 
 ORD = r'FIRST|SECOND|THIRD|FOURTH|FIFTH|SIXTH|SEVENTH|EIGHTH|NINTH|TENTH|ELEVENTH|TWELFTH'
 PART = re.compile(r'^PART\s+([IVXL]+|\d+)\b\s*[-—–:.]?\s*(.*)$')
 CHAPTER = re.compile(r'^CHAPTER\s+([IVXL]+|\d+)\b\s*[-—–:.]?\s*(.*)$')
 SCHED = re.compile(rf'^((?:{ORD})\s+)?SCHEDULE\b(\s+[A-Z0-9]{{1,3}}\b)?', re.I)
+# a schedule's heading line, also after the section it belongs to: "[SECTION 6 (2)] FIRST SCHEDULE" (LightOn puts
+# the reference first: Judicature 2/1978's First, Third and Fifth Schedules were read as schedule text)
+SCHED_HEAD = re.compile(rf'^(?:(?:\[\s*SECTIONS?\b[^\]]{{0,40}}\]|\(\s*SECTIONS?\b(?:[^()]|\([^()]*\)){{0,40}}\))\s*)?(?:(?:{ORD})\s+)?SCHEDULE\b', re.I)
 SECTION = re.compile(r'^(\d{1,3}[A-Z]{0,2})\s*\.\s+(.*)$', re.S)
 # a scan read without the dot, "11 (1) The Corporation shall ..." (30/2008); trusted only for the
 # next number with its own marginal note
@@ -580,6 +594,19 @@ def le1980_blocks(raw):
     return out
 
 
+def section_table(grid):
+    """docling sometimes reads a section and its marginal note as a two-column table: a cell that opens a section
+    ("48. Article 155G ... is hereby repealed") beside a short note ("Repeal of Article 155G ..."). 13 rows in 12
+    laws (2026-10-10), each hiding a section or a change note (12/2002 s2: no edge). Real tables (a schedule's
+    "Column I | Column II", rates) have no such row."""
+    for r in grid:
+        cells = [x.strip() for x in r if x and x.strip()]
+        op = [x for x in cells if re.match(r"^\d{1,3}[A-Z]?\.\s+\S", x) and re.search(r"\b(?:hereby|shall|may)\b", x)]
+        if op and any(x not in op and 3 <= len(x) <= 90 and x[:1].isupper() and not x[:1].isdigit() for x in cells):
+            return True
+    return False
+
+
 def blocks(raw, le1980=False):
     if le1980:
         return le1980_blocks(raw)
@@ -645,8 +672,10 @@ def blocks(raw, le1980=False):
                 grid = [[""] * t["num_cols"] for _ in range(t["num_rows"])]
                 for tc in t["table_cells"]:
                     grid[tc["start_row_offset_idx"]][tc["start_col_offset_idx"]] = clean(tc["text"])
-                page_out.append({**base, "bbox": [b["l"], b["t"], b["r"], b["b"]], "role": "body", "text": text, "rows": grid})
-                continue
+                if not section_table(grid):   # else: a section and its note read as a table, handled as text below
+                    page_out.append({**base, "bbox": [b["l"], b["t"], b["r"], b["b"]], "role": "body", "text": text, "rows": grid})
+                    continue
+                c = {**c, "label": "text"}    # ...split into note and body like any text cluster
             runs = [("body", c["cells"])]
             if is_margin and c["label"] not in SKIP:
                 runs = [("margin", [x for x in c["cells"] if is_margin(cx(x))])]
@@ -733,7 +762,11 @@ def num_key(n):
 # lower-case prose. A real quote opener ("'Provided that, ...", "'3. (1) The ...") has no such span.
 # a list of quoted terms opens no quotation either: '(a) “President”, “Presidential” or ...' (17/1982 s19,
 # one item per block in LightOn's output; read as a quotation, it swallowed s20-s468)
-TERM = re.compile(rf"^[{QUOTES}]{{1,2}}(?![\d(])[^{QUOTES}]{{0,60}}[^\s{QUOTES}]\s?[{QUOTES}]\s*(?:\([^)]*\)\s*)?(?:[a-z]|,\s*[{QUOTES}])")
+# ...or a term whose meaning is the list below it, '“individual”—', or one with a comma, '“net income”, in
+# relation to any individual, means' (65/1961 s21: read as quotations, they swallowed the rest of the Act)
+# ...or the end of a parenthesis carried over a page, "'preceding year') had any profits" (10/2006 p260: it
+# opened a quotation that swallowed ss174-218)
+TERM = re.compile(rf"^[{QUOTES}]{{1,2}}(?![\d(])[^{QUOTES}]{{0,60}}[^\s{QUOTES}]\s?[{QUOTES}]\s*(?:\([^)]*\)\s*)?(?:[a-z]|,\s*[{QUOTES}a-z]|[—–:-]+\s*$|[)\]]\s*[a-z,;.])")
 
 
 def quote_delta(text, open_):
@@ -759,6 +792,11 @@ KINDS = ("front", "section_start", "section_text", "quoted", "part_heading", "ch
 def rule_kinds(bs):
     """The rules' label for every body block (index in bs -> one of KINDS), plus warnings.
     Same label set as the Jev labeller (etl/label.py), so both feed assemble() and can be compared."""
+    # a centred schedule heading read as a marginal note ("THIRD SCHEDULE [Section 7 (1) (b)]", Mediation Boards
+    # 72/1988): it is body text; blocks are in page order, so it falls into place (assemble() sees the role too)
+    for b in bs:
+        if b["role"] == "margin" and len(b["text"]) < 80 and SCHED_HEAD.match(b["text"]) and "SCHEDULE" in b["text"]:
+            b["role"] = "body"
     body = [(k, b) for k, b in enumerate(bs) if b["role"] == "body"]
     notes = merge_margins([b for b in bs if b["role"] == "margin"], [b for _, b in body])
     kinds, warnings = {}, []
@@ -808,7 +846,7 @@ def rule_kinds(bs):
                 kinds[j] = kind
         # "SCHEDULE (Section 2)" isn't all caps (29/2018), so the heading word alone decides
         # ...or a table that starts with its heading ("SCHEDULE I section 2 54 or above ...", 28/2021)
-        if not quote and (len(t) < 80 or "rows" in b) and re.match(rf'((?:{ORD})\s+)?SCHEDULE\b', t):
+        if not quote and (len(t) < 80 or "rows" in b) and SCHED_HEAD.match(t) and "SCHEDULE" in t[:60]:
             in_sched = True
             put("schedule_heading")
             continue
@@ -827,9 +865,13 @@ def rule_kinds(bs):
                     titled = False
                     continue
         titled = False
-        if in_sched and le and (ms := SECTION.match(t)) and num_key(ms[1]) == ((last or (0, ''))[0] + 1, '') and any(
-                x["page"] == b["page"] and abs(x["bbox"][1] - b["bbox"][1]) < level(b) for x in notes):
-            in_sched = False           # 1980 chapters print schedules between sections too (Monetary Law, cap 323)
+        # the next section, level with its own (unquoted) note, ends a schedule: 1980 chapters print schedules
+        # between sections (Monetary Law, cap 323), and Acts print tables headed "FIRST SCHEDULE" inside a
+        # section (Inland Revenue 10/2006 s20: everything after it, ~200 sections, was schedule text)
+        if in_sched and (ms := SECTION.match(t)) and num_key(ms[1]) == ((last or (0, ''))[0] + 1, '') and any(
+                x["page"] == b["page"] and abs(x["bbox"][1] - b["bbox"][1]) < level(b) and (le or x["text"][:1] not in QUOTES)
+                for x in notes):
+            in_sched = False
         if in_sched:
             put("schedule_text")
             continue
@@ -945,15 +987,15 @@ def assemble(bs, kinds, warnings=(), cont=None):
         titled = None
         if kind == "schedule_heading":
             hm = SCHED.match(t) if "rows" in b else None   # heading and table in one block: split them
-            sched = {"heading": hm[0].strip() if hm else t, "page": b["page"],
+            sched = {"heading": hm[0].strip() if hm else t, "page": b["page"], "_at": (b["page"], b["bbox"][1]),
                      "paras": [{"text": t, "page": b["page"], "rows": b["rows"]}] if hm else []}
             doc["schedules"].append(sched)
             continue
         if kind == "schedule_text":
             if sched is None:
-                sched = {"heading": None, "page": b["page"], "paras": []}
+                sched = {"heading": None, "page": b["page"], "_at": (b["page"], b["bbox"][1]), "paras": []}
                 doc["schedules"].append(sched)
-            sched["paras"].append({"text": t, "page": b["page"], **({"rows": b["rows"]} if "rows" in b else {})})
+            sched["paras"].append({"text": t, "page": b["page"], "_b": b, **({"rows": b["rows"]} if "rows" in b else {})})
             continue
         if kind == "section_start":
             if re.fullmatch(r'\d{1,3}[A-Z]{0,2}\s*\.', t):      # bare number, text in the next block
@@ -997,6 +1039,8 @@ def assemble(bs, kinds, warnings=(), cont=None):
     dropped = {b["page"] for _, b in body} - {b["page"] for k, b in body if kinds.get(k) != "furniture"}
     paras = [p for s in doc["sections"] for p in s["paras"] if "_b" in p]
     quoted_paras = [p for p in paras if p.get("quoted")]
+    sched_paras = [p for sc in doc["schedules"] for p in sc["paras"] if "_b" in p]
+    unplaced = []
     for n in notes:
         if n["page"] in dropped:                 # e.g. the repeated copy of the Act (1/2010)
             continue
@@ -1034,13 +1078,78 @@ def assemble(bs, kinds, warnings=(), cont=None):
             s["note"] = n["text"]
         elif not s and level:
             min(level, key=lambda p: abs(p["_b"]["bbox"][1] - n["bbox"][1])).setdefault("notes", []).append(n["text"])
+        elif not s and (lv := [p for p in sched_paras if p["_b"]["page"] == n["page"]
+                               and p["_b"]["bbox"][1] - 4 <= n["bbox"][3] and n["bbox"][1] <= p["_b"]["bbox"][3]]):
+            # beside a schedule's paragraph ("[Section 62]", "Application for and allotment of shares." in a
+            # company's articles, 14/1966): that paragraph's note; dropped before (67 blocks lost there)
+            min(lv, key=lambda p: abs(p["_b"]["bbox"][1] - n["bbox"][1])).setdefault("notes", []).append(n["text"])
         elif first and (n["page"], n["bbox"][1]) < first:
             doc["front"].append(n["text"])          # e.g. "Preamble"
         else:
+            unplaced.append(n)
+    # second pass, for what is left (3,383 notes were dropped on 2026-10-10, 100 of them change notes, which give
+    # the graph its edges): a note set off its opener's line, often on scans, goes to the nearest section on its
+    # page that has none (within 150 pt, nearest pairs first); an amendment tag ("[§ 2, 55 of 1961.]", 1980
+    # chapters) is the history of the section it sits beside or under; "[Section 18.]" is the schedule
+    # paragraph's it sits beside. A quoted note belongs to an inserted section, not to an outer one.
+    TAG = re.compile(r"^\[\s*(?:§|\d+\s*,)")
+    pairs = sorted((abs(n["bbox"][1] - o["_opener"]["bbox"][1]), i, j) for i, n in enumerate(unplaced)
+                   for j, o in enumerate(doc["sections"]) if o["_opener"]["page"] == n["page"] and not o["note"]
+                   and abs(n["bbox"][1] - o["_opener"]["bbox"][1]) <= 150 and n["text"][:1] not in QUOTES
+                   and not TAG.match(n["text"]) and not re.match(r"\[\s*Sections?\b", n["text"], re.I))
+    used = set()
+    for _, i, j in pairs:
+        sec, t = doc["sections"][j], unplaced[i]["text"]
+        # a change note ("Amendment of section 15 ...") only where the section's own text names that section: a
+        # wrong one makes a wrong edge (without this check 3 of the 15 change notes placed here disagreed)
+        if (m := re.match(r"^\W*(?:Amendment|Replacement|Substitution|Repeal|Insertion|Addition)s?\b.*?\bsections?\s*(\d+[A-Z]*)",
+                          t, re.I)) and not re.search(rf"\b[Ss]ections?\s*(?:\d+[A-Z]*\s*,\s*)*{m[1]}\b",
+                                                      " ".join(p["text"] for p in sec["paras"])):
+            continue
+        if i not in used and not sec["note"]:
+            sec["note"] = t
+            used.add(i)
+    for i, n in enumerate(unplaced):
+        if i in used:
+            continue
+        on = [o for o in doc["sections"] if (o["_opener"]["page"], o["_opener"]["bbox"][1]) <= (n["page"], n["bbox"][3])]
+        near = [p for p in sched_paras if p["_b"]["page"] == n["page"] and abs(p["_b"]["bbox"][1] - n["bbox"][1]) <= 80]
+        if TAG.match(n["text"]) and on:
+            on[-1].setdefault("history", []).append(n["text"])
+        elif re.match(r"\[\s*Sections?\b", n["text"], re.I) and near:
+            min(near, key=lambda p: abs(p["_b"]["bbox"][1] - n["bbox"][1])).setdefault("notes", []).append(n["text"])
+        else:
             doc["warnings"].append(f"margin note not on a section opener, p{n['page']}: {n['text'][:60]}")
+    # an Act runs front matter -> sections -> schedules, never interleaved (user, 2026-10-10): a "schedule" that starts
+    # before the last section's opener is a table or heading inside the section it sits in ("FIRST SCHEDULE" over
+    # 10/2006 s20's rate table, which matched edges meant for the real First Schedule). Its heading and paragraphs go
+    # back into that section. 1980 chapters do print schedules between sections (Monetary Law, cap 323): kept.
+    # The clause "In the event of any inconsistency between the Sinhala and Tamil texts ... the Sinhala text shall
+    # prevail" is printed after the schedules in newer Acts (Companies 12/2026 s480 on its last page): it doesn't
+    # set the boundary.
+    main = [o for o in doc["sections"] if not re.search(r"Sinhala\s+text\s+(?:shall\s+|to\s+)?prevail", (o["note"] or "") + " "
+                                                         + " ".join(p["text"] for p in o["paras"][:2]), re.I)]
+    if main and not any(b.get("label") == "le1980" for _, b in body):
+        last = (main[-1]["_opener"]["page"], main[-1]["_opener"]["bbox"][1])
+        keep = []
+        for sc in doc["schedules"]:
+            if sc.get("_at") and sc["_at"] < last:
+                host = [o for o in doc["sections"] if (o["_opener"]["page"], o["_opener"]["bbox"][1]) <= sc["_at"]]
+                if host:
+                    o = host[-1]
+                    if sc["heading"]:
+                        o["paras"].append({"label": None, "text": sc["heading"], "page": sc["page"]})
+                    o["paras"].extend({"label": None, **{k: v for k, v in p.items() if k != "_b"}} for p in sc["paras"])
+                    o["pages"][1] = max(o["pages"][1], sc["page"])
+                    doc["warnings"].append(f"schedule heading inside s{o['num']} (p{sc['page']}): {(sc['heading'] or '')[:40]}")
+                    continue
+            keep.append(sc)
+        doc["schedules"] = keep
+    for sc in doc["schedules"]:
+        sc.pop("_at", None)
     for s in doc["sections"]:
         del s["_opener"]
-    for p in paras:
+    for p in paras + sched_paras:
         del p["_b"]
 
     if doc["title"] and re.match(r'APPROPRIATION\s+ACT', doc["title"], re.I):   # amendments to one are fine
@@ -1101,17 +1210,349 @@ def act(bs):
     doc = assemble(bs, *rule_kinds(bs))
     if (lang := script(bs)) != "english":
         doc["warnings"].insert(0, f"not English: the text is {lang}")
+    else:
+        # the sections themselves: 6 "English" files built as English were Sinhala or Tamil (0-10% Latin
+        # letters in their sections; 30/1997 parliament.lk, 17/1990 documents.gov.lk, 2026-10-10)
+        t = " ".join(p["text"] for s in doc["sections"] for p in s["paras"])
+        lat, other = len(re.findall(r"[A-Za-z]", t)), len(re.findall(r"[஀-௿඀-෿]", t))
+        if other and lat < other:
+            doc["warnings"].insert(0, "not English: the sections are Sinhala/Tamil")
+        # Sinhala in a legacy (FM*) font, read as Latin punctuation: "'˙…˙ ' ‰¶˘¶¨ -·˘·" (54/2007, 7/2006). Only
+        # marks English text never has: with fi/fl ligatures, "…", "£", "·", "»" in the set, 3,838 of 3,967
+        # English laws were flagged and skipped (BUILD 2026-10-10, first run; rebuilt)
+        elif len(re.findall(r"[˘˙¨˛˝⁄‹¤]", " ".join(doc["front"]) + t)) > max(50, lat // 20):
+            doc["warnings"].insert(0, "not English: legacy-font Sinhala/Tamil")
+    # no title line found (LightOn scans often miss page 1's): the short title s1 gives
+    if not doc["title"] and doc["sections"] and (m := re.search(
+            r"may\s+be\s+cited\s+as\s+the\s+(.+?(?:Act|Law|Ordinance|Constitution)(?:,?\s*No\.?\s*\d+\s+of\s+\d{4})?)",
+            " ".join(p["text"] for p in doc["sections"][0]["paras"]), re.I | re.S)):
+        doc["title"] = m[1].strip()
     if (lost := lost_text(bs, doc)):
         doc["warnings"].insert(0, f"{len(lost)} blocks not in the output verbatim, first p{lost[0]['page']}: "
                                f"{lost[0]['text'][:60]}")
     return doc
 
 
+# Bump when the structuring rules change, so `build` redoes every Act; otherwise it only
+# builds Acts that are new or were re-extracted (their raw_key or extracted_at changed).
+BUILD = "2026-10-10.2"  # 07: Surya text, non-English skipped, printed date = year; 09: LightOn pages (old if better), notes, openers; 10: schedules end at the next noted section, defined-term quotes, schedule notes, amendment:N, title from s1, Sinhala/Tamil/legacy-font check; 10.2: schedule headings after [Section N] or in the margin, bracket-closed terms, second-pass notes, history tags
+
+
+ORDINAL = "first second third fourth fifth sixth seventh eighth ninth tenth eleventh twelfth".split()
+
+
+def sched_name(t):
+    """'FIRST SCHEDULE', 'the First Schedule', 'SCHEDULE A (Section 2)', 'SCHEDULE' -> 'First Schedule',
+    'Schedule A', 'Schedule': the same name for a schedule's own row and for edges pointing at it."""
+    m = re.search(rf"\b(?:({'|'.join(ORDINAL)})\s+)?(SCHEDULES?)\b(?:\s+(?!(?:in|to|of|the|and)\b)([A-Z0-9]{{1,3}})\b(?!\s*\())?",
+                  t, re.I)
+    if not m:
+        return None
+    if m[1]:
+        return f"{m[1].title()} Schedule"
+    if m[2].lower() == "schedules":
+        return "Schedules"                                 # "Repeal of Schedules" = all of them
+    return f"Schedule {m[3].upper()}" if m[3] else "Schedule"
+
+
+def is_law_year(no):
+    """1973-77: the National State Assembly passed only Laws, so N/YYYY can only be a Law."""
+    return 1973 <= int(no[-4:]) <= 1977
+
+
+def text_of(s, quoted=None):
+    return "\n".join(((p["label"] + " ") if p["label"] else "") + p["text"] for p in s["paras"]
+                     if quoted is None or bool(p.get("quoted")) == quoted)
+
+
+def provisions(doc, key):
+    """Rows for `sections`: the preamble, every section, every schedule, in the Act's order; after each, its tables."""
+    head = lambda h, word: h and " ".join(filter(None, [word, h["num"], h["title"]]))
+    rows = []
+    pre = "\n".join(filter(None, [doc["long_title"], *doc["preamble"], doc["enacting"]]))
+    if pre:
+        rows.append(("Preamble", "preamble", None, None, None, None, pre))
+    # a table is also a row of its own, "20 Table 1" / "First Schedule Table 2", text one table row per line:
+    # rates and columns are what people ask about (2,733 tables on 2026-10-10); it stays in its owner's text too
+    def tables(owner, paras, note):
+        for i, p in enumerate([p for p in paras if p.get("rows")], 1):
+            rows.append((f"{owner} Table {i}", "table", note, None, None, None,
+                         "\n".join(" | ".join(c for c in r if c) for r in p["rows"])))
+    for s in doc["sections"]:
+        rows.append((s["num"], "section", s["note"], head(s["part"], "PART"), head(s["chapter"], "CHAPTER"),
+                     s.get("heading"), text_of(s)))
+        tables(s["num"], s["paras"], s["note"])
+    seen = set()
+    for sc in doc["schedules"]:
+        name = sched_name(sc["heading"] or "") or "Schedule"
+        n, i = name, 2
+        while n in seen:                           # two headings both read "SCHEDULE"
+            n, i = f"{name} ({i})", i + 1
+        seen.add(n)
+        # "[Section 41]", "(sections 5, 6 and 9)", "section 3(1)": the sections the schedule belongs to
+        ref = next((p["text"] for p in sc["paras"][:2]
+                    if re.fullmatch(r"[\[(]?\s*sections?\s+[\w(), ]{1,40}[\])]?\.?", p["text"].strip(), re.I)), None)
+        body = "\n".join("\n".join(" | ".join(c for c in r if c) for r in p["rows"]) if p.get("rows") else p["text"]
+                         for p in sc["paras"])
+        rows.append((n, "schedule", ref, None, None, None, "\n".join(filter(None, [sc["heading"], body]))))
+        tables(n, sc["paras"], sc["heading"])
+    return [(key, num, kind, i, *rest) for i, (num, kind, *rest) in enumerate(rows)]
+
+
+MONTHS = {m: i for i, m in enumerate("january february march april may june july august september "
+                                     "october november december".split(), 1)}
+
+
+def parse_date(t):
+    """'January 1, 2011' | '1st January, 2011' | 'the 1st day of April, 2011' -> '2011-01-01'."""
+    mon = "|".join(MONTHS)
+    for pat, order in ((rf"({mon})\s+(\d{{1,2}})(?:st|nd|rd|th)?,?\s+(\d{{4}})", "mdy"),
+                       # "8th September. 1948." (1980 Revised Edition OCR: a full stop for the comma)
+                       (rf"(\d{{1,2}})(?:st|nd|rd|th)?\s+(?:day\s+of\s+)?({mon})[,.]?\s+(\d{{4}})", "dmy")):
+        if (m := re.search(pat, t, re.I)):
+            mo, d, y = (m[1], m[2], m[3]) if order == "mdy" else (m[2], m[1], m[3])
+            return f"{y}-{MONTHS[mo.lower()]:02d}-{int(d):02d}"
+    return None
+
+
+def commencement(doc, certified):
+    """When the whole Act came into force, from s.1 or a section noted 'date of operation' /
+    'commencement' / 'retrospective'. Only the Act-wide sentence counts, not provisos for parts.
+    -> (date the walk uses, {kind, text}). kind: date | deemed (retrospective) | certified
+    (Speaker's certificate) | appointed (by a Gazette Order, not in the corpus) | unstated."""
+    cands = doc["sections"][:1] + [s for s in doc["sections"][1:]
+                                    if re.search(r"operation|commence|retrospect", s["note"] or "", re.I)]
+    for s in cands:
+        text = " ".join(p["text"] for p in s["paras"] if not p.get("quoted"))
+        m = re.search(r"(?:this Act|provisions of this Act(?:,? other than this section)?)(?:[^.;:]|\bNo\.){0,120}?"
+                      r"shall\s+(be\s+deemed\s+to\s+have\s+)?come\s+into\s+(?:operation|force)\s+"
+                      r"(?:on|from|with\s+effect\s+from)\s+([^.;:]{0,140})", text, re.I)
+        if not m:
+            continue
+        sentence, tail = m[0], m[2]
+        if re.match(r"(?:such\s+)?date\s+as\s+the\s+Minister|such\s+date", tail, re.I):
+            return certified, {"kind": "appointed", "text": sentence}
+        if re.match(r"the\s+date\s+on\s+which\s+the\s+certificate", tail, re.I):
+            return certified, {"kind": "certified", "text": sentence}
+        if (d := parse_date(tail)):
+            return d, {"kind": "deemed" if m[1] else "date", "text": sentence}
+    return certified, {"kind": "unstated", "text": None}
+
+
+def act_key(meta, doc=None):
+    if meta.get("cap"):
+        # Legislative Enactments 1980 chapter: the number the PDF prints, else lankalaw's listing
+        # (which lists both Customs and Masters Attendant as 235, 2026-10-07)
+        return f"cap:{(doc or {}).get('cap') or meta['cap']}"
+    if meta.get("cap1956"):
+        return f"cap1956:{meta['cap1956']}"       # 1956 Revised Edition chapter (other numbers than 1980's)
+    no = meta.get("act_no") or ""
+    if meta.get("kind") in ("law", "ordinance") and re.fullmatch(r"[1-9]\d*/\d{4}", no):
+        return f"{meta['kind']}:{no}"             # CommonLII says which (law:19/1978 beside act:19/1978)
+    if re.fullmatch(r"[1-9]\d*/\d{4}", no):
+        # 1972-78 National State Assembly Laws are built as law:N/YYYY, never act: (user, 2026-10-10).
+        # 1973-77 had only Laws; 1972 and 1978 had both, numbered separately (Act 5/1972 Agrarian Research
+        # != Law 5/1972 Co-operative Societies), so there the file's own title or long title says which
+        if is_law_year(no) or (1972 <= int(no[-4:]) <= 1978 and (
+                re.search(r"\bLAW\b,?\s*No", (doc or {}).get("title") or "")
+                or re.match(r"\s*A\s+LAW\b", (doc or {}).get("long_title") or "", re.I))):
+            return f"law:{no}"
+        return f"act:{no}"
+    # 0/YYYY = a Constitution amendment (documents.gov.lk lists them with no number; every 0/YYYY is one, checked
+    # 2026-10-10): keyed by its ordinal, "This Act may be cited as the Eighteenth Amendment to the Constitution"
+    if re.fullmatch(r"0/\d{4}", no) and (n := amendment_no(doc)):
+        return f"amendment:{n}"
+    return f"other:{meta['listing']['id']}"
+
+
+UNITS = "first second third fourth fifth sixth seventh eighth ninth".split()
+TEENS = "tenth eleventh twelfth thirteenth fourteenth fifteenth sixteenth seventeenth eighteenth nineteenth".split()
+
+
+def amendment_ordinal(doc):
+    t = " ".join(p["text"] for s in doc["sections"][:1] for p in s["paras"])
+    return re.search(r"cited\s+as\s+the\s+([A-Za-z -]+?)\s+Amendment", t, re.I)[1].title()
+
+
+def amendment_no(doc):
+    """'... cited as the Twenty First Amendment to the Constitution' -> 21 (from s1), else None."""
+    t = " ".join(p["text"] for s in (doc or {}).get("sections", [])[:1] for p in s["paras"])
+    m = re.search(r"cited\s+as\s+the\s+([A-Za-z -]+?)\s+Amendment\s+to\s+the\s+Constitution", t, re.I)
+    if not m:
+        return None
+    w = m[1].lower().replace("-", " ").split()
+    if w[0] in ("twenty", "thirty") and len(w) == 2 and w[1] in UNITS:
+        return (20 if w[0] == "twenty" else 30) + UNITS.index(w[1]) + 1
+    if len(w) == 1:
+        return {**{u: i + 1 for i, u in enumerate(UNITS)}, **{t: i + 10 for i, t in enumerate(TEENS)},
+                "twentieth": 20, "thirtieth": 30}.get(w[0])
+    return None
+
+
+_w = {}
+
+
+def _init(local):
+    """One per worker process: its own Neon connection and R2 client (or local raw files)."""
+    _w["conn"] = psycopg2.connect(os.environ["DATABASE_URL"])
+    if local:
+        files = {json.load(gzip.open(f))["sha256"]: f for f in Path(local).glob("*.json.gz")}
+        _w["load"] = lambda sha, _: json.load(gzip.open(files[sha]))
+    else:
+        from etl.fetch import r2
+        s3, bucket = r2(), os.environ["R2_BUCKET"]
+        get = lambda k: json.loads(gzip.decompress(s3.get_object(Bucket=bucket, Key=k)["Body"].read()))
+
+        def load(sha, k):
+            """raw/v2 plus, for scans, LightOnOCR-3's pages (raw/lighton, etl.ocr) when they exist."""
+            raw = get(k)
+            try:
+                raw["lighton"] = get(f"raw/lighton/{sha}.json.gz")
+            except s3.exceptions.NoSuchKey:
+                pass
+            return raw
+        _w["load"] = load
+
+
+def gaps(doc):
+    """Section numbers missing between 1 and the highest one found."""
+    nums = {int(s["num"]) for s in doc["sections"] if s["num"].isdigit()}
+    return sum(1 for i in range(1, max(nums, default=0) + 1) if i not in nums)
+
+
+def structure_raw(raw, le1980=False):
+    """The Act from LightOnOCR-3's pages where it has them, unless the old engine's pages (Chandra or
+    Surya) give more sections with no more numbering gaps. On the full build of 2026-10-09 LightOn gave
+    169 pre-2000 Acts more sections and 52 fewer: a separately boxed note inside quoted text (50/1981)
+    can put a scanned page's margin on the wrong side, and some noisy pages read worse (21/1981)."""
+    doc = act(blocks(raw, le1980=le1980))
+    if raw.get("lighton") and not le1980:
+        old = act(blocks({k: v for k, v in raw.items() if k != "lighton"}))
+        if len(old["sections"]) > len(doc["sections"]) and gaps(old) <= gaps(doc):
+            return {**old, "ocr": "old"}
+        doc["ocr"] = "lighton"
+    return doc
+
+
+def build_one(row):
+    """Read the raw into memory, structure it, write the Act and its provisions; nothing goes
+    to disk. Each worker process does the whole Act: the build waits on R2 and Neon round trips
+    (us-east-1), not on CPU, so Acts go in parallel (one process, serial writes: 27 Acts/min,
+    2026-10-07). -> ("ok" | "skip" | "fail", message)"""
+    doc_id, sha, raw_key, meta, doc_date = row
+    try:
+        doc = structure_raw(_w["load"](sha, raw_key), le1980=bool(meta.get("cap")))
+        if any(w.startswith("not English") for w in doc["warnings"]):   # listed as English, isn't (not always
+            # the first warning: the lost-text one is inserted ahead of it, which let 6/1987 through)
+            with _w["conn"], _w["conn"].cursor() as cur:    # and drop what an older build made of it
+                cur.execute("DELETE FROM acts WHERE document_id = %s", (doc_id,))
+            why = next(w for w in doc["warnings"] if w.startswith("not English"))
+            return "skip", f"skip {meta.get('act_no')}: {why}"
+        key, certified = act_key(meta, doc), (doc_date or "")[:10] or None
+        if meta.get("cap"):
+            # two chapters under one number (Customs and Masters Attendant, both 235, 2026-10-07): the
+            # first-listed keeps cap:N, the other cap:N@<document id>. ponytail: listing order, not which is right
+            cur = _w["conn"].cursor()
+            cur.execute("SELECT min(id) FROM documents WHERE source = 'le1980' AND meta->>'cap' = %s", (key[4:],))
+            first = cur.fetchone()[0]
+            _w["conn"].rollback()
+            if first is not None and first != doc_id:
+                doc["warnings"].append(f"Chapter {key[4:]} is also document {first}: keyed {key}@{doc_id}")
+                key = f"{key}@{doc_id}"
+            if key.split("@")[0] != f"cap:{meta['cap']}":
+                doc["warnings"].append(f"listed as Chapter {meta['cap']}, prints Chapter {key[4:]}")
+            # no "CHAPTER N" line of its own on page 1: lankalaw's title, "Vehicles (Chapter 534)"
+            doc["title"] = doc["title"] or re.sub(r"\s*\(Chapter[^)]*\)?\s*$", "", meta["listing"]["title"])
+        if key.startswith("amendment:"):
+            doc["title"] = doc["title"] or f"{amendment_ordinal(doc)} Amendment to the Constitution"
+        if meta.get("date_precision") == "year":   # lankalaw rows: only the year; the Act prints its date
+            printed = parse_date(doc["certified"] or "")
+            if printed and printed[:4] == key[-4:]:
+                certified = printed
+            elif printed:       # OCR misread (1465) or lankalaw linked another Act's file (5 Acts, 2026-10-07)
+                doc["warnings"].append(f"printed date {printed} is not in {key[-4:]}: kept the year only")
+        if meta.get("cap"):     # 1980 Revised Edition: the date under the long title, the law's first enactment
+            certified = parse_date(doc["certified"] or "")
+        date, comm = commencement(doc, certified)
+        conn = _w["conn"]
+        with conn, conn.cursor() as cur:         # one transaction per Act
+            # also this file's row under an older key (a 1972-78 Law once built as act:N)
+            cur.execute("DELETE FROM acts WHERE key = %s OR document_id = %s", (key, doc_id))
+            cur.execute("""INSERT INTO acts (key, document_id, raw_key, built_with, title, long_title, certified,
+                           commenced, commencement, warnings, doc) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
+                        (key, doc_id, raw_key, BUILD, doc["title"], doc["long_title"], certified, date, Json(comm),
+                         Json(doc["warnings"]), Json(doc)))
+            execute_values(cur, "INSERT INTO sections (act_key, num, kind, seq, note, part, chapter, heading, text) "
+                                "VALUES %s ON CONFLICT DO NOTHING", provisions(doc, key))
+        return "ok", ""
+    except Exception as e:
+        try:
+            _w["conn"].rollback()
+        except Exception:
+            _w["conn"] = psycopg2.connect(os.environ["DATABASE_URL"])   # dropped connection
+        return "fail", f"FAIL {sha[:12]}: {e}"[:300]
+
+
+def build(limit=None, workers=16, local=None, full=False):
+    """local: a directory of raw .json.gz files to use instead of R2 (testing); only the
+    documents rows whose sha256 is among them are built."""
+    conn = psycopg2.connect(os.environ["DATABASE_URL"])
+    cur = conn.cursor()
+    shas = [json.load(gzip.open(f))["sha256"] for f in Path(local).glob("*.json.gz")] if local else None
+    cur.execute("""SELECT DISTINCT ON (d.sha256) d.id, d.sha256, d.raw_key, d.meta, d.doc_date FROM documents d
+                   WHERE d.raw_key IS NOT NULL AND d.meta->>'lang' = 'ENGLISH'
+                     AND (%s::text[] IS NULL OR d.sha256 = ANY(%s))
+                     AND (%s OR NOT EXISTS (SELECT 1 FROM acts a WHERE a.document_id = d.id AND a.raw_key = d.raw_key
+                                            AND a.built_with = %s AND a.structured_at >= d.extracted_at))
+                     -- parliament.lk's official PDF over lankalaw's file for the same Act (SOURCES.md, 2026-10-10):
+                     -- both would build into one key, last writer wins. lankalaw lists one file per number: the
+                     -- Law in 1973-77, else the Act. 1972 and 1978 have an Act and a Law per number and
+                     -- parliament.lk leaves some Laws unmarked (15/1972 Ceiling on Income beside the Act
+                     -- 15/1972 Institute of Chemistry): there the title must match too
+                     -- a listing that links another Act's file (meta.wrong_file: what the file prints; SOURCES.md)
+                     AND NOT d.meta ? 'wrong_file'
+                     -- CommonLII (retyped 2007 text) only for laws no official file covers (user, 2026-10-10)
+                     AND NOT (d.source = 'commonlii' AND EXISTS (
+                         SELECT 1 FROM documents o WHERE o.source IN ('acts', 'parliament') AND o.raw_key IS NOT NULL
+                           AND NOT o.meta ? 'wrong_file' AND o.meta->>'lang' = 'ENGLISH'
+                           AND o.meta->>'act_no' = d.meta->>'act_no'
+                           AND coalesce(o.meta->>'kind', 'act') = coalesce(d.meta->>'kind', 'act')))
+                     AND NOT (d.source = 'lankalaw' AND EXISTS (
+                         SELECT 1 FROM documents p WHERE p.source = 'parliament' AND p.raw_key IS NOT NULL
+                           AND NOT p.meta ? 'wrong_file'
+                           AND p.meta->>'act_no' = d.meta->>'act_no'
+                           AND p.meta->>'kind' = CASE WHEN d.meta->>'act_no' ~ '/197[3-7]$' THEN 'law' ELSE 'act' END
+                           AND (d.meta->>'act_no' !~ '/197[28]$' OR regexp_replace(lower(regexp_replace(p.title, '[^A-Za-z]', '', 'g')), '(act|law)$', '')
+                                                                   = regexp_replace(lower(regexp_replace(d.title, '[^A-Za-z]', '', 'g')), '(act|law)$', ''))))
+                   ORDER BY d.sha256, d.source = 'parliament' DESC, d.id LIMIT %s""", (shas, shas, full, BUILD, limit))
+    rows = cur.fetchall()
+    conn.close()
+    print(f"{len(rows)} Acts to build ({'all' if full else 'new, re-extracted or built with older code'})", flush=True)
+    n = {"ok": 0, "skip": 0, "fail": 0}
+    with ProcessPoolExecutor(workers, initializer=_init, initargs=(local,)) as ex:
+        for i, (status, msg) in enumerate(ex.map(build_one, rows, chunksize=4), 1):
+            n[status] += 1
+            if msg:
+                print(f"[{i}/{len(rows)}] {msg}", flush=True)
+            if i % 25 == 0 or i == len(rows):
+                print(f"[{i}/{len(rows)}] {n['ok']} structured, {n['skip']} skipped, {n['fail']} failed", flush=True)
+    print("edges are not rebuilt here: run etl.graph build", flush=True)
+
+
 def main():
     a = argparse.ArgumentParser()
-    a.add_argument("raw", nargs="+", help="raw/v2 .json.gz files")
-    a.add_argument("--out", default=".", help="directory for <name>.act.json and <name>.blocks.json")
+    sub = a.add_subparsers(dest="cmd", required=True)
+    b = sub.add_parser("build", help="English raws from R2 -> Neon acts + sections")
+    b.add_argument("--limit", type=int)
+    b.add_argument("--workers", type=int, default=16)
+    b.add_argument("--local", help="directory of raw .json.gz to use instead of R2 (testing)")
+    b.add_argument("--full", action="store_true", help="rebuild every Act, not only new or changed ones")
+    f = sub.add_parser("file", help="structure local raw files into JSON (testing)")
+    f.add_argument("raw", nargs="+", help="raw/v2 .json.gz files")
+    f.add_argument("--out", default=".", help="directory for <name>.act.json and <name>.blocks.json")
     args = a.parse_args()
+    if args.cmd == "build":
+        return build(args.limit, args.workers, args.local, args.full)
     for f in args.raw:
         raw = json.load(gzip.open(f))
         bs = blocks(raw)
