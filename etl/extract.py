@@ -6,14 +6,15 @@
   python3 -m etl.extract --no-ocr       # only files with a text layer (no OCR)
   python3 -m etl.extract --before 2000 --limit 5   # scans only (OCR pilot)
   python3 -m etl.extract --recheck-ocr  # re-queue files whose OCR-layer pages were not OCR'd
-  python3 -m etl.extract --shard 0/3    # one of 3 workers side by side (and 1/3, 2/3)
+  (start it N times to run N workers side by side: each claims files from the shared queue)
 
 Per unique file (sha256): read the PDF from R2, count text-layer characters per
 page, then route:
   any page with a text layer      -> docling (whole file, OCR off)
-  pages with no text but an image -> Surya OCR inside docling (on ada's GPU; Chandra until 2026-10-06)
+  pages with no text but an image -> no OCR here: etl.ocr (LightOnOCR-3) afterwards, into raw/lighton
+                                     (Surya inside docling 2026-10-06..09, Chandra before)
   pages whose text is an OCR layer over an image (fonts named '*Minion Pro-21633', 2008 scans)
-                                  -> Surya too, whole page: that OCR is poor ("Rath11t1jotlzi")
+                                  -> the same: that OCR is poor ("Rath11t1jotlzi")
   pages with neither (blank)      -> nothing; recorded in `pages` only
 Writes raw/<VERSION>/<sha256>.json.gz to R2 and sets raw_key/extracted_at on every
 row with that sha256. What is stored is the engines' own output, untouched:
@@ -25,7 +26,7 @@ row with that sha256. What is stored is the engines' own output, untouched:
 A file is written only when every page succeeded, so raw is never partial.
 Bump VERSION when an engine or its parameters change; old raw stays in R2.
 """
-import argparse, ctypes, gzip, hashlib, io, json, os, time
+import argparse, ctypes, gzip, io, json, os, time
 from importlib.metadata import version
 
 import psycopg2
@@ -156,38 +157,53 @@ def write(sql, args):
         conn.close()
 
 
-def queue(before, limit, lang, tried, shard=None):
+CLAIM = "claimed by {} at {}"
+
+
+def claim(before, lang, tried, me):
+    """Take the next file off the shared queue: workers pull one file at a time, so a worker on a
+    fast card simply takes more (fixed shares left two of three workers idle, 2026-10-06). The claim
+    lives in `error` and dies after 3 hours, so a killed worker can't hold files. Untried files come
+    first, then ones that failed (e.g. out of GPU memory on another card); each worker tries a file
+    once per run. -> (sha256, r2_key) or None."""
     conn = connect()
-    with conn.cursor() as cur:
-        cur.execute("SELECT sha256, min(r2_key) FROM documents WHERE r2_key IS NOT NULL AND raw_key IS NULL "
-                    "AND (%s::text IS NULL OR doc_date < %s) AND (%s::text IS NULL OR meta->>'lang' = %s) "
-                    "GROUP BY sha256 ORDER BY min(id) LIMIT %s", (before, before, lang, lang, limit))
-        # the share: a hash of the file seeded per run, so a restart deals what's left evenly again
-        # (an unseeded hash left all 126 remaining files in one share, 2026-10-06)
-        rows = [r for r in cur.fetchall() if r[0] not in tried
-                and (shard is None or int(hashlib.md5((shard[2] + r[0]).encode()).hexdigest()[:8], 16)
-                     % shard[1] == shard[0])]
-    conn.close()
-    return rows
+    try:
+        with conn, conn.cursor() as cur:
+            cur.execute("""UPDATE documents SET error = %s, updated_at = NOW()
+                WHERE sha256 = (SELECT sha256 FROM documents
+                    WHERE r2_key IS NOT NULL AND raw_key IS NULL
+                      AND (%s::text IS NULL OR doc_date < %s) AND (%s::text IS NULL OR meta->>'lang' = %s)
+                      AND NOT (sha256 = ANY(%s))
+                      AND (error IS NULL OR error NOT LIKE 'claimed by %%' OR updated_at < NOW() - INTERVAL '3 hours')
+                    ORDER BY (error IS NOT NULL AND error NOT LIKE 'claimed by %%'), id
+                    LIMIT 1 FOR UPDATE SKIP LOCKED)
+                RETURNING sha256, r2_key""",
+                (CLAIM.format(me, time.strftime("%H:%M:%S")), before, before, lang, lang, list(tried)))
+            row = cur.fetchone()
+    finally:
+        conn.close()
+    return row
 
 
-def run(limit=None, use_ocr=True, before=None, lang="ENGLISH", shard=None):
-    """lang: only files in this language (decision 2026-10-05: English only; None = all). When the
-    queue runs out it looks again, so files fetched meanwhile are picked up; each is tried once."""
+def run(limit=None, use_ocr=True, before=None, lang="ENGLISH"):
+    """lang: only files in this language (decision 2026-10-05: English only; None = all). Runs until
+    the shared queue is empty, so files fetched meanwhile are picked up and any number of workers can
+    run side by side."""
     s3, bucket = r2(), os.environ["R2_BUCKET"]
-    tried, ok, bad, skipped = set(), 0, 0, 0
-    while (rows := queue(before, limit, lang, tried, shard)):
-        tried |= {r[0] for r in rows}
-        run_batch(rows, s3, bucket, use_ocr, counts := [0, 0, 0])
-        ok, bad, skipped = ok + counts[0], bad + counts[1], skipped + counts[2]
-        if limit:
-            break
-    print(f"\n{ok} extracted, {bad} failed, {skipped} skipped (failed and skipped stay queued)")
+    me = f"{os.uname().nodename}:{os.getpid()}"
+    tried, counts = set(), [0, 0, 0]
+    while (not limit or len(tried) < limit) and (row := claim(before, lang, tried, me)):
+        tried.add(row[0])
+        c = [0, 0, 0]
+        run_batch([row], s3, bucket, use_ocr, c, label=len(tried))
+        counts = [x + y for x, y in zip(counts, c)]
+    print(f"\n{counts[0]} extracted, {counts[1]} failed, {counts[2]} skipped (failed and skipped stay queued)")
 
 
-def run_batch(rows, s3, bucket, use_ocr, counts):
+def run_batch(rows, s3, bucket, use_ocr, counts, label=None):
     ok, bad, skipped = 0, 0, 0
     for i, (sha, key) in enumerate(rows, 1):
+        i = label or i
         t0 = time.time()
         try:
             pdf = s3.get_object(Bucket=bucket, Key=key)["Body"].read()
@@ -202,20 +218,27 @@ def run_batch(rows, s3, bucket, use_ocr, counts):
                 write("UPDATE documents SET raw_key=%s, extracted_at=NOW(), error=NULL, updated_at=NOW() "
                       "WHERE sha256=%s", (rkey, sha))
                 ok += 1
-                print(f"[{i}/{len(rows)}] {sha[:12]}: ok html in {time.time() - t0:.0f}s", flush=True)
+                print(f"[{i}] {sha[:12]}: ok html in {time.time() - t0:.0f}s", flush=True)
                 continue
             pages = text_layer(pdf)
             scan = [p["page_no"] - 1 for p in pages if is_scan(p)]
             digital = [p for p in pages if p["chars"] >= MIN_CHARS and not is_scan(p)]
             if scan and not use_ocr:
                 skipped += 1
-                print(f"[{i}/{len(rows)}] {sha[:12]}: skip, {len(scan)} pages need OCR", flush=True)
+                write("UPDATE documents SET error = NULL WHERE sha256 = %s AND error LIKE 'claimed by %%'", (sha,))
+                print(f"[{i}] {sha[:12]}: skip, {len(scan)} pages need OCR", flush=True)
                 continue
-            # scans: Surya inside docling; "force" when a scan page carries someone else's OCR layer
-            ocr = ("force" if any(pages[n].get("ocr_layer") for n in scan) else "scan") if scan else None
-            raw = {"sha256": sha, "version": VERSION, "pages": pages,
-                   "docling": docling(pdf, sha, [p["page_no"] for p in digital], ocr) if (digital or scan) else None,
-                   "chandra": None}
+            # scans: no OCR here since 2026-10-09; etl.ocr (LightOnOCR-3) reads them into raw/lighton afterwards.
+            # (Surya inside docling did it from 2026-10-06; docling(..., ocr="scan"|"force") still can.)
+            ocr = None
+            dl = docling(pdf, sha, [p["page_no"] for p in digital], ocr) if (digital or scan) else None
+            # docling returns PARTIAL_SUCCESS when Surya fails on some pages and drops them (15/1991 kept
+            # 1 of 7 pages, 2026-10-07): never store that, the row stays queued with the error
+            if dl and (not dl["status"].endswith("SUCCESS") or dl["status"].endswith("PARTIAL_SUCCESS")
+                       or {p["page_no"] for p in dl["pages"]} != {p["page_no"] for p in pages}):
+                lost = sorted({p["page_no"] for p in pages} - {p["page_no"] for p in dl["pages"]})
+                raise RuntimeError(f"docling {dl['status']}: pages {lost[:10]} not converted")
+            raw = {"sha256": sha, "version": VERSION, "pages": pages, "docling": dl, "chandra": None}
             rkey = f"raw/{VERSION}/{sha}.json.gz"
             s3.put_object(Bucket=bucket, Key=rkey, ContentType="application/gzip",
                           Body=gzip.compress(json.dumps(raw, ensure_ascii=False).encode()))
@@ -223,7 +246,7 @@ def run_batch(rows, s3, bucket, use_ocr, counts):
                   "WHERE sha256=%s", (rkey, sha))
             ok += 1
             s = time.time() - t0
-            msg = f"ok {len(pages)} pages ({len(scan)} via Surya) in {s:.0f}s, {len(pages) / s:.2f} pages/s"
+            msg = f"ok {len(pages)} pages ({len(scan)} scanned, for etl.ocr) in {s:.0f}s, {len(pages) / s:.2f} pages/s"
         except Exception as e:
             try:
                 write("UPDATE documents SET error=%s, updated_at=NOW() WHERE sha256=%s", (f"extract: {e}"[:500], sha))
@@ -231,7 +254,7 @@ def run_batch(rows, s3, bucket, use_ocr, counts):
                 e = f"{e} (error not saved: {e2})"
             bad += 1
             msg = f"FAIL {e}"[:160]
-        print(f"[{i}/{len(rows)}] {sha[:12]}: {msg}", flush=True)
+        print(f"[{i}] {sha[:12]}: {msg}", flush=True)
     counts[:] = [ok, bad, skipped]
 
 
@@ -284,20 +307,12 @@ def main():
     a.add_argument("--no-ocr", action="store_true", help="skip files that have pages needing OCR")
     a.add_argument("--before", help="only documents dated before this, e.g. 2000 (pilot on scans)")
     a.add_argument("--lang", default="ENGLISH", help="ENGLISH (default), SINHALA, TAMIL, or all")
-    a.add_argument("--shard", help="i/N[/seed]: this worker takes part i of N of the queue (by a hash of the "
-                                   "file seeded with seed; use the same seed for all N), so N "
-                                   "workers run side by side, so digital and scanned files overlap")
     a.add_argument("--recheck-ocr", action="store_true",
                    help="re-queue extracted files whose OCR-layer scan pages went to docling, then exit")
     args = a.parse_args()
     if args.recheck_ocr:
         return recheck()
-    if args.shard:                                   # "i/N" or "i/N/seed"
-        i, n, *seed = args.shard.split("/")
-        shard = (int(i), int(n), seed[0] if seed else "")
-    else:
-        shard = None
-    run(args.limit, not args.no_ocr, args.before, None if args.lang.lower() == "all" else args.lang.upper(), shard)
+    run(args.limit, not args.no_ocr, args.before, None if args.lang.lower() == "all" else args.lang.upper())
 
 
 if __name__ == "__main__":

@@ -299,6 +299,21 @@ After sweeping all 5 documents (462 pages total, ~55 pages sampled), the followi
 4. **The column gap (~12 pt of empty x space) is present in all text acts** observed.
 5. **Definitions/Interpretation sections** (always near the end of an act) use the same two-column layout. The quoted terms ("any person authorized by..." means...) appear as body text; the marginal note for that section is "Interpretation."
 
+## 1980 Revised Edition chapters (lankalaw.net le1980, surveyed 2026-10-07)
+
+All 516 chapter PDFs extracted (4,058 pages). Unlike the Acts:
+
+- **OCR text re-typeset as a text-only PDF.** Visible text (render mode 0), no images, generic fonts `/F0`, `/F1`, a different page size on every page (590×785, 566×779, …), and OCR misreads: "t h e", "Serail", "Aeration" for "Alteration", "Illustartion". Only 12 chapters have pages with no text layer (Surya OCR'd them).
+- **Two body columns per page, each with its notes on its outer side**: left column notes far left, right column notes far right (cap 8 p1: notes 39–97, body 98–291, body 303–497, notes 497–557). The gutter between the columns is only 8–13 pt.
+- **docling's clusters run across both columns and into the notes** ("(2) When a new member has been This Act may be cited as the 1. appointed…"), so the Act adapter can't use them. `le1980_blocks()` in `etl/structure.py` works from word cells instead.
+- **Section numbers hang into the gap** between the notes and the body ("1." at x 90–99, body text from 82, cap 46). So the note/body split is the x that the fewest words cross, not the body's own left edge.
+- **Header on page 1, spanning both columns:** "CHAPTER 8" / title / the laws consolidated in the left margin ("Acts Nos. 17 of 1948, 8 of 1950, …") / long title (AN ACT, AN ORDINANCE, A LAW) / the original date "[8th September. 1948.]". There is no enacting formula, and s.1 starts on page 1.
+- **Running header** "COMMISSIONS OF INQUIRY [Cap. 8" sits in the top 8–12% of the page; the footer is the volume/page number "1/118" (or "Ill/89" misread).
+- **Quotes are OCR'd straight `"`, often spaced** (`" Wrongful loss"`), so the quote fence for amending Acts can't tell opening from closing marks. A consolidated edition has no amending text in quotes, so the fence is off for le1980.
+- **Repealed sections leave gaps** ("Sections 59 to 66 repealed by …", Penal Code). Each gap is recorded in a footnote starting with `*` or `+`, and the next number may carry the marks too ("67.*+").
+- **Schedules can sit between sections** (Monetary Law, cap 323).
+- **54 chapters are one page.** Cap 1 is the edition's own front page, not a law.
+
 ## Outstanding Questions
 
 1. **Are Gazette notifications a different format?** Not yet studied — likely different (gazette has multiple items per issue).

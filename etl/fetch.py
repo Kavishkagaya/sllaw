@@ -5,6 +5,7 @@
   python3 -m etl.fetch acts --limit 20      # pilot
   python3 -m etl.fetch acts --no-discover   # only drain the fetch queue
   python3 -m etl.fetch le1980               # Legislative Enactments 1980 (lankalaw.net), one row per chapter
+  python3 -m etl.fetch le1956               # Legislative Enactments 1956 (lankalaw.net), HTML, one row per chapter
   python3 -m etl.fetch lankalaw             # lankalaw.net Acts by year, only those filling a gap
 
 One documents row per file (an act in three languages = three rows). Files are
@@ -20,7 +21,7 @@ import psycopg2
 from dotenv import load_dotenv
 from psycopg2.extras import Json, execute_values
 
-from etl.spiders import acts, lankalaw, le1980
+from etl.spiders import acts, lankalaw, le1956, le1980
 
 load_dotenv()
 WORKERS = 8   # parallel downloads; documents.gov.lk is a small govt server, don't go much higher
@@ -56,19 +57,34 @@ def discover_le1980(cur):
     return len(rows)
 
 
+def discover_le1956(cur):
+    """Legislative Enactments 1956 Revised Edition (lankalaw.net), one HTML page per chapter: 481 on 2026-10-09."""
+    rows = [("le1956", r["url"], r["title"], None,
+             Json({"cap1956": r["cap"], "lang": "ENGLISH", "format": "html", "listing": r})) for r in le1956.crawl()]
+    execute_values(cur,
+        """INSERT INTO documents (source, source_url, title, doc_date, meta) VALUES %s
+           ON CONFLICT (source, source_url) DO UPDATE
+           SET meta = documents.meta || EXCLUDED.meta, updated_at = NOW()""", rows, page_size=1000)
+    return len(rows)
+
+
 def discover_lankalaw(cur):
     """lankalaw.net rows only for Acts with no English file from documents.gov.lk (listed without
-    English, or not listed at all), 1980 onwards: 731 files on 2026-10-05 (573 PDF, 158 HTML). Same act_no, so the same
+    English, or not listed at all), 1956 onwards: 731 files from 1980 on 2026-10-05 (573 PDF, 158 HTML),
+    612 before 1980 on 2026-10-09 (593 HTML, 19 PDF). Same act_no, so the same
     graph node. doc_date is the year's 1 January until the Act's own "[Certified on ...]" is read."""
+    # crawl before touching Neon: 71 year pages take minutes, and Neon closes an idle connection (2026-10-09)
+    listed = lankalaw.crawl(range(1956, 2027))
     cur.execute("SELECT DISTINCT meta->>'act_no' FROM documents WHERE source = 'acts' AND meta->>'lang' = 'ENGLISH'")
     have = {r[0] for r in cur.fetchall()}
     rows = [("lankalaw", r["url"], r["title"], f"{r['act_no'].split('/')[1]}-01-01",
              Json({"act_no": r["act_no"], "lang": "ENGLISH", "format": r["format"], "date_precision": "year",
                    "listing": r}))
-            # 1980 onwards only (decision 2026-10-05): pre-1980 law waits
-            for r in lankalaw.crawl(range(1980, 2027)) if r["act_no"] not in have
+            # 1956 onwards (2026-10-09; 1980 onwards from 2026-10-05): pre-1980 Acts and 1972-77 Laws are
+            # almost all HTML there, and are what most unresolved amendment edges point at (SOURCES.md)
+            for r in listed if r["act_no"] not in have
             and not r["url"].endswith(("_S.pdf", "_T.pdf"))   # documents.gov.lk Sinhala/Tamil, listed as English
-            and 1980 <= int(r["act_no"].split("/")[1]) <= 2026]
+            and 1956 <= int(r["act_no"].split("/")[1]) <= 2026]
     execute_values(cur,
         """INSERT INTO documents (source, source_url, title, doc_date, meta) VALUES %s
            ON CONFLICT (source, source_url) DO UPDATE
@@ -144,7 +160,7 @@ def fetch(conn, source, limit=None):
 
 def main():
     a = argparse.ArgumentParser()
-    a.add_argument("source", choices=["acts", "le1980", "lankalaw"])
+    a.add_argument("source", choices=["acts", "le1956", "le1980", "lankalaw"])
     a.add_argument("--limit", type=int, help="fetch at most N files (pilot)")
     a.add_argument("--no-discover", action="store_true", help="skip listing, only drain the queue")
     args = a.parse_args()
@@ -152,7 +168,8 @@ def main():
     conn = psycopg2.connect(os.environ["DATABASE_URL"])
     if not args.no_discover:
         with conn.cursor() as cur:
-            discover = {"acts": discover_acts, "le1980": discover_le1980, "lankalaw": discover_lankalaw}[args.source]
+            discover = {"acts": discover_acts, "le1956": discover_le1956, "le1980": discover_le1980,
+                        "lankalaw": discover_lankalaw}[args.source]
             print(f"discovered {discover(cur)} files")
         conn.commit()
     fetch(conn, args.source, args.limit)

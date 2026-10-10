@@ -18,7 +18,8 @@ The walk is for retrieval: it doesn't apply amendments, it lists them in date or
 reader (an LLM) gets the original wording plus every later change up to the year asked.
 """
 import argparse, gzip, json, os, re
-from concurrent.futures import ThreadPoolExecutor
+from collections import Counter
+from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 
 import psycopg2
@@ -31,7 +32,7 @@ from etl.structure import act, blocks
 load_dotenv()
 # Bump when etl/structure.py or the edge rules change, so `build` redoes every Act; otherwise it only
 # builds Acts that are new or were re-extracted (their raw_key or extracted_at changed).
-BUILD = "2026-10-06"    # Surya OCR text (tags stripped), non-English files skipped; d: HTML Acts
+BUILD = "2026-10-09.5"  # 07: Surya text, non-English skipped, printed date = year; 09: LightOn pages (old if better), notes, openers
 CIT = re.compile(r"\b(Act|Law|Ordinance),?\s*No\.?\s*(\d+)\s+of\s+(\d{4})", re.I)
 CHAP = re.compile(r"\b(?:Chapter|Cap\.?)\s*(\d+[A-Z]?)\b")        # digits only: this Act's own CHAPTERs are roman
 NOTE = re.compile(r"^(Amendment|Replacement|Substitution|Repeal|Insertion|Addition)s?\b(.*)$", re.I)
@@ -56,10 +57,53 @@ def sched_name(t):
     return f"Schedule {m[3].upper()}" if m[3] else "Schedule"
 
 
+# "Chapter N" is ambiguous: later Acts cite pre-1980 law by its 1956 Revised Edition chapter as often as by
+# its 1980 one ("section 53 of the Penal Code (Chapter 19)", 10/2018; Chapter 19 in 1980 is Courts' Records).
+# The law's name is not ambiguous, so a chapter citation resolves by the name printed before it.
+CHAPTERS = {}            # normalised 1980 chapter title -> its acts key; loaded per worker (load_chapters)
+_cite = {"local": {}, "le": False}   # per Act being built: chapter number -> key resolved by name; in a 1980 chapter?
+
+
+def norm_name(t):
+    """'the Masters Attendant Ordinance', 'MASTERS ATTENDANT*', 'Penal Code (Chapter 25)' -> 'masters attendant',
+    'penal code'."""
+    t = re.sub(r"\((?:chapter|cap)[^)]*\)?", " ", t.lower())
+    w = re.sub(r"[^a-z ]", " ", t.replace("’", "'").replace("'s", "s")).split()
+    while w and w[0] == "the":
+        w = w[1:]
+    while w and w[-1] in ("ordinance", "act", "law", "enactment"):
+        w = w[:-1]
+    return " ".join(w)
+
+
+def load_chapters(cur):
+    """Names of the built 1980 chapters: the title the PDF prints and lankalaw's. A name two chapters share
+    is dropped (it can't decide anything)."""
+    cur.execute("SELECT a.key, a.title, d.title FROM acts a JOIN documents d ON d.id = a.document_id "
+                "WHERE d.source = 'le1980'")
+    seen = {}
+    for k, *names in cur.fetchall():
+        for n in {norm_name(x) for x in names if x} - {""}:
+            seen.setdefault(n, set()).add(k)
+    CHAPTERS.clear()
+    CHAPTERS.update({n: next(iter(ks)) for n, ks in seen.items() if len(ks) == 1})
+
+
+def chapter_by_name(m):
+    """The chapter whose title ends the text just before "(Chapter N)", longest name first; None if none."""
+    words = re.findall(r"[A-Za-z’'-]+", m.string[max(0, m.start() - 160):m.start()])
+    for k in range(min(12, len(words)), 0, -1):
+        if (hit := CHAPTERS.get(norm_name(" ".join(words[-k:])))):
+            return hit
+    return None
+
+
 def key_of(m):
-    """A citation match -> node key: act:14/2002, law:1/1975, ordinance:5/1950, cap:107."""
+    """A citation match -> node key: act:14/2002, law:1/1975, ordinance:5/1950, cap:107 (a 1980 chapter),
+    chapter:19 (a chapter number whose law isn't named, so the edition is unknown)."""
     if m.re is CHAP:
-        return f"cap:{m[1]}"
+        return (chapter_by_name(m) or _cite["local"].get(m[1])
+                or (f"cap:{m[1]}" if _cite["le"] else f"chapter:{m[1]}"))   # in a 1980 chapter: 1980 numbers
     return f"{m[1].lower()}:{int(m[2])}/{m[3]}"
 
 
@@ -102,6 +146,11 @@ def provisions(doc, key):
 def edges(doc, key, date):
     out = []
     lt = doc["long_title"] or ""
+    # a bare "Chapter 19" means the law this Act names as Chapter 19 elsewhere ("the Penal Code (Chapter 19)")
+    _cite["le"], _cite["local"] = key.startswith("cap:"), {}
+    for m in CHAP.finditer(" ".join([lt] + [text_of(s) for s in doc["sections"]])):
+        if m[1] not in _cite["local"] and (hit := chapter_by_name(m)):
+            _cite["local"][m[1]] = hit
     lt_target = first_target(lt)
     if lt_target and re.match(r"AN\s+ACT\s+TO\s+(AMEND|REPEAL|PROVIDE FOR THE REPEAL)", lt, re.I):
         kind = "repeals_act" if re.search(r"\bREPEAL\b", lt[:40], re.I) and "AMEND" not in lt[:20].upper() else "amends_act"
@@ -166,7 +215,8 @@ def parse_date(t):
     """'January 1, 2011' | '1st January, 2011' | 'the 1st day of April, 2011' -> '2011-01-01'."""
     mon = "|".join(MONTHS)
     for pat, order in ((rf"({mon})\s+(\d{{1,2}})(?:st|nd|rd|th)?,?\s+(\d{{4}})", "mdy"),
-                       (rf"(\d{{1,2}})(?:st|nd|rd|th)?\s+(?:day\s+of\s+)?({mon}),?\s+(\d{{4}})", "dmy")):
+                       # "8th September. 1948." (1980 Revised Edition OCR: a full stop for the comma)
+                       (rf"(\d{{1,2}})(?:st|nd|rd|th)?\s+(?:day\s+of\s+)?({mon})[,.]?\s+(\d{{4}})", "dmy")):
         if (m := re.search(pat, t, re.I)):
             mo, d, y = (m[1], m[2], m[3]) if order == "mdy" else (m[2], m[1], m[3])
             return f"{y}-{MONTHS[mo.lower()]:02d}-{int(d):02d}"
@@ -197,56 +247,107 @@ def commencement(doc, certified):
     return certified, {"kind": "unstated", "text": None}
 
 
-def act_key(meta):
+def act_key(meta, doc=None):
     if meta.get("cap"):
-        return f"cap:{meta['cap']}"                 # Legislative Enactments 1980 chapter
+        # Legislative Enactments 1980 chapter: the number the PDF prints, else lankalaw's listing
+        # (which lists both Customs and Masters Attendant as 235, 2026-10-07)
+        return f"cap:{(doc or {}).get('cap') or meta['cap']}"
+    if meta.get("cap1956"):
+        return f"cap1956:{meta['cap1956']}"       # 1956 Revised Edition chapter (other numbers than 1980's)
     no = meta.get("act_no") or ""
+    if meta.get("kind") in ("law", "ordinance") and re.fullmatch(r"[1-9]\d*/\d{4}", no):
+        return f"{meta['kind']}:{no}"             # CommonLII says which (law:19/1978 beside act:19/1978)
     if re.fullmatch(r"[1-9]\d*/\d{4}", no):
+        # 1972-78 National State Assembly Laws: lankalaw lists them by number like Acts, amending Acts
+        # cite them as "Law No. 5 of 1972" (law:5/1972); the file says which it is
+        if 1972 <= int(no[-4:]) <= 1978 and re.search(r"\bLAW\b,?\s*No", (doc or {}).get("title") or ""):
+            return f"law:{no}"
         return f"act:{no}"
     return f"other:{meta['listing']['id']}"       # 0/YYYY = Constitution amendments, several per year
 
 
-def structure_one(row, load):
-    """The raw is read into memory and dropped after structuring: nothing is written to disk."""
-    doc_id, sha, raw_key, meta, doc_date = row
-    return doc_id, meta, doc_date, raw_key, act(blocks(load(sha, raw_key)))
+_w = {}
 
 
-def build(limit=None, workers=8, local=None, full=False):
-    """local: a directory of raw .json.gz files to use instead of R2 (testing); only the
-    documents rows whose sha256 is among them are built."""
-    conn = psycopg2.connect(os.environ["DATABASE_URL"])
-    cur = conn.cursor()
+def _init(local):
+    """One per worker process: its own Neon connection and R2 client (or local raw files)."""
+    _w["conn"] = psycopg2.connect(os.environ["DATABASE_URL"])
     if local:
         files = {json.load(gzip.open(f))["sha256"]: f for f in Path(local).glob("*.json.gz")}
-        load = lambda sha, _: json.load(gzip.open(files[sha]))
+        _w["load"] = lambda sha, _: json.load(gzip.open(files[sha]))
     else:
         s3, bucket = r2(), os.environ["R2_BUCKET"]
-        load = lambda _, k: json.loads(gzip.decompress(s3.get_object(Bucket=bucket, Key=k)["Body"].read()))
-    cur.execute("""SELECT DISTINCT ON (d.sha256) d.id, d.sha256, d.raw_key, d.meta, d.doc_date FROM documents d
-                   WHERE d.raw_key IS NOT NULL AND d.meta->>'lang' = 'ENGLISH'
-                     AND (%s::text[] IS NULL OR d.sha256 = ANY(%s))
-                     AND (%s OR NOT EXISTS (SELECT 1 FROM acts a WHERE a.document_id = d.id AND a.raw_key = d.raw_key
-                                            AND a.built_with = %s AND a.structured_at >= d.extracted_at))
-                   ORDER BY d.sha256, d.id LIMIT %s""",
-                (list(files) if local else None, list(files) if local else None, full, BUILD, limit))
-    rows = cur.fetchall()
-    print(f"{len(rows)} Acts to build ({'all' if full else 'new, re-extracted or built with older code'})", flush=True)
-    ok = bad = 0
-    with ThreadPoolExecutor(workers) as ex:
-        for i, res in enumerate(ex.map(lambda r: _safe(structure_one, r, load), rows), 1):
-            if isinstance(res, str):
-                bad += 1
-                print(f"[{i}/{len(rows)}] FAIL {res}", flush=True)
-                continue
-            doc_id, meta, doc_date, raw_key, doc = res
-            if doc["warnings"][:1] and doc["warnings"][0].startswith("not English"):   # listed as English, isn't
-                print(f"[{i}/{len(rows)}] skip {meta.get('act_no')}: {doc['warnings'][0]}", flush=True)
-                continue
-            key, certified = act_key(meta), (doc_date or "")[:10] or None
-            if meta.get("date_precision") == "year":   # lankalaw rows: only the year; the Act prints its date
-                certified = parse_date(doc["certified"] or "") or certified
-            date, comm = commencement(doc, certified)
+        get = lambda k: json.loads(gzip.decompress(s3.get_object(Bucket=bucket, Key=k)["Body"].read()))
+
+        def load(sha, k):
+            """raw/v2 plus, for scans, LightOnOCR-3's pages (raw/lighton, etl.ocr) when they exist."""
+            raw = get(k)
+            try:
+                raw["lighton"] = get(f"raw/lighton/{sha}.json.gz")
+            except s3.exceptions.NoSuchKey:
+                pass
+            return raw
+        _w["load"] = load
+    with _w["conn"], _w["conn"].cursor() as cur:   # ponytail: chapters built before this run; new ones resolve on the next
+        load_chapters(cur)
+
+
+def gaps(doc):
+    """Section numbers missing between 1 and the highest one found."""
+    nums = {int(s["num"]) for s in doc["sections"] if s["num"].isdigit()}
+    return sum(1 for i in range(1, max(nums, default=0) + 1) if i not in nums)
+
+
+def structure(raw, le1980=False):
+    """The Act from LightOnOCR-3's pages where it has them, unless the old engine's pages (Chandra or
+    Surya) give more sections with no more numbering gaps. On the full build of 2026-10-09 LightOn gave
+    169 pre-2000 Acts more sections and 52 fewer: a separately boxed note inside quoted text (50/1981)
+    can put a scanned page's margin on the wrong side, and some noisy pages read worse (21/1981)."""
+    doc = act(blocks(raw, le1980=le1980))
+    if raw.get("lighton") and not le1980:
+        old = act(blocks({k: v for k, v in raw.items() if k != "lighton"}))
+        if len(old["sections"]) > len(doc["sections"]) and gaps(old) <= gaps(doc):
+            return {**old, "ocr": "old"}
+        doc["ocr"] = "lighton"
+    return doc
+
+
+def build_one(row):
+    """Read the raw into memory, structure it, write the Act, its provisions and edges; nothing goes
+    to disk. Each worker process does the whole Act: the build waits on R2 and Neon round trips
+    (us-east-1), not on CPU, so Acts go in parallel (one process, serial writes: 27 Acts/min,
+    2026-10-07). -> ("ok" | "skip" | "fail", message)"""
+    doc_id, sha, raw_key, meta, doc_date = row
+    try:
+        doc = structure(_w["load"](sha, raw_key), le1980=bool(meta.get("cap")))
+        if doc["warnings"][:1] and doc["warnings"][0].startswith("not English"):   # listed as English, isn't
+            return "skip", f"skip {meta.get('act_no')}: {doc['warnings'][0]}"
+        key, certified = act_key(meta, doc), (doc_date or "")[:10] or None
+        if meta.get("cap"):
+            # two chapters under one number (Customs and Masters Attendant, both 235, 2026-10-07): the
+            # first-listed keeps cap:N, the other cap:N@<document id>. ponytail: listing order, not which is right
+            cur = _w["conn"].cursor()
+            cur.execute("SELECT min(id) FROM documents WHERE source = 'le1980' AND meta->>'cap' = %s", (key[4:],))
+            first = cur.fetchone()[0]
+            _w["conn"].rollback()
+            if first is not None and first != doc_id:
+                doc["warnings"].append(f"Chapter {key[4:]} is also document {first}: keyed {key}@{doc_id}")
+                key = f"{key}@{doc_id}"
+            if key.split("@")[0] != f"cap:{meta['cap']}":
+                doc["warnings"].append(f"listed as Chapter {meta['cap']}, prints Chapter {key[4:]}")
+            # no "CHAPTER N" line of its own on page 1: lankalaw's title, "Vehicles (Chapter 534)"
+            doc["title"] = doc["title"] or re.sub(r"\s*\(Chapter[^)]*\)?\s*$", "", meta["listing"]["title"])
+        if meta.get("date_precision") == "year":   # lankalaw rows: only the year; the Act prints its date
+            printed = parse_date(doc["certified"] or "")
+            if printed and printed[:4] == key[-4:]:
+                certified = printed
+            elif printed:       # OCR misread (1465) or lankalaw linked another Act's file (5 Acts, 2026-10-07)
+                doc["warnings"].append(f"printed date {printed} is not in {key[-4:]}: kept the year only")
+        if meta.get("cap"):     # 1980 Revised Edition: the date under the long title, the law's first enactment
+            certified = parse_date(doc["certified"] or "")
+        date, comm = commencement(doc, certified)
+        conn = _w["conn"]
+        with conn, conn.cursor() as cur:         # one transaction per Act
             cur.execute("DELETE FROM acts WHERE key = %s", (key,))
             cur.execute("""INSERT INTO acts (key, document_id, raw_key, built_with, title, long_title, certified,
                            commenced, commencement, warnings, doc) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
@@ -258,23 +359,143 @@ def build(limit=None, workers=8, local=None, full=False):
             if es:
                 execute_values(cur, "INSERT INTO edges (src_act, src_section, kind, dst_act, dst_section, date, "
                                     "new_text, evidence) VALUES %s", es)
-            conn.commit()
-            ok += 1
+        return "ok", ""
+    except Exception as e:
+        try:
+            _w["conn"].rollback()
+        except Exception:
+            _w["conn"] = psycopg2.connect(os.environ["DATABASE_URL"])   # dropped connection
+        return "fail", f"FAIL {sha[:12]}: {e}"[:300]
+
+
+def build(limit=None, workers=16, local=None, full=False):
+    """local: a directory of raw .json.gz files to use instead of R2 (testing); only the
+    documents rows whose sha256 is among them are built."""
+    conn = psycopg2.connect(os.environ["DATABASE_URL"])
+    cur = conn.cursor()
+    shas = [json.load(gzip.open(f))["sha256"] for f in Path(local).glob("*.json.gz")] if local else None
+    cur.execute("""SELECT DISTINCT ON (d.sha256) d.id, d.sha256, d.raw_key, d.meta, d.doc_date FROM documents d
+                   WHERE d.raw_key IS NOT NULL AND d.meta->>'lang' = 'ENGLISH'
+                     AND (%s::text[] IS NULL OR d.sha256 = ANY(%s))
+                     AND (%s OR NOT EXISTS (SELECT 1 FROM acts a WHERE a.document_id = d.id AND a.raw_key = d.raw_key
+                                            AND a.built_with = %s AND a.structured_at >= d.extracted_at))
+                   ORDER BY d.sha256, d.id LIMIT %s""", (shas, shas, full, BUILD, limit))
+    rows = cur.fetchall()
+    conn.close()
+    print(f"{len(rows)} Acts to build ({'all' if full else 'new, re-extracted or built with older code'})", flush=True)
+    n = {"ok": 0, "skip": 0, "fail": 0}
+    with ProcessPoolExecutor(workers, initializer=_init, initargs=(local,)) as ex:
+        for i, (status, msg) in enumerate(ex.map(build_one, rows, chunksize=4), 1):
+            n[status] += 1
+            if msg:
+                print(f"[{i}/{len(rows)}] {msg}", flush=True)
             if i % 25 == 0 or i == len(rows):
-                print(f"[{i}/{len(rows)}] {ok} structured, {bad} failed", flush=True)
+                print(f"[{i}/{len(rows)}] {n['ok']} structured, {n['skip']} skipped, {n['fail']} failed", flush=True)
+    conn = psycopg2.connect(os.environ["DATABASE_URL"])
+    with conn, conn.cursor() as cur:
+        link(cur)
     conn.close()
 
 
-def _safe(f, r, load):
-    try:
-        return f(r, load)
-    except Exception as e:
-        return f"{r[1][:12]}: {e}"[:300]
+NAMED = re.compile(r"([A-Z][A-Za-z,'’()\s-]{3,120}?)\s+(ACT|LAW|ORDINANCE)\s*,?\s*No\.?\s*(\d{1,3})\s+OF\s+(\d{4})", re.I)
+LISTED = re.compile(r"\b(Ac[it]s?|Ordinances?|Laws?)\s*Nos?\s*[.,]?\s*(\d{1,3})\s*of\s*(\d{4})", re.I)
+
+
+def title_key(t):
+    """'CODE OF CRIMINAL PROCEDURE ACT, No. 15 OF 1979' and 'Code of Criminal Procedure' -> 'CODE OF CRIMINAL PROCEDURE'."""
+    t = re.sub(r"\b(?:ACT|ORDINANCE|LAW)\b.*$|\bNo\.?\s*\d+.*$|\(\s*CHAPTER.*$", "", (t or "").upper())
+    return " ".join(re.sub(r"[^A-Z ]", " ", t).split())
+
+
+def link(cur):
+    """same_as between a pre-1980 law and the 1980 Revised Edition chapter that consolidates it, so edges
+    into either key reach the text (walk follows same_as); and 1972-78 Laws' law: keys (below). Two signals:
+      * the chapter's front lists the laws it consolidates, principal first ("Acts Nos.33 of 1961 17 of 1964",
+        cap 203; OCR'd as "Acis"): only the first is linked, the later ones are mostly amending Acts whose
+        section numbers are not the chapter's
+      * a pre-1980 Act or Law (not an amending one) whose title is exactly one chapter's title, and that
+        chapter's only match (Code of Criminal Procedure = 15/1979 = cap 26)
+    Re-run after every build: rebuilding a chapter drops its edges. Marked new_text = 'link'."""
+    cur.execute("DELETE FROM edges WHERE kind = 'same_as' AND new_text = 'link'")
+    cur.execute("SELECT a.key, a.title, d.title, a.doc->'front', a.doc->>'long_title' FROM acts a "
+                "JOIN documents d ON d.id = a.document_id")
+    rows = cur.fetchall()
+    pairs = {}
+    for key, title, listed_title, front, lt in rows:
+        if key.startswith(("cap:", "cap1956:")) and (m := LISTED.search(" ".join((front or [])[:12] + [lt or ""]))):
+            kind = {"a": "act", "o": "ordinance", "l": "law"}[m[1][0].lower()]
+            pairs[(key, f"{kind}:{int(m[2])}/{m[3]}")] = "listed"
+    caps, laws = {}, {}
+    for key, title, listed_title, *_ in rows:
+        names = {title_key(title), title_key(listed_title)} - {"", None}
+        if key.startswith(("cap:", "cap1956:")):
+            for n in names:
+                caps.setdefault(n, set()).add(key)
+        if key.startswith("cap1956:"):
+            # a chapter number cited without a name whose edition is unknown (chapter:N): the 1956 one.
+            # Checked 2026-10-09: chapter:203 (138 edges) = Motor Traffic, 262 = Local Authorities Elections,
+            # 252 = Municipal Councils, 182 = Firearms: all 1956 numbers
+            pairs[(key, "chapter:" + key[8:])] = "1956"
+        elif re.match(r"(?:act|law):\d+/19[0-7]\d$", key) and not re.search(r"AMENDMENT", f"{title} {listed_title}", re.I):
+            for n in names:
+                laws.setdefault(n, set()).add(key)
+    for n, ks in laws.items():
+        for cap in caps.get(n, ()):          # one chapter per edition: a 1956 and a 1980 one may both match
+            if len(ks) == 1 and sum(c.split(":")[0] == cap.split(":")[0] for c in caps[n]) == 1:
+                pairs.setdefault((cap, next(iter(ks))), "title")
+    # the same law in both editions, by title (Penal Code = 1956 chapter 19 = 1980 chapter 19)
+    for n, cs in caps.items():
+        c56, c80 = [c for c in cs if c.startswith("cap1956:")], [c for c in cs if c.startswith("cap:")]
+        if len(c56) == 1 and len(c80) == 1:
+            pairs.setdefault((c56[0], c80[0]), "editions")
+    # 1972-78 National State Assembly Laws are built under lankalaw's number as act:N/YYYY; amending Acts
+    # cite them as "Law No. 5 of 1972" (law:5/1972, 680 unresolved edges on 2026-10-09). The file says
+    # which it is: a long title "A LAW TO ..." or "Law" in its title
+    # 1973-77 had only Laws, so "Act No. 2 of 1974" can only mean that Law: always the same node. 1972 and
+    # 1978 had both, numbered separately (Act 5/1972 Agrarian Research ≠ Law 5/1972 Co-operative Societies),
+    # so there only the file's own word counts
+    for key, title, listed_title, front, lt in rows:
+        if re.fullmatch(r"act:\d+/197[3-7]", key) or (re.fullmatch(r"act:\d+/197[28]", key) and
+                (re.match(r"\s*A\s+LAW\b", lt or "", re.I) or re.search(r"\bLAW\b", f"{title} {listed_title}", re.I))):
+            pairs[(key, "law:" + key[4:])] = "law"
+    # a cited law we hold no file for, by the name the citing text gives it: 1972 and 1978 have an Act and a
+    # Law under the same number ("THE CO-OPERATIVE SOCIETIES LAW, No. 5 OF 1972" is not Act 5/1972, the
+    # Agrarian Research and Training Institute Act), and lankalaw lists one file per number; the Law sits in
+    # the 1980 Revised Edition under its name. The longest tail of the cited name that is exactly one
+    # chapter's title (1980 edition first) wins; a name more than one key claims decides nothing.
+    built = {r[0] for r in rows}
+    cur.execute("SELECT DISTINCT dst_act, evidence FROM edges WHERE evidence IS NOT NULL AND kind <> 'same_as'")
+    cited = {}
+    for dst, ev in cur.fetchall():
+        if dst in built:
+            continue
+        for m in NAMED.finditer(ev):
+            if f"{m[2].lower()}:{int(m[3])}/{m[4]}" != dst:
+                continue
+            words = re.sub(r"[^A-Z ]", " ", m[1].upper()).split()     # not title_key: it cuts at "AN ACT"
+            for i in range(len(words)):
+                tail = " ".join(words[i:])
+                hit = sorted(caps.get(tail, ()), key=lambda c: c.startswith("cap1956:"))
+                if hit and sum(c.split(":")[0] == hit[0].split(":")[0] for c in hit) == 1:
+                    cited.setdefault(dst, set()).add(hit[0])
+                    break
+    linked = {law for _, law in pairs}
+    for dst, cs in cited.items():
+        if len(cs) == 1 and dst not in linked:
+            pairs[(next(iter(cs)), dst)] = "cited name"
+    execute_values(cur, "INSERT INTO edges (src_act, kind, dst_act, new_text, evidence) VALUES %s",
+                   [(cap, "same_as", law, "link", f"also {cap}") for (cap, law) in pairs])
+    by = Counter(pairs.values())
+    print(f"linked {len(pairs)}: {by['listed']} laws to their chapter from the chapter's list, {by['title']} by title, "
+          f"{by['editions']} 1956 chapters to 1980 ones by title, {by['1956']} chapter:N to cap1956:N, "
+          f"{by['law']} 1972-78 Laws to their law: key, {by['cited name']} cited laws to a chapter by the name cited", flush=True)
 
 
 def why_missing(cur, key):
     """Why an Act key has no row in `acts`: what to fetch or extract to fill it."""
     kind, _, ref = key.partition(":")
+    if kind == "chapter":
+        return "chapter cited by number only, its law not named: 1956 or 1980 numbering unknown"
     if kind == "cap":
         cur.execute("SELECT raw_key IS NOT NULL FROM documents WHERE source = 'le1980' AND meta->>'cap' = %s", (ref,))
         r = cur.fetchone()
@@ -372,10 +593,11 @@ def main():
     sub = a.add_subparsers(dest="cmd", required=True)
     b = sub.add_parser("build")
     b.add_argument("--limit", type=int)
-    b.add_argument("--workers", type=int, default=8)
+    b.add_argument("--workers", type=int, default=16)
     b.add_argument("--local", help="directory of raw .json.gz to use instead of R2 (testing)")
     b.add_argument("--full", action="store_true", help="rebuild every Act, not only new or changed ones")
     sub.add_parser("missing", help="Acts that edges point at but that are not built, with the reason")
+    sub.add_parser("link", help="same_as between pre-1980 laws and their 1980 chapters (also run by build)")
     w = sub.add_parser("walk")
     w.add_argument("act", help="14/2002, or a key like cap:107")
     w.add_argument("section")
@@ -383,11 +605,15 @@ def main():
     args = a.parse_args()
     if args.cmd == "build":
         build(args.limit, args.workers, args.local, args.full)
+    elif args.cmd == "link":
+        conn = psycopg2.connect(os.environ["DATABASE_URL"])
+        with conn, conn.cursor() as cur:
+            link(cur)
+        conn.close()
     elif args.cmd == "missing":
         rows = missing()
         for k, ch, ci, why in rows[:60]:
             print(f"{k:18} {ch:4} changes {ci:4} citations | {why}")
-        from collections import Counter
         print(f"\n{len(rows)} targets not built:", dict(Counter(r[3].split(':')[0] for r in rows)))
     else:
         print(json.dumps(walk(args.act, args.section, args.year), ensure_ascii=False, indent=1, default=str))

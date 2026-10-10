@@ -16,20 +16,26 @@ docs/
   LAYOUT.md        how Act PDFs are laid out (columns, marginal notes, page types)
 etl/               the pipeline: one file per step
   fetch.py         step 1: list sources → PDFs into R2 → rows in Neon
-  extract.py       step 2: router → docling (text layer) / Chandra (scans) → raw JSON into R2
+  extract.py       step 2: docling (text layer, HTML) → raw JSON into R2; scans go to ocr.py
   structure.py     step 3: raw → blocks (docling adapter) → Act JSON (sections, notes, quotes, schedules)
+  ocr.py           step 2b: LightOnOCR-3-0.8B on scanned pages (pre-2000) → raw/lighton/ in R2
+  ocr_ada.sh       starts 2 vLLM servers + 4 ocr workers on ada (from /var/tmp/e19309)
+  ocr_lighton.py   experiment: LightOn vs Chandra/Surya/text layer comparison (PIPELINE.md)
   label.py         experiment: Jev/Clef block labeller (not adopted, see PIPELINE.md)
-  graph.py         step 4: structured Acts + amendment edges into Neon; `walk` = section as of a year
+  graph.py         step 4: structured Acts + amendment edges into Neon; `link` = same_as between old laws,
+                   chapters and editions; `walk` = section as of a year
   migrate.py       applies etl/migrations/*.sql in order
   migrations/
   spiders/acts.py  documents.gov.lk listing (Next.js Server Action)
-  spiders/lankalaw.py  lankalaw.net Acts by year (fills gaps; PDF and HTML)
-  spiders/le1980.py    lankalaw.net Legislative Enactments 1980 (pre-1980 chapters)
+  spiders/lankalaw.py  lankalaw.net Acts by year 1956– (fills gaps; PDF and HTML)
+  spiders/le1980.py    lankalaw.net Legislative Enactments 1980 (pre-1980 chapters; cap:N)
+  spiders/le1956.py    lankalaw.net Legislative Enactments 1956 (HTML chapters; cap1956:N)
+  spiders/commonlii.py CommonLII numbered Acts via the Wayback Machine (only laws we hold no file for)
 viewer/            Next.js app for browsing documents from Neon
 legacy/            archive of the previous pipelines; read-only, not imported
 ```
 
-Structuring is code-based and English-only (decision 2026-10-04); Sinhala/Tamil go to an agent with the whole Act when needed. Next: apply migration 002 on Neon and run `etl.graph build` on ada (not done yet); test 2000–2008 once extracted; a Chandra adapter for pre-2000 scans. `etl/label.py` (Jev/Clef labeller) is kept as an experiment, not used. See PIPELINE.md.
+Structuring is code-based and English-only (decision 2026-10-04); Sinhala/Tamil go to an agent with the whole Act when needed. Scanned pages before 2000 are read by LightOnOCR-3-0.8B (`etl/ocr.py`, decision 2026-10-09); the graph is built on Neon (BUILD 2026-10-09.5). Pre-1980 law is in (lankalaw 1956–79 Acts, 1956 and 1980 Revised Editions) and `etl.graph link` ties old laws, chapters and editions together: 98.9% of change edges reach their target (92 left: laws with no file anywhere we can reach). Next: verify edge precision (judge model + gold set), LightOn on the 119 post-2000 files with scanned pages (1,708 pages), schedules split into items, the vector layer (pgvector) for search + graph walk. `etl/label.py` (Jev/Clef labeller) is kept as an experiment, not used. See PIPELINE.md.
 
 ## Setup (ada or local)
 
@@ -51,7 +57,8 @@ cp .env.example .env                     # fill DATABASE_URL and R2_*
 Fetching and extraction run on **ada**, never locally: no source files on this machine. Use the `/ada-ssh` skill.
 
 - ada: 3× NVIDIA RTX 6000 Ada (49 GB each), **shared with other users**: check `nvidia-smi` and pick the idle card. Project dir `~/sllaw/`. There is no conda env and no sudo. Chandra server: `etl/chandra_server.sh` (GPU/MEM/PORT env vars), port 8011.
-- **Run Python on ada from `/tmp/e19309/sllaw_venv/bin/python`, not `~/sllaw/.venv`.** The home directory is NFS (`/new-home`, 8 KB reads); loading docling/torch from it took over 25 minutes on 2026-10-05, against 27 seconds from local disk. `/tmp` is wiped when ada reboots (it did on 2026-10-05 09:40 UTC, killing extraction and Chandra): run `CHANDRA_GPU=<idlest card> DOCLING_GPU=<other> bash ~/sllaw/etl/ada_setup.sh` in tmux. It rebuilds both venvs, starts Chandra (re-downloading its 16 GB of weights) and starts 3 English extraction workers; failed and unfinished files are still queued, so nothing is redone needlessly.
+- **`/var/tmp/e19309` survives reboots; `/tmp` does not** (wiped 2026-10-05 and 2026-10-09). Everything lives there: `sllaw_venv` (docling, extract), `lighton_venv` (vllm 0.31, torch, boto3, psycopg2: ocr, graph, fetch), `models/LightOnOCR-3-{0.8B,4B}`, `hf`, `pip_cache`, `cache/`; `~/.cache/{torch,docling,vllm,flashinfer,triton}` link there. `bash ~/sllaw/etl/ada_setup.sh` builds `sllaw_venv` if missing and starts 3 extraction workers.
+- **Run Python on ada from `/var/tmp/e19309/{sllaw,lighton}_venv/bin/python`, not `~/sllaw/.venv`.** The home directory is NFS (`/new-home`, 8 KB reads; under 3 MB/s bulk): loading docling/torch from it took over 25 minutes on 2026-10-05, against 27 seconds from local disk. Extraction workers exit when the queue is empty: start them after a fetch, not before.
 - Store nothing else on ada: jobs stream R2 → memory → R2/Neon. Logs go to `~/sllaw/logs/`.
 
 ## Sources, scope and decisions
@@ -97,3 +104,4 @@ Needs `DATABASE_URL` in `viewer/.env.local`. It currently reads the legacy `chun
 - **docling default backend (docling_parse) once failed on gazette PDFs** (older docling). With 2.104 it works on Acts and keeps word cells and fonts, which pypdfium doesn't. `etl/extract.py` uses it and falls back to pypdfium per file.
 - **transformers 5.x breaks surya**: `SuryaDecoderConfig` is missing `pad_token_id`. Downgrade to 4.57.6 and add `kwargs.setdefault("pad_token_id", 2)` before `super().__init__()` in `surya/common/surya/decoder/config.py`.
 - **Surya on CPU gives 1 box/page**: always run it on ada.
+- **docling `PARTIAL_SUCCESS` drops pages** when Surya fails on some of them (15/1991 kept 1 of 7). `etl/extract.py` raises on it so the row stays queued; never store a partial raw.
