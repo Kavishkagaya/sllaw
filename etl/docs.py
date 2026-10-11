@@ -2,6 +2,8 @@
 """Documents, their text in chunks, and links between documents (Neon `docs`, `chunks`, `links`; migration 003).
 
   python3 -m etl.docs build [--keys act:12/2002,...] [--limit N]   # raw (R2) -> docs + chunks, then links
+  python3 -m etl.docs relink [--keys ...]                         # links again from the chunks in the database
+  python3 -m etl.docs keys [--fix]                                # files under the wrong key (short title vs key)
   python3 -m etl.docs show act:12/2002                             # print a document's chunks (no writes)
 
 No section/schedule assembly (decision 2026-10-10, user). A document's text is read in reading order:
@@ -11,8 +13,8 @@ No section/schedule assembly (decision 2026-10-10, user). A document's text is r
          onto the body block level with it. Page furniture (header, page_number, footer, image, text+) is dropped.
   HTML   the same form, from etl.structure.blocks() (body and margin cells of the 1956 edition, lankalaw, CommonLII).
 The text is cut into chunks at section openers ("22. ...", "12A. ...") and at Part / Chapter / Schedule headings;
-a chunk's label is what it opens, in the form links use ("22", "First Schedule"). Links come from
-etl.graph.edges() run over the chunks (sections = chunks with a label).
+a chunk's label is what it opens, in the form links use ("22", "First Schedule"). Links come from each chunk's
+text alone (etl/refs.py; marginal notes are not read, decision 2026-10-10).
 """
 import argparse, gzip, html, json, os, re
 from concurrent.futures import ProcessPoolExecutor
@@ -21,8 +23,9 @@ import psycopg2
 from dotenv import load_dotenv
 from psycopg2.extras import Json, execute_values
 
+from etl import refs
 from etl.fetch import pg_connect
-from etl.structure import QUOTES, SCHED_HEAD, act_key, blocks, commencement, parse_date, sched_name
+from etl.structure import SCHED_HEAD, act_key, blocks, commencement, parse_date, sched_name
 
 load_dotenv()
 BUILD = "2026-10-10"
@@ -156,36 +159,40 @@ def chunks(paras):
     return [(l, t) for l, t in out if t.strip()]
 
 
-def as_doc(ch, long_title):
-    """The shape etl.graph.edges() and etl.structure.commencement() read: chunks with a section label as
-    sections (note = the italic tail of the first line; quoted paragraphs flagged)."""
-    secs = []
-    for label, text in ch:
-        if not label or not re.match(r"\d", label):
-            continue
-        paras = text.split("\n\n")
-        paras = paras[next((i for i, t in enumerate(paras) if OPENER.match(t)), 0):]   # after any Part/Chapter heading
-        first = paras[0]
-        m = re.search(r"\s\*([^*]{3,200})\*\s*$", first)
-        note = m[1].strip() if m else None
-        if m:
-            paras[0] = first[:m.start()]
-        paras[0] = re.sub(r"^\d{1,3}[A-Z]{0,4}\s*\.\s+", "", paras[0])
-        secs.append({"num": label, "note": note,
-                     "paras": [{"label": None, "text": t, "quoted": t.lstrip()[:1] in QUOTES} for t in paras]})
-    return {"long_title": long_title or "", "sections": secs}
-
-
 def long_title_of(paras):
     return next((re.sub(r"^#+\s*|\*", "", p["text"]).strip() for p in paras[:40]
                  if re.match(r"^(?:#+\s*)?\**\s*AN?\s+(?:ACT|LAW|ORDINANCE)\s+(?:TO|FOR)\b", p["text"], re.I)), None)
 
 
-def text_of(raw, lo, le1980=False):
+def split_spreads(raw, lo):
+    """A scan of two printed pages side by side (the 1978 Constitution, meta.spread): each image becomes two
+    half-width pages, so blocks() finds one body column and its margin per printed page. A block goes to the half
+    its centre is in; the cut is midway between the two halves' blocks (1978: left body ends ~472, right starts ~485)."""
+    size = {p["page_no"]: (p["width_pt"], p["height_pt"]) for p in raw["pages"]}
+    pages, out = [], []
+    for p in sorted(lo["pages"], key=lambda p: p["page_no"]):
+        bs = [(m, [int(x) for x in m.groups()[1:5]]) for m in BLOCK.finditer(p["md"])]
+        left = [b for m, b in bs if m[1] not in DROP and (b[0] + b[2]) / 2 < 500]
+        right = [b for m, b in bs if m[1] not in DROP and (b[0] + b[2]) / 2 >= 500]
+        mid = (max((b[2] for b in left), default=480) + min((b[0] for b in right), default=480)) / 2
+        w, h = size[p["page_no"]]
+        for half, (lo_x, hi_x) in enumerate([(0, mid), (mid, 1000)]):
+            sx = lambda x: str(round(min(1000, max(0, (x - lo_x) * 1000 / (hi_x - lo_x)))))
+            md = "\n".join(f"![{m[1]}]({sx(b[0])},{b[1]},{sx(b[2])},{b[3]})\n{m[6]}" for m, b in bs
+                           if ((b[0] + b[2]) / 2 < mid) == (half == 0))
+            n = 2 * p["page_no"] - 1 + half
+            pages.append({"page_no": n, "width_pt": w / 2, "height_pt": h, "chars": 0})
+            out.append({**p, "page_no": n, "md": md})
+    return {"pages": pages}, {**lo, "pages": out}
+
+
+def text_of(raw, lo, le1980=False, spread=False):
     """(paragraphs, 'lighton' | 'html' | 'docling'). Every source goes through etl.structure.blocks(), which splits
     each page into body and margin by layout (the margin column moves page to page; LightOn returns a note as a
     plain block beside its section, often not italic: checked 2026-10-10 on 1,528 laws, an italic-only reading
     found notes on 48% of sections). LightOn's pages replace the others where it has them."""
+    if spread and lo and lo.get("pages"):
+        raw, lo = split_spreads(raw, lo)
     if lo and lo.get("pages"):
         raw = {**raw, "lighton": lo}
     src = "lighton" if lo and lo.get("pages") else "html" if raw.get("format") == "html" else "docling"
@@ -193,7 +200,7 @@ def text_of(raw, lo, le1980=False):
 
 
 KIND = {"act": "act", "law": "law", "ordinance": "ordinance", "cap": "chapter1980", "cap1956": "chapter1956",
-        "amendment": "amendment", "other": "other"}
+        "amendment": "amendment", "constitution": "constitution", "other": "other"}
 _w = {}
 
 
@@ -203,7 +210,7 @@ def _init():
     _w["conn"] = pg_connect()
     with _w["conn"], _w["conn"].cursor() as cur:       # chapter and Act titles, for names cited without a number
         graph.load_chapters(cur)
-    _w["edges"] = graph.edges
+        refs.load_names(cur)
     _w["s3"], _w["bucket"] = r2(), os.environ["R2_BUCKET"]
 
 
@@ -222,7 +229,7 @@ def build_one(row):
             lo = _get(f"raw/lighton/{sha}.json.gz")
         except _w["s3"].exceptions.NoSuchKey:
             lo = None
-        paras, src = text_of(raw, lo, le1980=bool(meta.get("cap")))
+        paras, src = text_of(raw, lo, le1980=bool(meta.get("cap")), spread=bool(meta.get("spread")))
         ch = chunks(paras)
         if not ch:
             return "skip", f"skip {key}: no text"
@@ -238,18 +245,7 @@ def build_one(row):
             ids = execute_values(cur, "INSERT INTO chunks (doc_key, seq, label, text) VALUES %s RETURNING id",
                                  [(key, i, l, t) for i, (l, t) in enumerate(ch)], page_size=1000, fetch=True)
             ids = [r[0] for r in ids]
-            by_label = {}
-            for (l, _), cid in zip(ch, ids):
-                if l:
-                    by_label.setdefault(l, cid)
-            rows = []
-            for e in _w["edges"](as_doc(ch, lt), key, commenced):
-                kind, dst, dst_label, evidence = e[2], e[3], e[4], e[7]
-                src_chunk = None if kind == "same_as" else (by_label.get(e[1]) if e[1] else ids[0])
-                rows.append((key, src_chunk, kind, dst, dst_label, e[5], (evidence or "")[:300] or None))
-            if rows:
-                execute_values(cur, "INSERT INTO links (src_doc, src_chunk, kind, dst_doc, dst_label, date, context) VALUES %s",
-                               rows, page_size=1000)
+            write_links(cur, key, lt, commenced, [t for _, t in ch], ids)
         return "ok", ""
     except Exception as e:
         try:
@@ -279,16 +275,53 @@ def build(keys=None, limit=None, workers=16):
     links()
 
 
+def write_links(cur, key, lt, commenced, texts, ids):
+    """A law's links from its chunk texts (etl.refs: the text alone, no marginal notes), replacing the ones it had."""
+    cur.execute("DELETE FROM links WHERE src_doc = %s AND detail IS NOT NULL", (key,))   # not the same_as copies from `edges`
+    rows = [(key, None if i is None else ids[i], kind, dst, label, commenced, (ctx or "")[:300] or None, Json(det))
+            for i, kind, dst, label, ctx, det in refs.links(key, lt, texts)]
+    if rows:
+        execute_values(cur, "INSERT INTO links (src_doc, src_chunk, kind, dst_doc, dst_label, date, context, detail) VALUES %s",
+                       rows, page_size=1000)
+    return len(rows)
+
+
+def relink(keys=None):
+    """Links again from the chunks in the database (no R2, no chunking): for a change to etl/refs.py. Reads chunk text
+    out of the database, so only on ada's Postgres (Neon's transfer quota, 2026-10-10)."""
+    from etl import graph
+    conn = pg_connect()
+    with conn.cursor() as cur:
+        graph.load_chapters(cur)
+        refs.load_names(cur)
+        cur.execute("SELECT key, meta->>'long_title', commenced FROM docs WHERE %s::text[] IS NULL OR key = ANY(%s) ORDER BY key",
+                    (keys, keys))
+        docs = cur.fetchall()
+    n = 0
+    for j, (key, lt, commenced) in enumerate(docs, 1):
+        with conn, conn.cursor() as cur:
+            cur.execute("SELECT id, text FROM chunks WHERE doc_key = %s ORDER BY seq", (key,))
+            rows = cur.fetchall()
+            n += write_links(cur, key, lt, commenced, [t for _, t in rows], [i for i, _ in rows])
+        if j % 500 == 0 or j == len(docs):
+            print(f"[{j}/{len(docs)}] {n} links", flush=True)
+    conn.close()
+    links()
+
+
 def links():
     """same_as pairs from the edition lists (etl.graph.link, kept in `edges`), and each link's target chunk: the
     target document's, or a same_as twin's, first chunk with the link's label. All inside the database: nothing
     is read out (Neon's transfer quota was hit on 2026-10-10)."""
     conn = pg_connect()
     with conn, conn.cursor() as cur:
-        cur.execute("DELETE FROM links WHERE kind = 'same_as' AND src_chunk IS NULL AND context NOT LIKE 'also %%'")
+        cur.execute("DELETE FROM links WHERE kind = 'same_as' AND detail IS NULL")      # the copies from `edges` (refs.py rows have detail)
         cur.execute("""INSERT INTO links (src_doc, kind, dst_doc, context)
                        SELECT DISTINCT e.src_act, 'same_as', e.dst_act, e.evidence FROM edges e
                        WHERE e.kind = 'same_as' AND e.new_text = 'link' AND e.src_act IN (SELECT key FROM docs)""")
+        # a consolidated Constitution is the same document: "Article 154G" (13th Amendment) resolves in the text that has it
+        cur.execute("""INSERT INTO links (src_doc, kind, dst_doc, context)
+                       SELECT key, 'same_as', 'constitution', 'consolidated' FROM docs WHERE key LIKE 'constitution:%%'""")
         # every name of a document (same_as both ways; edges() records its own pairs as context "also <key>"),
         # then each link's candidate target documents, joined to chunks on the (doc_key, label) index. A correlated
         # alias lookup ran over 30 minutes on 19,330 links x 89,025 chunks (2026-10-10).
@@ -316,6 +349,77 @@ def links():
     conn.close()
 
 
+CITED = re.compile(r"(?:may|shall)\s+be\s+cited\s+as\s+(?:the\s+)?([^.*\n]{3,160}?)\b(Act|Law|Ordinance)\W{0,3}No[.,:]?\s*(\d+)\s*(?:of|0f)\s*(\d{4})",
+                   re.I | re.S)
+
+
+def key_plan(cur, tried):
+    """[(key, "typo" | "switch" | "drop", other document id, why)] for each Act/Law printing another number."""
+    import difflib
+    from etl.graph import norm_name
+    cur.execute("""SELECT d.key, d.document_id, coalesce(nullif(trim(x.title), ''), d.title), x.meta->>'act_no', (SELECT string_agg(text, ' ' ORDER BY seq)
+                   FROM chunks WHERE doc_key = d.key AND seq < 3) FROM docs d JOIN documents x ON x.id = d.document_id
+                   WHERE d.key ~ '^(act|law):'""")
+    rows = cur.fetchall()
+    held = {r[0] for r in rows}
+
+    def text(k):
+        cur.execute("SELECT string_agg(text, ' ' ORDER BY seq) FROM chunks WHERE doc_key = %s", (k,))
+        return re.sub(r"\s+", " ", cur.fetchone()[0] or "")[:6000]
+    plan = []
+    for key, doc_id, listed, act_no, head in rows:
+        if not (m := CITED.search(head or "")) or (printed := refs.num_key(m[2], m[3], m[4])) == key:
+            continue
+        a, b = norm_name(m[1] + m[2]), norm_name(re.sub(r",?\s*No\.?\s*\d+.*$", "", listed or ""))
+        same_name = difflib.SequenceMatcher(None, a, b).ratio() >= 0.85      # listings misspell ("Universitites")
+        dup = printed in held and difflib.SequenceMatcher(None, text(key), text(printed), autojunk=False).ratio() >= 0.95
+        said = re.sub(r"\s+", " ", m[0])[-80:]
+        why = f"prints {said!r}, listed as {listed!r}" + (f", same text as {printed}" if dup else "")
+        if same_name and not dup:
+            plan.append((key, "typo", None, why))
+            continue
+        tried.setdefault(key, set()).add(doc_id)
+        cur.execute("""SELECT id, raw_key IS NOT NULL FROM documents WHERE meta->>'act_no' = %s AND id <> ALL(%s) AND r2_key IS NOT NULL
+                       AND sha256 <> ALL(SELECT sha256 FROM documents WHERE id = ANY(%s) AND sha256 IS NOT NULL)
+                       AND coalesce(meta->>'lang', 'ENGLISH') ILIKE 'english%%' ORDER BY raw_key IS NOT NULL DESC, source = 'parliament' DESC, id""",
+                    (act_no, list(tried[key]), list(tried[key])))
+        alt = cur.fetchone()
+        plan.append((key, "drop" if not alt else "switch" if alt[1] else "extract", alt and alt[0], why))
+    return plan
+
+
+def keys(fix=False):
+    """Each Act/Law's own "may be cited as ... No. N of YYYY" against its key (2026-10-11: 35 of 3,959 differ).
+    The printed name is the listing's title -> the key is right, the printed number a misprint (kept), unless the
+    text is that of the law the printed number is held as (a duplicate file). Otherwise the file is another law:
+    switch to another listing row of the same number that has a file and rebuild, until one prints its key; with
+    none left, drop the document (its chunks and links go with it) and say why on its `documents` row."""
+    conn = pg_connect()
+    tried = {}
+    while True:
+        with conn.cursor() as cur:
+            plan = key_plan(cur, tried)
+        for k, act, alt, why in plan:
+            print(k, act + (f" to document {alt}" if alt else ""), why, sep=" | ", flush=True)
+        # "extract": the other file is fetched but not extracted; etl.extract first (on ada), then run this again
+        if not fix or not (sw := [(k, alt) for k, act, alt, _ in plan if act == "switch"]):
+            break
+        with conn, conn.cursor() as cur:
+            for k, alt in sw:
+                cur.execute("UPDATE acts SET document_id = %s, title = (SELECT title FROM documents WHERE id = %s) WHERE key = %s",
+                            (alt, alt, k))
+        build([k for k, _ in sw], workers=2)
+    for k, act, _, why in plan if fix else []:
+        if act == "drop":
+            with conn, conn.cursor() as cur:
+                cur.execute("UPDATE documents SET error = %s WHERE id = (SELECT document_id FROM acts WHERE key = %s)",
+                            (f"wrong file for {k}: {why}"[:500], k))
+                cur.execute("DELETE FROM docs WHERE key = %s", (k,))
+                cur.execute("DELETE FROM acts WHERE key = %s", (k,))
+            print("dropped", k, flush=True)
+    conn.close()
+
+
 def show(key):
     conn = pg_connect()
     cur = conn.cursor()
@@ -332,7 +436,11 @@ def main():
     b.add_argument("--keys", help="comma-separated keys (default: every law in `acts`)")
     b.add_argument("--limit", type=int)
     b.add_argument("--workers", type=int, default=16)
-    sub.add_parser("links", help="links again from the chunks in Neon (no R2)")
+    sub.add_parser("links", help="resolve link targets to chunks (inside the database)")
+    r = sub.add_parser("relink", help="links again from the chunks in the database (etl/refs.py), then resolve")
+    r.add_argument("--keys", help="comma-separated keys (default: every document)")
+    k = sub.add_parser("keys", help="Acts/Laws whose short title prints another number: report; --fix switches or drops")
+    k.add_argument("--fix", action="store_true")
     s = sub.add_parser("show")
     s.add_argument("key")
     args = a.parse_args()
@@ -340,6 +448,10 @@ def main():
         build(args.keys.split(",") if args.keys else None, args.limit, args.workers)
     elif args.cmd == "links":
         links()
+    elif args.cmd == "keys":
+        keys(args.fix)
+    elif args.cmd == "relink":
+        relink(args.keys.split(",") if args.keys else None)
     else:
         show(args.key)
 

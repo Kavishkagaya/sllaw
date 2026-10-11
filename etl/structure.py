@@ -1340,6 +1340,8 @@ def commencement(doc, certified):
 
 
 def act_key(meta, doc=None):
+    if meta.get("constitution"):
+        return meta["constitution"]                # `constitution` (1978 text), `constitution:N` (up to the Nth amendment)
     if meta.get("cap"):
         # Legislative Enactments 1980 chapter: the number the PDF prints, else lankalaw's listing
         # (which lists both Customs and Masters Attendant as 235, 2026-10-07)
@@ -1463,6 +1465,8 @@ def build_one(row):
                 doc["warnings"].append(f"listed as Chapter {meta['cap']}, prints Chapter {key[4:]}")
             # no "CHAPTER N" line of its own on page 1: lankalaw's title, "Vehicles (Chapter 534)"
             doc["title"] = doc["title"] or re.sub(r"\s*\(Chapter[^)]*\)?\s*$", "", meta["listing"]["title"])
+        if key.startswith("constitution"):
+            doc["title"] = meta["listing"]["title"]
         if key.startswith("amendment:"):
             doc["title"] = doc["title"] or f"{amendment_ordinal(doc)} Amendment to the Constitution"
         if meta.get("date_precision") == "year":   # lankalaw rows: only the year; the Act prints its date

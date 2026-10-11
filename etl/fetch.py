@@ -8,6 +8,7 @@
   python3 -m etl.fetch le1956               # Legislative Enactments 1956 (lankalaw.net), HTML, one row per chapter
   python3 -m etl.fetch lankalaw             # lankalaw.net Acts by year, only those filling a gap
   python3 -m etl.fetch parliament           # parliament.lk official PDFs, 1956 on, not already from documents.gov.lk
+  python3 -m etl.fetch constitution         # parliament.lk: the 1978 Constitution and its consolidations
 
 One documents row per file (an act in three languages = three rows). Files are
 keyed by content hash, source/<sha256>.pdf, so re-runs and duplicates never
@@ -139,6 +140,30 @@ def discover_parliament(db):
     return len(rows)
 
 
+# parliament.lk /en/constitution/<slug> (SOURCES.md, 2026-10-11): the 1978 text and the text as amended up to the
+# Nth amendment. /files/pdf/constitution.pdf is the up-to-21st file again; no consolidation up to the 22nd yet.
+# ponytail: six fixed files, no spider; re-check the pages when a 23rd amendment passes
+CONSTITUTION = [("constitution", "1978ConstitutionWithoutAmendments.pdf", "1978-09-07",
+                 "Constitution of the Democratic Socialist Republic of Sri Lanka (1978, as enacted)")] + [
+    (f"constitution:{n}", f"constitution-upto-{n}th.pdf" if n < 21 else "constitution-upto-21st.pdf", None,
+     f"Constitution of the Democratic Socialist Republic of Sri Lanka (as amended up to the {o} Amendment)")
+    for n, o in [(17, "Seventeenth"), (18, "Eighteenth"), (19, "Nineteenth"), (20, "Twentieth"), (21, "Twenty First")]]
+
+
+def discover_constitution(db):
+    """meta.constitution is the key: `constitution` (1978 text), `constitution:N` (as amended up to the Nth)."""
+    base = "https://www.parliament.lk/files/pdf/constitution/"
+    rows = [("constitution", base + f, title, date, Json({"constitution": key, "lang": "ENGLISH", "listing": {"title": title},
+                  **({"spread": True} if key == "constitution" else {})}))     # two printed pages per image
+            for key, f, date, title in CONSTITUTION]
+    cur = db()
+    execute_values(cur,
+        """INSERT INTO documents (source, source_url, title, doc_date, meta) VALUES %s
+           ON CONFLICT (source, source_url) DO UPDATE
+           SET meta = documents.meta || EXCLUDED.meta, updated_at = NOW()""", rows)
+    return len(rows)
+
+
 def r2():
     return boto3.client(
         "s3", region_name="auto",
@@ -212,7 +237,7 @@ def fetch(conn, source, limit=None):
 
 def main():
     a = argparse.ArgumentParser()
-    a.add_argument("source", choices=["acts", "le1956", "le1980", "lankalaw", "parliament"])
+    a.add_argument("source", choices=["acts", "le1956", "le1980", "lankalaw", "parliament", "constitution"])
     a.add_argument("--limit", type=int, help="fetch at most N files (pilot)")
     a.add_argument("--no-discover", action="store_true", help="skip listing, only drain the queue")
     args = a.parse_args()
@@ -233,7 +258,8 @@ def main():
 
     if not args.no_discover:
         discover = {"acts": discover_acts, "le1956": discover_le1956, "le1980": discover_le1980,
-                    "lankalaw": discover_lankalaw, "parliament": discover_parliament}[args.source]
+                    "lankalaw": discover_lankalaw, "parliament": discover_parliament,
+                    "constitution": discover_constitution}[args.source]
         print(f"discovered {discover(db)} files")
         conn.commit()
     db()

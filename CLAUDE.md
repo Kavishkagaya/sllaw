@@ -24,6 +24,8 @@ etl/               the pipeline: one file per step
   ocr_lighton.py   experiment: LightOn vs Chandra/Surya/text layer comparison (PIPELINE.md)
   label.py         experiment: Jev/Clef block labeller (not adopted, see PIPELINE.md)
   docs.py          documents model (2026-10-10): text (LightOn / HTML) -> docs + chunks + links; `docs_ada.sh` runs it on ada
+  refs.py          links read from the text alone (no marginal notes): operative templates, citations, details;
+                   `etl.docs relink` rebuilds links from the chunks in the database; tests `etl/test_refs.py`
   db_ada.sh        the project Postgres on ada (init/start; /var/tmp/e19309/pgdata, localhost:5433)
   backup.py        tables -> gzipped CSV in R2 (backups/), read back and counted
   graph.py         step 4: edges from acts.doc (Neon only, ~45 s, all rebuilt); `link` = same_as between old laws,
@@ -36,11 +38,12 @@ etl/               the pipeline: one file per step
   spiders/le1956.py    lankalaw.net Legislative Enactments 1956 (HTML chapters; cap1956:N)
   spiders/commonlii.py CommonLII numbered Acts via the Wayback Machine (only laws we hold no file for)
   spiders/parliament.py parliament.lk Acts listing: official English PDFs 1956– (preferred over lankalaw)
+  (fetch.py constitution) parliament.lk 1978 Constitution + consolidations up to the 17th–21st Amendments (`constitution`, `constitution:N`)
 viewer/            Next.js app for browsing documents from Neon
 legacy/            archive of the previous pipelines; read-only, not imported
 ```
 
-Structuring is code-based and English-only (decision 2026-10-04); Sinhala/Tamil go to an agent with the whole Act when needed. Scanned pages before 2000 are read by LightOnOCR-3-0.8B (`etl/ocr.py`, decision 2026-10-09); the graph is built on Neon (BUILD 2026-10-10.2). Pre-1980 law is in (lankalaw 1956–79 Acts, 1956 and 1980 Revised Editions) and `etl.graph link` ties old laws, chapters and editions together: parliament.lk's official PDFs (1956 on) replace lankalaw's copies (2026-10-10); 99.36% of change edges reach their target (78 left: laws with no file anywhere we can reach); CommonLII is the last resort (32 laws no official source has). Laws are keyed `law:`, Acts `act:`. Current model (2026-10-10): `etl/docs.py`, documents → chunks → links between documents (PIPELINE.md, "Documents, chunks and links"); Neon's transfer quota was hit, so never bulk-read doc or chunk text out of Neon. Next: verify edge precision (judge model + gold set), LightOn on the 119 post-2000 files with scanned pages (1,708 pages), schedules split into items, the vector layer (pgvector) for search + graph walk. `etl/label.py` (Jev/Clef labeller) is kept as an experiment, not used. See PIPELINE.md.
+Structuring is code-based and English-only (decision 2026-10-04); Sinhala/Tamil go to an agent with the whole Act when needed. Scanned pages before 2000 are read by LightOnOCR-3-0.8B (`etl/ocr.py`, decision 2026-10-09); the graph is built on Neon (BUILD 2026-10-10.2). Pre-1980 law is in (lankalaw 1956–79 Acts, 1956 and 1980 Revised Editions) and `etl.graph link` ties old laws, chapters and editions together: parliament.lk's official PDFs (1956 on) replace lankalaw's copies (2026-10-10); 99.36% of change edges reach their target (78 left: laws with no file anywhere we can reach); CommonLII is the last resort (32 laws no official source has). Laws are keyed `law:`, Acts `act:`. Current model (2026-10-10): `etl/docs.py`, documents → chunks → links between documents (PIPELINE.md, "Documents, chunks and links"); Neon's transfer quota was hit, so never bulk-read doc or chunk text out of Neon. The Constitution is in (2026-10-11): 1978 text + consolidations, 90% of Article links reach their Article. Next: verify edge precision (judge model + gold set), LightOn on the 119 post-2000 files with scanned pages (1,708 pages), schedules split into items, the vector layer (pgvector) for search + graph walk. `etl/label.py` (Jev/Clef labeller) is kept as an experiment, not used. See PIPELINE.md.
 
 ## Setup (ada or local)
 

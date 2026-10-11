@@ -334,3 +334,8 @@ All 516 chapter PDFs extracted (4,058 pages). Unlike the Acts:
 | `layout_output_docling/` | Output images from docling runs |
 | `layout_output_docling/sweep_document_p*.png` | Doc1 full-sweep images (13 pages sampled) |
 | `layout_output_docling/sweep_document2_p*.png` | Doc2 full-sweep images (12 pages sampled) |
+
+## Two-page spreads: the 1978 Constitution (2026-10-11)
+
+parliament.lk's `1978ConstitutionWithoutAmendments.pdf` (64 PDF pages) has two printed pages per image, side by side. In LightOn's 0-1000 grid the left page's notes are at x 55-140 and its body at x 150-472; the right page's body starts at x ~485, and no block crosses the gap. Read as one page, the right page looks like the margin column. `etl/docs.py` `split_spreads()` cuts each image at the gap (only for files flagged `meta.spread`).
+

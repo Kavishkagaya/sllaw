@@ -28,5 +28,6 @@ if [ -s "${SHAS:-}" ]; then
     if [ $((done_n * 100)) -lt $((want * 95)) ]; then echo "PIPELINE_STOPPED: OCR incomplete"; exit 1; fi
 fi
 $T/lighton_venv/bin/python -u -m etl.docs build --workers 12
-$T/lighton_venv/bin/python -u -m etl.docs links
+# links again once every document is in: names cited without a number resolve against all held titles
+$T/lighton_venv/bin/python -u -m etl.docs relink
 echo PIPELINE_DONE
