@@ -94,7 +94,8 @@ Rules:
 **Since 2026-10-10 the working database is Postgres on ada** (`etl/db_ada.sh`: Postgres 16 + pgvector from the
 pgserver wheel, data in `/var/tmp/e19309/pgdata`, `localhost:5433`, URL `DB_LOCAL_URL` in ada's `~/sllaw/.env`;
 from here: `ssh -L 5433:localhost:5433 ada`). Neon's free transfer quota (5 GB egress/month) was hit; Neon keeps
-the old copy and gets a dump later. Backups: `python -m etl.backup <table>` -> `backups/<table>_<time>.csv.gz` in R2
+the old copy. **The app reads from a new Neon project (decision 2026-10-15)**, filled push-only from ada (issue #12);
+never bulk-read from it in ETL. Backups: `python -m etl.backup <table>` -> `backups/<table>_<time>.csv.gz` in R2
 (`documents`, the one table nothing rebuilds: 6,496 rows on 2026-10-10).
 
 Neon Postgres (until 2026-10-10). Tables: `docs`, `chunks`, `links` (migration 003, the current model); `acts`, `sections`, `edges` (002, the earlier section model, kept); `documents`, the file inventory: one row per source file (listing record verbatim in `meta`, `sha256`, `r2_key`). Schema: `etl/migrations/001_documents.sql`.
