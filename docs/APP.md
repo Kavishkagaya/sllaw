@@ -32,6 +32,10 @@ lawyer or the AI writes them; proper drafting of plaints and submissions comes l
   in R2.
 - **Privacy, v1:** no PII masking (it breaks legal reasoning: party names matter, and lawyers already paste files
   into free ChatGPT). LLM via API (not used for training). Deleting a case deletes its files and chunks.
+- **Agents: Vercel AI SDK** for chat and the answering tool loop (search chunks, read doc, follow links, read case
+  file). Cloudflare Agents SDK later, only for asynchronous work (long jobs, scheduled watches); state stays in Neon.
+- **LLM calls go through Cloudflare AI Gateway** (the AI SDK provider's `baseURL`): logs, cost per request tagged
+  with workspace, caching, rate limits, provider fallback. Cost per workspace is what pricing is set from.
 - **Drafting:** later. v1 documents are markdown.
 - **Users:** reach lawyers once a working base exists.
 
