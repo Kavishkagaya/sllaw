@@ -14,6 +14,7 @@ docs/
   SOURCES.md       scope, every source site, coverage, blockers, open datasets, prior art
   PIPELINE.md      decisions (extract once, router, engines), validation rules, measurements
   LAYOUT.md        how Act PDFs are laid out (columns, marginal notes, page types)
+  APP.md           the app: who it is for, case-first product, decisions
 etl/               the pipeline: one file per step
   fetch.py         step 1: list sources → PDFs into R2 → rows in Neon
   extract.py       step 2: docling (text layer, HTML) → raw JSON into R2; --ocr-api sends scans to LightOn in the same pass
