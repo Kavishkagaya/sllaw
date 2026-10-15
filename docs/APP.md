@@ -25,8 +25,9 @@ lawyer or the AI writes them; proper drafting of plaints and submissions comes l
 
 ## Decisions
 
-- **Auth: Clerk.** Every user gets a personal workspace; all data is keyed by `workspace_id`, not `user_id`, so
-  multi-user workspaces (Clerk Organizations) need no data migration later.
+- **Auth: Clerk, multi-user workspaces from the start** (Clerk Organizations). Sign-up creates the user's
+  workspace; all data is keyed by `workspace_id`, with members and roles in the model. v1 only hides inviting
+  members, so opening it later is a UI change.
 - **Data:** app reads a new Neon project pushed from ada (#12); vectors in a hosted vector DB (#4); uploaded files
   in R2.
 - **Privacy, v1:** no PII masking (it breaks legal reasoning: party names matter, and lawyers already paste files
