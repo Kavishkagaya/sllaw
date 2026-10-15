@@ -23,6 +23,32 @@ lawyer or the AI writes them; proper drafting of plaints and submissions comes l
 
 **Plain chat**: quick questions, same grounding, "make this a case".
 
+## Knowledge (agreed 2026-10-15)
+
+**One graph:** the `links` table (doc/chunk → doc/chunk, with a kind). New sources add kinds, not graphs: judgments
+`interprets`/`follows`/`overrules`, regulations `made_under`. No graph database.
+
+**Agents:**
+- *Research agent* (cheap model, many tool calls): `search(query, scope, filters)`, `read(doc/chunk)`,
+  `links(chunk, direction, kinds)`, `as_of(section, date)` (the graph walk, code, no LLM). Returns an evidence pack,
+  not prose: `[{chunk_id, quote, why, version as of date}]`.
+- *Main agent* (stronger model): case summary and file list always in context; runs research agents (in parallel,
+  one per sub-question); loads the chunks it judges relevant into its context by `chunk_id`; answers citing only
+  chunk ids it has loaded, so the UI can check every citation.
+
+**User files:** same vector DB, one namespace per workspace. Access is filtered *inside* the vector query, so top-k
+is never lost to filtering afterwards (Vectorize applies the filter first and takes top-k from the filtered set).
+Each vector carries `scope` = `case:<id>` for files shared in a case or `user:<id>` for a member's private files;
+Postgres resolves which scopes the user can see, the query passes `scope $in [...]` (Vectorize has `$in`, no `$or`;
+the filter JSON is capped at 2 KB, so scope ids are kept short; a user who sees every case in the workspace needs no
+scope filter). Metadata indexes (`scope`, `case_id`, `doc_type`; 10 max) are created before the first insert.
+
+**File ingestion** (async job per uploaded or changed file, keyed by hash): parse to text → one cheap-model read
+returning JSON (doc_type: petition, appeal, affidavit, plaint, judgment, contract…; tags, summary, parties, dates,
+court, case numbers, laws cited) → chunk + embed into the workspace namespace → cited laws resolved to our doc keys
+as links into the law graph → file card in the UI, dates into the case timeline. No knowledge graph over user files
+in v1; an entity graph can be built later from the same per-file JSON.
+
 ## Decisions
 
 - **Auth: Clerk, multi-user workspaces from the start** (Clerk Organizations). Sign-up creates the user's
