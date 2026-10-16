@@ -41,7 +41,6 @@ etl/               the pipeline: one file per step
   spiders/commonlii.py CommonLII numbered Acts via the Wayback Machine (only laws we hold no file for)
   spiders/parliament.py parliament.lk Acts listing: official English PDFs 1956– (preferred over lankalaw)
   (fetch.py constitution) parliament.lk 1978 Constitution + consolidations up to the 17th–21st Amendments (`constitution`, `constitution:N`)
-viewer/            Next.js app for browsing documents from Neon
 legacy/            archive of the previous pipelines; read-only, not imported
 ```
 
@@ -106,14 +105,6 @@ Neon Postgres (until 2026-10-10). Tables: `docs`, `chunks`, `links` (migration 0
 .venv/bin/python3 etl/migrate.py           # apply pending
 .venv/bin/python3 etl/migrate.py --status  # show applied / pending
 ```
-
-## Viewer (`viewer/`)
-
-```bash
-cd viewer && npm install && npm run dev    # http://localhost:3000
-```
-
-Needs `DATABASE_URL` in `viewer/.env.local`. It currently reads the legacy `chunks` rows.
 
 ## Known issues
 
