@@ -30,12 +30,12 @@ WORKERS = 8   # parallel downloads; documents.gov.lk is a small govt server, don
 BATCH = 50    # results per Neon write
 
 
-def pg_connect(tries=30, wait=10):
+def pg_connect(tries=30, wait=10, url=None):
     """psycopg2.connect, retried on connection errors (ada's DNS failed to resolve Neon's host for a minute or so
     three times on 2026-10-10; the first time it killed all four OCR workers at start)."""
     for i in range(tries):
         try:
-            return psycopg2.connect(os.environ["DATABASE_URL"], connect_timeout=30)
+            return psycopg2.connect(url or os.environ["DATABASE_URL"], connect_timeout=30)
         except psycopg2.OperationalError as e:
             if i == tries - 1:
                 raise

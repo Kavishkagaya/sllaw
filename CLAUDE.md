@@ -29,6 +29,7 @@ etl/               the pipeline: one file per step
                    `etl.docs relink` rebuilds links from the chunks in the database; tests `etl/test_refs.py`
   db_ada.sh        the project Postgres on ada (init/start; /var/tmp/e19309/pgdata, localhost:5433)
   backup.py        tables -> gzipped CSV in R2 (backups/), read back and counted
+  publish.py       ada -> the app's Neon (sllaw-app): docs, chunks, links replaced in one transaction, push-only
   graph.py         step 4: edges from acts.doc (Neon only, ~45 s, all rebuilt); `link` = same_as between old laws,
                    chapters and editions; `walk` = section as of a year
   migrate.py       applies etl/migrations/*.sql in order
@@ -95,7 +96,7 @@ Rules:
 **Since 2026-10-10 the working database is Postgres on ada** (`etl/db_ada.sh`: Postgres 16 + pgvector from the
 pgserver wheel, data in `/var/tmp/e19309/pgdata`, `localhost:5433`, URL `DB_LOCAL_URL` in ada's `~/sllaw/.env`;
 from here: `ssh -L 5433:localhost:5433 ada`). Neon's free transfer quota (5 GB egress/month) was hit; Neon keeps
-the old copy. **The app reads from a new Neon project (decision 2026-10-15)**, filled push-only from ada (issue #12);
+the old copy. **The app reads from a new Neon project (decision 2026-10-15)**, filled push-only from ada by `python -m etl.publish` (`APP_DATABASE_URL` in ada's .env; issue #12);
 never bulk-read from it in ETL. Backups: `python -m etl.backup <table>` -> `backups/<table>_<time>.csv.gz` in R2
 (`documents`, the one table nothing rebuilds: 6,496 rows on 2026-10-10).
 
