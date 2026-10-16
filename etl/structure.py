@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Step 3: raw extraction -> blocks -> structured Act. Cheap and repeatable; never edits raw.
 
-  python3 -m etl.structure build [--limit N] [--full]       # new/changed English raws (R2) -> Neon acts, sections
+  python3 -m etl.structure build [--limit N] [--full]       # new/changed English raws (R2) -> acts (the list of laws etl.docs builds)
   python3 -m etl.structure file raw.json.gz [...] [--out DIR]   # local raw files (testing)
 
 Edges are step 4 (etl.graph build): it reads acts.doc from Neon, so changing an edge rule never
@@ -29,7 +29,7 @@ from pathlib import Path
 
 import psycopg2
 from dotenv import load_dotenv
-from psycopg2.extras import Json, execute_values
+from psycopg2.extras import Json
 
 load_dotenv()
 
@@ -1265,40 +1265,6 @@ def text_of(s, quoted=None):
                      if quoted is None or bool(p.get("quoted")) == quoted)
 
 
-def provisions(doc, key):
-    """Rows for `sections`: the preamble, every section, every schedule, in the Act's order; after each, its tables."""
-    head = lambda h, word: h and " ".join(filter(None, [word, h["num"], h["title"]]))
-    rows = []
-    pre = "\n".join(filter(None, [doc["long_title"], *doc["preamble"], doc["enacting"]]))
-    if pre:
-        rows.append(("Preamble", "preamble", None, None, None, None, pre))
-    # a table is also a row of its own, "20 Table 1" / "First Schedule Table 2", text one table row per line:
-    # rates and columns are what people ask about (2,733 tables on 2026-10-10); it stays in its owner's text too
-    def tables(owner, paras, note):
-        for i, p in enumerate([p for p in paras if p.get("rows")], 1):
-            rows.append((f"{owner} Table {i}", "table", note, None, None, None,
-                         "\n".join(" | ".join(c for c in r if c) for r in p["rows"])))
-    for s in doc["sections"]:
-        rows.append((s["num"], "section", s["note"], head(s["part"], "PART"), head(s["chapter"], "CHAPTER"),
-                     s.get("heading"), text_of(s)))
-        tables(s["num"], s["paras"], s["note"])
-    seen = set()
-    for sc in doc["schedules"]:
-        name = sched_name(sc["heading"] or "") or "Schedule"
-        n, i = name, 2
-        while n in seen:                           # two headings both read "SCHEDULE"
-            n, i = f"{name} ({i})", i + 1
-        seen.add(n)
-        # "[Section 41]", "(sections 5, 6 and 9)", "section 3(1)": the sections the schedule belongs to
-        ref = next((p["text"] for p in sc["paras"][:2]
-                    if re.fullmatch(r"[\[(]?\s*sections?\s+[\w(), ]{1,40}[\])]?\.?", p["text"].strip(), re.I)), None)
-        body = "\n".join("\n".join(" | ".join(c for c in r if c) for r in p["rows"]) if p.get("rows") else p["text"]
-                         for p in sc["paras"])
-        rows.append((n, "schedule", ref, None, None, None, "\n".join(filter(None, [sc["heading"], body]))))
-        tables(n, sc["paras"], sc["heading"])
-    return [(key, num, kind, i, *rest) for i, (num, kind, *rest) in enumerate(rows)]
-
-
 MONTHS = {m: i for i, m in enumerate("january february march april may june july august september "
                                      "october november december".split(), 1)}
 
@@ -1437,7 +1403,7 @@ def structure_raw(raw, le1980=False):
 
 
 def build_one(row):
-    """Read the raw into memory, structure it, write the Act and its provisions; nothing goes
+    """Read the raw into memory, structure it, write its `acts` row; nothing goes
     to disk. Each worker process does the whole Act: the build waits on R2 and Neon round trips
     (us-east-1), not on CPU, so Acts go in parallel (one process, serial writes: 27 Acts/min,
     2026-10-07). -> ("ok" | "skip" | "fail", message)"""
@@ -1486,8 +1452,6 @@ def build_one(row):
                            commenced, commencement, warnings, doc) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
                         (key, doc_id, raw_key, BUILD, doc["title"], doc["long_title"], certified, date, Json(comm),
                          Json(doc["warnings"]), Json(doc)))
-            execute_values(cur, "INSERT INTO sections (act_key, num, kind, seq, note, part, chapter, heading, text) "
-                                "VALUES %s ON CONFLICT DO NOTHING", provisions(doc, key))
         return "ok", ""
     except Exception as e:
         try:
@@ -1546,7 +1510,7 @@ def build(limit=None, workers=16, local=None, full=False):
 def main():
     a = argparse.ArgumentParser()
     sub = a.add_subparsers(dest="cmd", required=True)
-    b = sub.add_parser("build", help="English raws from R2 -> Neon acts + sections")
+    b = sub.add_parser("build", help="English raws from R2 -> acts")
     b.add_argument("--limit", type=int)
     b.add_argument("--workers", type=int, default=16)
     b.add_argument("--local", help="directory of raw .json.gz to use instead of R2 (testing)")

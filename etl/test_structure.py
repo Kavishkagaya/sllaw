@@ -21,18 +21,6 @@ assert SECTION.match("12A. (1) Notwithstanding")[1] == "12A"
 assert LABEL.match("(iii) at any election")[1] == "(iii)"
 print("ok rules")
 
-# Jev answers -> one label (etl/label.py)
-from etl.label import kind, unsure
-a = {"type": "section_start", "type_p": 0.97, "type_conf": 0.95, "quoted": 0.9, "cont": 0.1}
-assert kind(a) == "quoted"                                   # a quoted section is not a section
-assert kind({**a, "quoted": 0.1}) == "section_start"
-assert kind({**a, "type": "provision", "quoted": 0.1}) == "section_text"
-assert kind({**a, "type": "schedule_content"}) == "quoted"          # a schedule inserted into another law
-assert kind({**a, "type": "schedule_content", "quoted": 0.1}) == "schedule_text"
-assert kind({**a, "type": "furniture"}) == "furniture"
-assert not unsure({**a, "quoted": 0.95}) and unsure({**a, "quoted": 0.5}) and unsure({**a, "type_conf": 0.4})
-print("ok labels")
-
 # amendment edges (etl/graph.py)
 import etl.graph as g
 from etl.graph import edges
@@ -168,11 +156,3 @@ assert section_table([["Repeal of Article 155G of the Constitution.", "48. Artic
 assert not section_table([["Column I", "Column II"], ["ENACTMENTS", "AMENDMENTS"], ["6. The Rubber Control Act", "1. For section 16, substitute"]])
 assert not section_table([["Sum invested", "Period in years"], ["30", "5"]])
 print("ok section tables")
-from etl.structure import provisions
-dt = {"long_title": "AN ACT", "preamble": [], "enacting": None, "schedules": [{"heading": "FIRST SCHEDULE", "paras": [
-      {"text": "x", "rows": [["Column I", "Column II"], ["a", "b"]]}]}],
-      "sections": [{"num": "20", "note": "Rates.", "part": None, "chapter": None, "paras": [
-          {"label": None, "text": "Rates are-"}, {"label": None, "text": "t", "rows": [["Sum", "Rate"], ["30", "5%"]]}]}]}
-R = {r[1]: (r[2], r[-1]) for r in provisions(dt, "act:1/2000")}
-assert R["20 Table 1"] == ("table", "Sum | Rate\n30 | 5%") and R["First Schedule Table 1"][0] == "table" and "20" in R
-print("ok table rows")

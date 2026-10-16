@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Step 4: the amendment graph in Neon, built from the structured Acts (step 3, etl.structure build),
-and the post-retrieval walk.
+"""Edges and same_as pairs from the structured Acts (`acts.doc`, etl.structure build). etl.docs uses only the
+same_as pairs (`links()`) and the name lookups here (load_chapters, law_by_name, key_of, sched_names); its own
+links come from etl.refs.
 
-  python3 -m etl.graph build                        # every Act's acts.doc -> edges (all rebuilt), then link
-  python3 -m etl.graph walk 14/2002 22 --year 2023  # a section as it stood: original + changes up to then
-  python3 -m etl.graph missing                      # targets edges point at that are not built, and why
+  python3 -m etl.graph build      # every Act's acts.doc -> edges (all rebuilt), then link
+  python3 -m etl.graph link       # same_as only
 
 Edges are read from text the structure step already isolates, not guessed:
   amends_act / repeals_act   long title "AN ACT TO AMEND THE ... ACT, NO. 14 OF 2002"
@@ -15,10 +15,8 @@ Edges are read from text the structure step already isolates, not guessed:
   repeals_act                a section whose note says Repeal without naming a section
   cites                      "Act, No. 19 of 1994", "(Chapter 26)" in this Act's own (unquoted) text
   same_as                    one law under two keys, act:44/1953 = cap:432 (its 1980 Revised Edition chapter)
-The walk is for retrieval: it doesn't apply amendments, it lists them in date order so the
-reader (an LLM) gets the original wording plus every later change up to the year asked.
 """
-import argparse, json, os, re
+import argparse, os, re
 from collections import Counter
 
 import psycopg2
@@ -367,119 +365,11 @@ def link(cur):
           f"{by['cited name']} cited laws to a chapter by the name cited", flush=True)
 
 
-def why_missing(cur, key):
-    """Why an Act key has no row in `acts`: what to fetch or extract to fill it."""
-    kind, _, ref = key.partition(":")
-    if kind == "chapter":
-        return "chapter cited by number only, its law not named: 1956 or 1980 numbering unknown"
-    if kind == "cap":
-        cur.execute("SELECT raw_key IS NOT NULL FROM documents WHERE source = 'le1980' AND meta->>'cap' = %s", (ref,))
-        r = cur.fetchone()
-        return ("1980 Revised Edition chapter, fetched but not extracted yet" if r and not r[0] else
-                "1980 Revised Edition chapter, extracted but not built yet" if r else
-                "pre-1980 law: 1980 Revised Edition not fetched (etl.fetch le1980)")
-    year = int(ref.split("/")[-1]) if "/" in ref else 0
-    if kind != "act" or year < 1980:
-        # Laws (1972-77), Ordinances and pre-1980 Acts are in the 1980 Revised Edition, but under a
-        # chapter number: reaching them by number needs a number -> chapter map (not built)
-        return f"pre-1980 {kind}: in the 1980 Revised Edition under a chapter number (needs number -> chapter map)"
-    cur.execute("""SELECT count(*), count(*) FILTER (WHERE meta->>'lang' = 'ENGLISH'),
-                          count(*) FILTER (WHERE meta->>'lang' = 'ENGLISH' AND raw_key IS NOT NULL),
-                          count(*) FILTER (WHERE meta->>'lang' = 'ENGLISH' AND error IS NOT NULL)
-                   FROM documents WHERE source = 'acts' AND meta->>'act_no' = %s""", (ref,))
-    n, en, en_raw, en_err = cur.fetchone()
-    if not n:
-        return "not on documents.gov.lk: try the lk_legal_docs mirror or lankalaw year pages"
-    if not en:
-        return "listed, but no English file (Sinhala/Tamil only)"
-    if en_err and not en_raw:
-        return "English file failed extraction"
-    if not en_raw:
-        return "English file not extracted yet"
-    return "extracted but not structured yet (run etl.structure build, then etl.graph build)"
-
-
-def missing():
-    """Every Act key edges point at that has no row in `acts`, most-referenced first, with why."""
-    conn = psycopg2.connect(os.environ["DATABASE_URL"])
-    cur = conn.cursor()
-    cur.execute("""SELECT e.dst_act, count(*) FILTER (WHERE e.kind <> 'cites'), count(*) FILTER (WHERE e.kind = 'cites')
-                   FROM edges e WHERE e.kind <> 'same_as' AND NOT EXISTS (SELECT 1 FROM acts a WHERE a.key = e.dst_act)
-                   GROUP BY 1 ORDER BY 2 DESC, 3 DESC""")
-    rows = [(k, ch, ci, why_missing(cur, k)) for k, ch, ci in cur.fetchall()]
-    conn.close()
-    return rows
-
-
-def walk(target, section, year):
-    """Section `section` of Act `target` (e.g. 14/2002) as of the end of `year`: its original text
-    (if that Act is structured) and every edge into it, or into the whole Act, dated by then."""
-    key = target if ":" in target else f"act:{target}"
-    if re.fullmatch(r"\d+[A-Za-z]*", section):
-        section = section.upper()                        # 12a -> 12A
-    elif section.lower() == "preamble":
-        section = "Preamble"
-    else:
-        section = sched_name(section) or section         # "first schedule" -> First Schedule
-    conn = psycopg2.connect(os.environ["DATABASE_URL"])
-    cur = conn.cursor()
-    # every name of the law: same_as pairs are stored as dst_act + evidence "also <other key>"
-    cur.execute("SELECT dst_act, substr(evidence, 6) FROM edges WHERE kind = 'same_as'")
-    names, pairs = {key}, cur.fetchall()
-    for _ in range(3):
-        names |= {b for a, b in pairs if a in names} | {a for a, b in pairs if b in names}
-    names = sorted(names)
-    cur.execute("SELECT a.title, a.certified, s.note, s.text FROM sections s JOIN acts a ON a.key = s.act_key "
-                "WHERE s.act_key = ANY(%s) AND s.num = %s", (names, section))
-    original = cur.fetchone()
-    # each change comes with the whole amending section: the instruction ("by the repeal of the first
-    # proviso ... and the substitution therefor of the following") is as needed as the new words
-    def changes_to(acts, sec, depth=0, whole_act=True):
-        cur.execute("""SELECT e.date, e.src_act, a.title, e.src_section, e.kind, e.dst_section, e.new_text, e.evidence,
-                              s.text, a.commencement
-                       FROM edges e JOIN acts a ON a.key = e.src_act
-                       LEFT JOIN sections s ON s.act_key = e.src_act AND s.num = e.src_section
-                       WHERE e.dst_act = ANY(%s) AND (e.dst_section = %s OR (%s AND e.kind = 'repeals_act')
-                                                      -- "Amendment of Schedules.": every schedule of the law
-                                                      OR (%s AND e.dst_section = 'Schedules')
-                                                      -- a partial repeal ("Part IX of ... is hereby repealed"): the
-                                                      -- reader decides from the amending text whether it covers this one
-                                                      OR (%s AND e.kind = 'repeals' AND e.dst_section IS NULL))
-                         AND e.kind <> 'cites' AND (e.date IS NULL OR e.date <= make_date(%s, 12, 31))
-                       ORDER BY e.date NULLS LAST, e.src_act, e.src_section""",
-                    (acts, sec, whole_act, "Schedule" in (sec or ""), whole_act, year))
-        out = [dict(zip(("date", "by_act", "by_title", "by_section", "kind", "section", "new_text", "evidence",
-                         "amending_text", "commencement"), r)) for r in cur.fetchall()]
-        for c in out:
-            # amendments of amendments: a later Act changing the amending section itself
-            if depth < 3 and c["by_section"]:
-                c["amended_by"] = changes_to([c["by_act"]], c["by_section"], depth + 1, False)
-            if (c["commencement"] or {}).get("kind") == "appointed":
-                c["date_note"] = "in force on a date appointed by Gazette Order (not in the corpus); certified date shown"
-        return out
-    changes = changes_to(names, section)
-    gap = None
-    if not original:      # say why, so a missing original is never silent
-        cur.execute("SELECT key FROM acts WHERE key = ANY(%s)", (names,))
-        gap = (f"section {section} not found in the structured Act" if cur.fetchone()
-               else "; ".join(f"{n}: {why_missing(cur, n)}" for n in names))
-    conn.close()
-    return {"act": key, "also_known_as": [n for n in names if n != key], "section": section, "as_of": year,
-            "original": original and dict(zip(("act_title", "certified", "note", "text"), original)),
-            **({"original_missing": gap} if gap else {}),
-            "changes": changes}
-
-
 def main():
     a = argparse.ArgumentParser()
     sub = a.add_subparsers(dest="cmd", required=True)
     sub.add_parser("build", help="every edge again from acts.doc (step 3 output), then link")
-    sub.add_parser("missing", help="Acts that edges point at but that are not built, with the reason")
     sub.add_parser("link", help="same_as between pre-1980 laws and their 1980 chapters (also run by build)")
-    w = sub.add_parser("walk")
-    w.add_argument("act", help="14/2002, or a key like cap:107")
-    w.add_argument("section")
-    w.add_argument("--year", type=int, default=9999)
     args = a.parse_args()
     if args.cmd == "build":
         build()
@@ -488,13 +378,6 @@ def main():
         with conn, conn.cursor() as cur:
             link(cur)
         conn.close()
-    elif args.cmd == "missing":
-        rows = missing()
-        for k, ch, ci, why in rows[:60]:
-            print(f"{k:18} {ch:4} changes {ci:4} citations | {why}")
-        print(f"\n{len(rows)} targets not built:", dict(Counter(r[3].split(':')[0] for r in rows)))
-    else:
-        print(json.dumps(walk(args.act, args.section, args.year), ensure_ascii=False, indent=1, default=str))
 
 
 if __name__ == "__main__":

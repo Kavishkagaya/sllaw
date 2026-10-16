@@ -2,7 +2,7 @@
 
 ## What this project is
 
-A corpus of Sri Lankan law: Constitution, Acts, consolidated statutes and regulations first, then judgments. The pipeline fetches every source file once into R2, extracts it once (docling for text-layer PDFs, Chandra for scans), and keeps the raw output unchanged. All structuring (sections, schedules, knowledge graph) runs afterwards from that raw output.
+A corpus of Sri Lankan law: Constitution, Acts, consolidated statutes and regulations first, then judgments. The pipeline fetches every source file once into R2, extracts it once (docling for text-layer PDFs and HTML, LightOnOCR-3 for scans), and keeps the raw output unchanged. Everything after (documents, chunks, links) is rebuilt from that raw output.
 
 ## Layout
 
@@ -15,36 +15,32 @@ docs/
   PIPELINE.md      decisions (extract once, router, engines), validation rules, measurements
   LAYOUT.md        how Act PDFs are laid out (columns, marginal notes, page types)
   APP.md           the app: who it is for, case-first product, decisions
-etl/               the pipeline: one file per step
-  fetch.py         step 1: list sources → PDFs into R2 → rows in Neon
-  extract.py       step 2: docling (text layer, HTML) → raw JSON into R2; --ocr-api sends scans to LightOn in the same pass
-  structure.py     step 3: raw → blocks (docling adapter) → Act JSON (sections, notes, quotes, schedules);
-                   `build` = R2 raws → Neon acts + sections
-  ocr.py           step 2b: LightOnOCR-3-0.8B on scanned pages → raw/lighton/ in R2 (queue: files extracted without --ocr-api)
-  ocr_ada.sh       starts 2 vLLM servers + 4 ocr workers on ada (from /var/tmp/e19309)
-  ocr_lighton.py   experiment: LightOn vs Chandra/Surya/text layer comparison (PIPELINE.md)
-  label.py         experiment: Jev/Clef block labeller (not adopted, see PIPELINE.md)
-  docs.py          documents model (2026-10-10): text (LightOn / HTML) -> docs + chunks + links; `docs_ada.sh` runs it on ada
-  refs.py          links read from the text alone (no marginal notes): operative templates, citations, details;
-                   `etl.docs relink` rebuilds links from the chunks in the database; tests `etl/test_refs.py`
-  db_ada.sh        the project Postgres on ada (init/start; /var/tmp/e19309/pgdata, localhost:5433)
-  backup.py        tables -> gzipped CSV in R2 (backups/), read back and counted
-  publish.py       ada -> the app's Neon (sllaw-app): docs, chunks, links replaced in one transaction, push-only
-  graph.py         step 4: edges from acts.doc (Neon only, ~45 s, all rebuilt); `link` = same_as between old laws,
-                   chapters and editions; `walk` = section as of a year
-  migrate.py       applies etl/migrations/*.sql in order
-  migrations/
+etl/               the pipeline, in run order
+  fetch.py         1: list sources → files into R2 → `documents` rows; spiders/ = one listing per site
   spiders/acts.py  documents.gov.lk listing (Next.js Server Action)
   spiders/lankalaw.py  lankalaw.net Acts by year 1956– (fills gaps; PDF and HTML)
   spiders/le1980.py    lankalaw.net Legislative Enactments 1980 (pre-1980 chapters; cap:N)
   spiders/le1956.py    lankalaw.net Legislative Enactments 1956 (HTML chapters; cap1956:N)
   spiders/commonlii.py CommonLII numbered Acts via the Wayback Machine (only laws we hold no file for)
   spiders/parliament.py parliament.lk Acts listing: official English PDFs 1956– (preferred over lankalaw)
-  (fetch.py constitution) parliament.lk 1978 Constitution + consolidations up to the 17th–21st Amendments (`constitution`, `constitution:N`)
-legacy/            archive of the previous pipelines; read-only, not imported
+  (fetch.py constitution) parliament.lk 1978 Constitution + consolidations up to the 17th–21st Amendments
+  extract.py       2: docling (text layer, HTML) → raw JSON into R2; --ocr-api sends scans to LightOn in the same pass
+  ocr.py           2b: LightOnOCR-3-0.8B on scanned pages → raw/lighton/ in R2 (files extracted without --ocr-api)
+  structure.py     3: raw → blocks (`blocks()`, also what docs.py reads) → Act JSON; `build` = the `acts` rows:
+                   each law's key, title, dates and chosen file (the list etl.docs builds)
+  graph.py         4: `build` = change edges from acts.doc, then `link` = same_as between old laws, chapters and
+                   editions (`edges`); docs.py uses only the same_as pairs and the name lookups
+  docs.py          5: text (LightOn / HTML / docling) → docs + chunks + links (the current model)
+  refs.py          links read from the text alone (no marginal notes); `etl.docs relink` reruns it on stored chunks
+  publish.py       6: ada → the app's Neon (sllaw-app): docs, chunks, links replaced in one transaction, push-only
+  backup.py        tables → gzipped CSV in R2 (backups/), read back and counted
+  migrate.py       applies etl/migrations/*.sql in order
+  test_structure.py, test_refs.py   assert-based checks: `python -m etl.test_structure`
+  *_ada.sh         on ada: ada_setup (venv + extract workers), ocr_ada (vLLM + OCR workers),
+                   docs_ada (OCR → docs build → relink), db_ada (the project Postgres)
 ```
 
-Structuring is code-based and English-only (decision 2026-10-04); Sinhala/Tamil go to an agent with the whole Act when needed. Scanned pages before 2000 are read by LightOnOCR-3-0.8B (`etl/ocr.py`, decision 2026-10-09); the graph is built on Neon (BUILD 2026-10-10.2). Pre-1980 law is in (lankalaw 1956–79 Acts, 1956 and 1980 Revised Editions) and `etl.graph link` ties old laws, chapters and editions together: parliament.lk's official PDFs (1956 on) replace lankalaw's copies (2026-10-10); 99.36% of change edges reach their target (78 left: laws with no file anywhere we can reach); CommonLII is the last resort (32 laws no official source has). Laws are keyed `law:`, Acts `act:`. Current model (2026-10-10): `etl/docs.py`, documents → chunks → links between documents (PIPELINE.md, "Documents, chunks and links"); Neon's transfer quota was hit, so never bulk-read doc or chunk text out of Neon. The Constitution is in (2026-10-11): 1978 text + consolidations, 90% of Article links reach their Article. Next: verify edge precision (judge model + gold set), LightOn on the 119 post-2000 files with scanned pages (1,708 pages), schedules split into items, the vector layer (pgvector) for search + graph walk. `etl/label.py` (Jev/Clef labeller) is kept as an experiment, not used. See PIPELINE.md.
+Structuring is code-based and English-only (decision 2026-10-04); Sinhala/Tamil go to an agent with the whole Act when needed. Scanned pages before 2000 are read by LightOnOCR-3-0.8B (`etl/ocr.py`, decision 2026-10-09). Pre-1980 law is in (lankalaw 1956–79 Acts, 1956 and 1980 Revised Editions) and `etl.graph link` ties old laws, chapters and editions together: parliament.lk's official PDFs (1956 on) replace lankalaw's copies (2026-10-10); 99.36% of change edges reach their target (78 left: laws with no file anywhere we can reach); CommonLII is the last resort (32 laws no official source has). Laws are keyed `law:`, Acts `act:`. Current model (2026-10-10): `etl/docs.py`, documents → chunks → links between documents (PIPELINE.md, "Documents, chunks and links"); Neon's transfer quota was hit, so never bulk-read doc or chunk text out of Neon. The Constitution is in (2026-10-11): 1978 text + consolidations, 90% of Article links reach their Article. Next: verify edge precision (judge model + gold set), LightOn on the 119 post-2000 files with scanned pages (1,708 pages), schedules split into items, the vector layer (pgvector) for search + graph walk. See PIPELINE.md.
 
 ## Setup (ada or local)
 
@@ -56,16 +52,14 @@ cp .env.example .env                     # fill DATABASE_URL and R2_*
 .venv/bin/python3 -m etl.fetch acts --limit 20   # pilot: 20 files into R2
 .venv/bin/python3 -m etl.fetch acts              # everything; re-run to resume or retry
 
-# step 2 needs Chandra's vLLM server for scanned pages. `chandra_vllm --gpu l40s` (48 GB, closest
-# to ada's RTX 6000 Ada) runs it through `sudo docker`; without docker, run the same flags via
-# `vllm serve datalab-to/chandra-ocr-2 --served-model-name chandra …` (see chandra/scripts/vllm.py).
-.venv/bin/python3 -m etl.extract --no-chandra --limit 20   # docling-only files, no server needed
-.venv/bin/python3 -m etl.extract --limit 50                # pilot, with the server on :8000
+# step 2 on ada (see below): docling for text layers; scans go to a LightOn vLLM server (etl/ocr_ada.sh)
+.venv/bin/python3 -m etl.extract --no-ocr --limit 20                          # text-layer files only
+.venv/bin/python3 -m etl.extract --limit 50 --ocr-api http://localhost:8013/v1   # scans too
 ```
 
 Fetching and extraction run on **ada**, never locally: no source files on this machine. Use the `/ada-ssh` skill.
 
-- ada: 3× NVIDIA RTX 6000 Ada (49 GB each), **shared with other users**: check `nvidia-smi` and pick the idle card. Project dir `~/sllaw/`. There is no conda env and no sudo. Chandra server: `etl/chandra_server.sh` (GPU/MEM/PORT env vars), port 8011.
+- ada: 3× NVIDIA RTX 6000 Ada (49 GB each), **shared with other users**: check `nvidia-smi` and pick the idle card. Project dir `~/sllaw/`. There is no conda env and no sudo.
 - **`/var/tmp/e19309` survives reboots; `/tmp` does not** (wiped 2026-10-05 and 2026-10-09). Everything lives there: `sllaw_venv` (docling, extract), `lighton_venv` (vllm 0.31, torch, boto3, psycopg2: ocr, graph, fetch), `models/LightOnOCR-3-{0.8B,4B}`, `hf`, `pip_cache`, `cache/`; `~/.cache/{torch,docling,vllm,flashinfer,triton}` link there. `bash ~/sllaw/etl/ada_setup.sh` builds `sllaw_venv` if missing and starts 3 extraction workers.
 - **Run Python on ada from `/var/tmp/e19309/{sllaw,lighton}_venv/bin/python`, not `~/sllaw/.venv`.** The home directory is NFS (`/new-home`, 8 KB reads; under 3 MB/s bulk): loading docling/torch from it took over 25 minutes on 2026-10-05, against 27 seconds from local disk. Extraction workers exit when the queue is empty: start them after a fetch, not before.
 - Store nothing else on ada: jobs stream R2 → memory → R2/Neon. Logs go to `~/sllaw/logs/`.
@@ -99,7 +93,7 @@ the old copy. **The app reads from a new Neon project (decision 2026-10-15)**, f
 never bulk-read from it in ETL. Backups: `python -m etl.backup <table>` -> `backups/<table>_<time>.csv.gz` in R2
 (`documents`, the one table nothing rebuilds: 6,496 rows on 2026-10-10).
 
-Neon Postgres (until 2026-10-10). Tables: `docs`, `chunks`, `links` (migration 003, the current model); `acts`, `sections`, `edges` (002, the earlier section model, kept); `documents`, the file inventory: one row per source file (listing record verbatim in `meta`, `sha256`, `r2_key`). Schema: `etl/migrations/001_documents.sql`.
+Neon Postgres (until 2026-10-10). Tables: `docs`, `chunks`, `links` (migration 003, the current model); `acts` (the list of laws), `edges` (same_as pairs; 002; `sections` there is no longer written, 2026-10-16); `documents`, the file inventory: one row per source file (listing record verbatim in `meta`, `sha256`, `r2_key`). Schema: `etl/migrations/001_documents.sql`.
 
 ```bash
 .venv/bin/python3 etl/migrate.py           # apply pending

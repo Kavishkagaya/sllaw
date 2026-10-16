@@ -25,7 +25,7 @@ from psycopg2.extras import Json, execute_values
 
 from etl import refs
 from etl.fetch import pg_connect
-from etl.structure import SCHED_HEAD, act_key, blocks, commencement, parse_date, sched_name
+from etl.structure import SCHED_HEAD, blocks, sched_name
 
 load_dotenv()
 BUILD = "2026-10-10"
