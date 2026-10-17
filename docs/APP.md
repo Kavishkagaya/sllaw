@@ -36,12 +36,14 @@ lawyer or the AI writes them; proper drafting of plaints and submissions comes l
   one per sub-question); loads the chunks it judges relevant into its context by `chunk_id`; answers citing only
   chunk ids it has loaded, so the UI can check every citation.
 
-**User files:** same vector DB, one namespace per workspace. Access is filtered *inside* the vector query, so top-k
-is never lost to filtering afterwards (Vectorize applies the filter first and takes top-k from the filtered set).
-Each vector carries `scope` = `case:<id>` for files shared in a case or `user:<id>` for a member's private files;
-Postgres resolves which scopes the user can see, the query passes `scope $in [...]` (Vectorize has `$in`, no `$or`;
-the filter JSON is capped at 2 KB, so scope ids are kept short; a user who sees every case in the workspace needs no
-scope filter). Metadata indexes (`scope`, `case_id`, `doc_type`; 10 max) are created before the first insert.
+**User files:** Zilliz, a separate collection from the law chunks, one row per file chunk with `workspace_id`,
+`scope` (`case:<id>` for files shared in a case, `user:<id>` for a member's private files) and `case_id`, `doc_type`.
+Access is filtered *inside* the vector query (Zilliz filter expression, `scope in [...]`), so top-k is never lost to
+filtering afterwards; Postgres resolves which scopes the user can see.
+
+**Search (2026-10-17, eval):** dense (bge-m3) by default; the agent picks `weighted` (small BM25 weight) when it
+searches for a section, Article or law number or an exact phrase; the query is always English (the agent
+translates a Sinhala/Tamil question first) (PIPELINE.md, "Vector layer").
 
 **File ingestion** (async job per uploaded or changed file, keyed by hash): parse to text → one cheap-model read
 returning JSON (doc_type: petition, appeal, affidavit, plaint, judgment, contract…; tags, summary, parties, dates,
@@ -50,6 +52,19 @@ as links into the law graph → file card in the UI, dates into the case timelin
 in v1; an entity graph can be built later from the same per-file JSON.
 
 ## Decisions
+
+- **Build order (2026-10-17):** M1 a law question answered with citations (scaffold #14, gateway #22, research tools
+  #16, viewer #20, plain chat #21); M2 case workspace + main agent (#18, #17); M3 file ingestion (#19); M4 onboarding
+  (#15). Judgments (#7) block release, not building.
+- **Code and hosting:** Next.js in `app/` in this repo (the app depends on the ETL's schema, link kinds, embed text
+  format and Zilliz schema, so they change in one commit); Vercel, Root Directory `app/`, Ignored Build Step for
+  ETL-only commits.
+- **LLM: DeepSeek** via AI Gateway (user, 2026-10-17). The model per task (main agent, research agent, reading
+  files) is one config value each, not code: picked later. Not checked yet: DeepSeek's API terms on training and data
+  location (the privacy line below depends on it).
+- **App tables never reference `docs`/`chunks` by foreign key or by chunk id alone:** `etl.publish` truncates
+  them and a rebuild renumbers chunks. Pinned authorities and saved citations store `doc_key` + `label` + the quote;
+  a chunk id is a cache, looked up again when gone.
 
 - **Auth: Clerk, multi-user workspaces from the start** (Clerk Organizations). Sign-up creates the user's
   workspace; all data is keyed by `workspace_id`, with members and roles in the model. v1 only hides inviting
@@ -70,4 +85,3 @@ in v1; an entity graph can be built later from the same per-file JSON.
 - Pricing (per-lawyer monthly in LKR, free tier, student plan: not set).
 - Reading uploaded scans: text-layer PDFs and .docx first; scans need an OCR API (LightOn runs on ada, not in
   production).
-- Which LLM and model per task (answers vs. reading files).
