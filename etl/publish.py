@@ -16,7 +16,7 @@ from etl.fetch import pg_connect
 
 load_dotenv()
 
-# Schema as migrations 003 + 004, minus docs.document_id's FK: the app database has no `documents` table.
+# Schema as migrations 003 + 004 + 005, minus docs.document_id's FK: the app database has no `documents` table.
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS docs (
     key TEXT PRIMARY KEY, kind TEXT NOT NULL, title TEXT, year INT, certified DATE, commenced DATE,
@@ -24,7 +24,8 @@ CREATE TABLE IF NOT EXISTS docs (
     built_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
 CREATE TABLE IF NOT EXISTS chunks (
     id BIGSERIAL PRIMARY KEY, doc_key TEXT NOT NULL REFERENCES docs(key) ON DELETE CASCADE, seq INT NOT NULL,
-    label TEXT, text TEXT NOT NULL, UNIQUE (doc_key, seq));
+    label TEXT, text TEXT NOT NULL, path TEXT, UNIQUE (doc_key, seq));
+ALTER TABLE chunks ADD COLUMN IF NOT EXISTS path TEXT;
 CREATE INDEX IF NOT EXISTS chunks_label_idx ON chunks (doc_key, label);
 CREATE TABLE IF NOT EXISTS links (
     id BIGSERIAL PRIMARY KEY, src_doc TEXT NOT NULL REFERENCES docs(key) ON DELETE CASCADE,
@@ -37,7 +38,7 @@ CREATE INDEX IF NOT EXISTS links_src_idx ON links (src_doc);
 TABLES = ("docs", "chunks", "links")   # FK order
 COLS = {"docs": "key, kind, title, year, certified, commenced, commencement, document_id, text_from, built_with, "
                 "meta, built_at",
-        "chunks": "id, doc_key, seq, label, text",
+        "chunks": "id, doc_key, seq, label, text, path",
         "links": "id, src_doc, src_chunk, kind, dst_doc, dst_label, dst_chunk, date, context, detail"}
 
 

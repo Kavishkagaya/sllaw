@@ -25,3 +25,4 @@ legacy/ocr_results/
 legacy/pipeline/out/
 legacy/pipeline/chunks_out/
 pilot/
+!etl/eval_questions.json

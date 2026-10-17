@@ -28,12 +28,14 @@ from etl.fetch import pg_connect
 from etl.structure import SCHED_HEAD, blocks, sched_name
 
 load_dotenv()
-BUILD = "2026-10-10"
+BUILD = "2026-10-16"   # 16: contents pages dropped, path (breadcrumb), MAX 3000 -> 1500
 BLOCK = re.compile(r"!\[([\w+-]+)\]\((\d+),(\d+),(\d+),(\d+)\)[ \t]*\n?(.*?)(?=\n!\[[\w+-]+\]\(\d|\Z)", re.S)
 DROP = {"header", "page_number", "footer", "image", "footer_image", "text+", "page_footer", "page_header"}
 OPENER = re.compile(r"^(\d{1,3}[A-Z]{0,4})\s*\.\s+\S")        # "22. (1) The ...", "12A. Where ..."; not "“25A." (quoted)
 HEADING = re.compile(r"^(?:#+\s*)?\**\s*(PART|CHAPTER)\s+([IVXLC]+[A-Z]?|\d+)\b", re.I)
-MAX = 3000                                                    # chars; a longer chunk is cut at paragraph ends
+MAX = 1500                                                    # chars; a longer chunk is cut at paragraph ends
+ROMAN = {"I": 1, "V": 5, "X": 10, "L": 50, "C": 100}
+MID_PART = re.compile(r"\n\s*\**\s*PART\s+[IVXLC]+[A-Z]?\b")       # an upper-case Part heading inside a paragraph
 
 
 def table_text(h):
@@ -113,28 +115,66 @@ def num_key(n):
     return int(m[1]), m[2]
 
 
-def chunks(paras):
-    """Paragraphs -> [(label, text)]: a new chunk at each section opener and each Part/Chapter/Schedule heading;
-    a section's note follows its first line as an italic tail, the form LightOn prints. Over MAX, cut at a
-    paragraph end (the label stays on the first piece).
+def drop_contents(paras):
+    """Paragraphs without the contents page ("Arrangement of sections"): its lines read as section openers
+    ("3. Establishment of the Authority", then "15", its page) and took the labels 1, 2, 3 ... from the body's
+    sections (act:7/2007, act:38/2000: 2026-10-16). Dropped: the paragraphs from the document's first numbered
+    paragraph, a "1.", up to the next "1.", when that one reads as a section (60+ chars or a note), at least 5
+    openers lie between and 80% of them are short lines that don't end like a sentence. A schedule's numbered list
+    passes the last two tests (countries, councils, chemicals: cap:314, act:38/1988, act:1/2008) but never comes
+    first. -> (paragraphs, number dropped)"""
+    ops = [i for i, p in enumerate(paras) if OPENER.match(p["text"].strip())]
+    ones = [i for i in ops if OPENER.match(paras[i]["text"].strip())[1] == "1"]
+    if len(ones) < 2 or ones[0] != ops[0]:
+        return paras, 0
+    a, b = ones[:2]
+    if len(paras[b]["text"].strip()) < 60 and not paras[b]["note"]:
+        return paras, 0
+    lines = [t for p in paras[a:b] if OPENER.match(t := p["text"].strip())]
+    entry = [t for t in lines if len(t) < 150 and not re.sub(r"\s+\d{1,4}$", "", t).rstrip("*").endswith((".", ":", "-", "—"))]
+    if len(lines) >= 5 and len(entry) >= 0.8 * len(lines):
+        return paras[:a] + paras[b:], b - a
+    return paras, 0
+
+
+def roman(s):
+    v = [ROMAN.get(c, 0) for c in s]
+    return sum(-x if i + 1 < len(v) and x < v[i + 1] else x for i, x in enumerate(v))
+
+
+def chunks(paras, word="section", parts=True):
+    """Paragraphs -> [(label, text, path)]: a new chunk at each section opener and each Part/Chapter/Schedule
+    heading; a section's note follows its first line as an italic tail, the form LightOn prints. Over MAX, cut at a
+    paragraph end (the label stays on the first piece). The contents page is dropped first (drop_contents).
     A numbered paragraph opens a section only if it continues the sequence: the next number, a lettered one of
     the same base (12 -> 12A), or a jump of up to 10 with its own note (numbers lost to OCR). After a schedule
     heading, numbered items are the schedule's ("1. Name of applicant"), until the next section number appears
     with a note (1980 chapters print schedules between sections). On 1,528 LightOn laws, openers without this
-    rule went backwards 1,570 times (2026-10-10)."""
+    rule went backwards 1,570 times (2026-10-10).
+    path = breadcrumb, "Part II — Powers of the Council › section 13 — Powers (cont.)"; anything not certain is
+    left out, never guessed (user, 2026-10-16): only the latest Part/Chapter heading, and only while its numbers
+    run in order from I (a break - contents residue, a quoted inserted Part, OCR - ends Parts for the document;
+    so does an upper-case PART inside a paragraph); none in amending Acts (parts=False: they quote other laws'
+    Parts) or schedules; a note over 100 chars is left out; "(cont.)" only on a piece this function cut, and not
+    once the chunk holds a rejected opener (a section may have been missed there)."""
+    paras = drop_contents(paras)[0]
     out, cur, label, last, in_sched = [], [], None, (0, ""), False
+    head, seen, path, bad = None, {}, None, []        # bad[i]: cur[i] is an opener rejected outside a schedule
     def close():
-        piece, n, first = [], 0, True
-        for t in cur:
+        piece, n, first, doubt = [], 0, True, False
+        for t, b in zip(cur, bad):
             if piece and n + len(t) > MAX:
-                out.append((label if first else None, "\n\n".join(piece)))
+                out.append((label if first else None, "\n\n".join(piece),
+                            path if first else None if doubt or not path else path + " (cont.)"))
                 piece, n, first = [], 0, False
-            piece.append(t); n += len(t)
+            piece.append(t); n += len(t); doubt = doubt or b
         if piece:
-            out.append((label if first else None, "\n\n".join(piece)))
+            out.append((label if first else None, "\n\n".join(piece),
+                        path if first else None if doubt or not path else path + " (cont.)"))
     for p in paras:
         t = p["text"].strip()
         m = OPENER.match(t)
+        rejected = False
         if m:
             n = num_key(m[1])
             ok = n > last and (n[0] == last[0] if n[1] else
@@ -142,21 +182,48 @@ def chunks(paras):
             if in_sched and not (ok and p["note"] and not n[1]):
                 ok = False
             if not ok:
-                m = None
+                m, rejected = None, not in_sched
             else:
                 last, in_sched = n, False
         sched = bool(SCHED_HEAD.match(t.lstrip("#* ")) and "SCHEDULE" in t[:80] and len(t) < 120)
-        head = bool(HEADING.match(t)) and not in_sched
-        if m or sched or head:
+        hm = HEADING.match(t)
+        heading = bool(hm) and not in_sched
+        if parts and MID_PART.search(t):
+            parts = head = None
+        if heading and parts:
+            kind, num = hm[1].title(), hm[2].upper()
+            nm = re.fullmatch(r"(\d+)()|([IVXLC]+)([A-Z]?)", num)        # "II", "IIA", "XVIIA", "3" (a C suffix breaks the run)
+            v = (int(nm[1]), "") if nm[1] else (roman(nm[3]), nm[4])
+            prev = seen.get(kind)
+            if (prev is None and v == (1, "")) or (prev and (v == (prev[0] + 1, "") or (v[0] == prev[0] and v[1] > prev[1]))):
+                seen[kind] = v
+                rest = re.sub(r"^[\s\-–—:.]+", "", t[hm.end():].replace("*", ""))
+                title = re.sub(r"\s+", " ", rest.split("\n")[0]).strip()
+                ok_title = title and len(title) <= 100 and not re.search(r"\d", title)
+                head = f"{kind} {num}" + (f" — {title}" if ok_title else "")
+            else:
+                parts = head = None
+        elif head and cur and not label and not m and not sched and len(cur) == 1 and HEADING.match(cur[0]) \
+                and "—" not in head and len(t) <= 100 and not re.search(r"\d|\.$", t):
+            head += f" — {re.sub(r'\s+', ' ', t.replace('*', ''))}"   # the Part's title on the line after it
+        if m or sched or heading:
             # a Part/Chapter heading leads the section after it: no chunk of headings alone
             if not (m and cur and label is None and HEADING.match(cur[0]) and all(len(x) < 150 for x in cur)):
                 close()
-                cur = []
+                cur, bad = [], []
             label = m[1] if m else (sched_name(t) or "Schedule") if sched else None
             in_sched = in_sched or sched
+            if sched:
+                head = None
+            note = (p["note"] or "").strip("* ")
+            whole = (note and len(note) <= 100 and note[0].isupper()          # not a fragment of a wrapped note:
+                     and not re.search(r"\b(?:by|of|to|the|and|or|in|for|under|with|a|an|on|from)$", note.rstrip(" .,;"), re.I))
+            what = (f"{word} {label}" + (f" — {note}" if whole else "")) if m else label
+            path = " › ".join(x for x in ((None if sched else head), what) if x) or None
         cur.append(t + (f" *{p['note']}*" if p["note"] else ""))
+        bad.append(rejected)
     close()
-    return [(l, t) for l, t in out if t.strip()]
+    return [(l, t, pa) for l, t, pa in out if t.strip()]
 
 
 def long_title_of(paras):
@@ -230,7 +297,8 @@ def build_one(row):
         except _w["s3"].exceptions.NoSuchKey:
             lo = None
         paras, src = text_of(raw, lo, le1980=bool(meta.get("cap")), spread=bool(meta.get("spread")))
-        ch = chunks(paras)
+        amending = "AMENDMENT" in (title or "").upper() and not key.startswith("constitution")
+        ch = chunks(paras, "Article" if key.startswith("constitution") else "section", parts=not amending)
         if not ch:
             return "skip", f"skip {key}: no text"
         year = int(m[1]) if (m := re.search(r"/(\d{4})$", key)) else None
@@ -242,10 +310,10 @@ def build_one(row):
                            text_from, built_with, meta) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
                         (key, KIND.get(key.split(":")[0], "other"), title, year, certified, commenced, Json(comm),
                          doc_id, src, BUILD, Json({"long_title": lt, "chunks": len(ch)})))
-            ids = execute_values(cur, "INSERT INTO chunks (doc_key, seq, label, text) VALUES %s RETURNING id",
-                                 [(key, i, l, t) for i, (l, t) in enumerate(ch)], page_size=1000, fetch=True)
+            ids = execute_values(cur, "INSERT INTO chunks (doc_key, seq, label, text, path) VALUES %s RETURNING id",
+                                 [(key, i, l, t, pa) for i, (l, t, pa) in enumerate(ch)], page_size=1000, fetch=True)
             ids = [r[0] for r in ids]
-            write_links(cur, key, lt, commenced, [t for _, t in ch], ids)
+            write_links(cur, key, lt, commenced, [t for _, t, _ in ch], ids)
         return "ok", ""
     except Exception as e:
         try:
@@ -423,9 +491,9 @@ def keys(fix=False):
 def show(key):
     conn = pg_connect()
     cur = conn.cursor()
-    cur.execute("SELECT seq, label, text FROM chunks WHERE doc_key = %s ORDER BY seq", (key,))
-    for seq, label, text in cur.fetchall():
-        print(f"--- [{seq}] {label or ''}\n{text[:400]}")
+    cur.execute("SELECT seq, label, path, text FROM chunks WHERE doc_key = %s ORDER BY seq", (key,))
+    for seq, label, path, text in cur.fetchall():
+        print(f"--- [{seq}] {label or ''}  {path or ''}\n{text[:400]}")
     conn.close()
 
 
