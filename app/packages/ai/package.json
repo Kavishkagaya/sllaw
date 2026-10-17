@@ -10,7 +10,6 @@
   },
   "dependencies": {
     "@ai-sdk/deepseek": "^3.0.67",
-    "@sllaw/services": "workspace:*",
     "ai": "^7.0.143"
   },
   "devDependencies": {

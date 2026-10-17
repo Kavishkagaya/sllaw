@@ -58,9 +58,9 @@ in v1; an entity graph can be built later from the same per-file JSON.
   (#15). Judgments (#7) block release, not building.
 - **Code and hosting:** a Turborepo + pnpm monorepo inside `app/` (the ETL stays at the root; user, 2026-10-17). In
   one repo because the app depends on the ETL's schema, link kinds, embed text format and Zilliz schema.
-  `apps/web` Next.js → `packages/api` tRPC (thin) → `packages/ai` models + agents → `packages/services` logic →
-  `packages/db` (the app's database) and `packages/etl_db` (the corpus the ETL publishes, a separate database,
-  read-only, with Zilliz). Boundaries in `app/CLAUDE.md`. Vercel: Root Directory `app/apps/web`, Ignored Build
+  `apps/web` Next.js → `packages/api` tRPC (thin) → `packages/services` logic → `packages/ai` (models,
+  embeddings, agents; tools' implementations passed in by services), `packages/db` (the app's database) and
+  `packages/etl_db` (the corpus the ETL publishes, a separate database, read-only, with Zilliz). Boundaries in `app/CLAUDE.md`. Vercel: Root Directory `app/apps/web`, Ignored Build
   Step for commits outside `app/`.
 - **LLM: DeepSeek** via AI Gateway (user, 2026-10-17). The model per task (main agent, research agent, reading
   files) is one config value each, not code: picked later. Not checked yet: DeepSeek's API terms on training and data
