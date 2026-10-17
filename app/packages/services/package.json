@@ -9,7 +9,7 @@
     "typecheck": "tsc"
   },
   "dependencies": {
-    "@sllaw/db": "workspace:*"
+    "@sllaw/db": "workspace:*", "@sllaw/etl_db": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^26.6.5",

@@ -1,4 +1,4 @@
-// The app's own tables (drizzle-kit migrations). Every row is keyed by workspace_id. Ids are Clerk's (org_..., user_...).
+// The app tables (drizzle-kit migrations). Every row is keyed by workspace_id. Ids are Clerk's (org_..., user_...).
 import { pgTable, primaryKey, text, timestamp, uuid } from "drizzle-orm/pg-core";
 
 export const workspaces = pgTable("workspaces", {

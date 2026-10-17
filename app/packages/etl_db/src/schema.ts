@@ -1,5 +1,5 @@
-// The law corpus, written by etl.publish (etl/publish.py) and read-only here. Not in drizzle-kit's schema: publish
-// truncates these tables and a rebuild renumbers chunk ids, so app tables never reference them by foreign key.
+// The law corpus, written by etl.publish (etl/publish.py) and read-only here; no migrations. publish truncates these
+// tables and a rebuild renumbers chunk ids, so the app database never stores a chunk id as a lasting reference.
 import { bigint, date, integer, jsonb, pgTable, text } from "drizzle-orm/pg-core";
 
 export const docs = pgTable("docs", {

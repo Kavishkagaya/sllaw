@@ -1,0 +1,19 @@
+{
+  "name": "@sllaw/etl_db",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc"
+  },
+  "dependencies": {
+    "@neondatabase/serverless": "^1.2.0",
+    "drizzle-orm": "^0.45.4"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "typescript": "^7.0.2"
+  }
+}

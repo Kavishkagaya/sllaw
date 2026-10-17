@@ -1,9 +1,9 @@
 import { defineConfig } from "drizzle-kit";
 
-// Only the app's tables: docs/chunks/links (src/corpus.ts) belong to etl.publish, which truncates them each run.
+// The app database only; the corpus (etl_db) has no migrations here.
 export default defineConfig({
   dialect: "postgresql",
-  schema: "./src/app.ts",
+  schema: "./src/schema.ts",
   out: "./migrations",
   dbCredentials: { url: process.env.DATABASE_URL! },
 });

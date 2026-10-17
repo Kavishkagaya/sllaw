@@ -106,11 +106,30 @@ importers:
         specifier: ^7.0.2
         version: 7.0.2
 
+  packages/etl_db:
+    dependencies:
+      '@neondatabase/serverless':
+        specifier: ^1.2.0
+        version: 1.2.0
+      drizzle-orm:
+        specifier: ^0.45.4
+        version: 0.45.4(@neondatabase/serverless@1.2.0)
+    devDependencies:
+      '@types/node':
+        specifier: ^26.6.5
+        version: 26.6.5
+      typescript:
+        specifier: ^7.0.2
+        version: 7.0.2
+
   packages/services:
     dependencies:
       '@sllaw/db':
         specifier: workspace:*
         version: link:../db
+      '@sllaw/etl_db':
+        specifier: workspace:*
+        version: link:../etl_db
     devDependencies:
       '@types/node':
         specifier: ^26.6.5
