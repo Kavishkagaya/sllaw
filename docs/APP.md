@@ -56,9 +56,12 @@ in v1; an entity graph can be built later from the same per-file JSON.
 - **Build order (2026-10-17):** M1 a law question answered with citations (scaffold #14, gateway #22, research tools
   #16, viewer #20, plain chat #21); M2 case workspace + main agent (#18, #17); M3 file ingestion (#19); M4 onboarding
   (#15). Judgments (#7) block release, not building.
-- **Code and hosting:** Next.js in `app/` in this repo (the app depends on the ETL's schema, link kinds, embed text
-  format and Zilliz schema, so they change in one commit); Vercel, Root Directory `app/`, Ignored Build Step for
-  ETL-only commits.
+- **Code and hosting:** a Turborepo + pnpm monorepo inside `app/` (the ETL stays at the root; user, 2026-10-17). In
+  one repo because the app depends on the ETL's schema, link kinds, embed text format and Zilliz schema.
+  `apps/web` Next.js; `packages/api` tRPC routers → `packages/ai` agents + model config → `packages/services` the
+  functions both call → `packages/db` drizzle. Imports only go that way. Packages export TS source (no build step).
+  drizzle-kit migrates only `db/src/app.ts`; `db/src/corpus.ts` types the ETL's tables, never migrated. Vercel:
+  Root Directory `app/apps/web`, Ignored Build Step for commits outside `app/`.
 - **LLM: DeepSeek** via AI Gateway (user, 2026-10-17). The model per task (main agent, research agent, reading
   files) is one config value each, not code: picked later. Not checked yet: DeepSeek's API terms on training and data
   location (the privacy line below depends on it).

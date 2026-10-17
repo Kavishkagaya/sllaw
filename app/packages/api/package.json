@@ -1,0 +1,22 @@
+{
+  "name": "@sllaw/api",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc"
+  },
+  "dependencies": {
+    "@sllaw/ai": "workspace:*",
+    "@sllaw/services": "workspace:*",
+    "@trpc/server": "^11.19.0",
+    "superjson": "^2.2.6",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "typescript": "^7.0.2"
+  }
+}
