@@ -156,3 +156,16 @@ assert section_table([["Repeal of Article 155G of the Constitution.", "48. Artic
 assert not section_table([["Column I", "Column II"], ["ENACTMENTS", "AMENDMENTS"], ["6. The Rubber Control Act", "1. For section 16, substitute"]])
 assert not section_table([["Sum invested", "Period in years"], ["30", "5"]])
 print("ok section tables")
+from etl.docs import chunks
+P = lambda t, note=None: {"text": t, "note": note}
+ch = chunks([P("Price : Rs. 36.00"), P("AN ACT TO PROVIDE FOR SPORTS."),
+             P("1. This Act may be cited as the Sports Act.", "Short title."),
+             P("2. (1) The Director shall inform the Council of such fact and the", "Effect of registering."),
+             P("Council shall thereupon issue a directive."), P("3. No person shall bet.", "Offence.")])
+assert "Price" not in ch[0][1] and "AN ACT" in ch[0][1], ch[0]
+assert ch[2] == ("2", "2. (1) The Director shall inform the Council of such fact and the\n\nCouncil shall thereupon issue a "
+                 "directive. *Effect of registering.*", "section 2 — Effect of registering."), ch[2]
+# a law with no notes: an OCR gap in the numbering (3 lost) doesn't stop the sections after it
+ch = chunks([P(f"{n}. Section {n} of the Customs Ordinance says this much and no more.") for n in (1, 2, 4, 5)])
+assert [c[0] for c in ch] == ["1", "2", "4", "5"], ch
+print("ok chunks: notes, cover, gaps")

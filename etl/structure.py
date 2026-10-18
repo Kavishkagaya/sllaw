@@ -491,6 +491,11 @@ PARA_START = re.compile(r'^(\d{1,3}[A-Z]{0,2}\s*\.\s|\((?:[a-z]{1,2}|[ivxl]+|\d{
                         rf'(?:(?:{ORD})\s+)?SCHEDULE\b)')
 
 
+CROSS = 0.15   # words that may cross a note/body boundary, per line: at 0.1 cap:105 lost the notes of 91 of 211 pages
+               # (p48: 6 words crossed for 56 lines, OCR runs a body word into its note), issue #23
+LIST_NO = re.compile(r"\(\w{1,4}\)[.,]?|\d+[A-Z]?\s*[.,]?")   # "(13)", "(b)", "5."
+
+
 def le1980_blocks(raw):
     """1980 Revised Edition chapters (lankalaw.net le1980): OCR text re-typeset as text-only PDF, two
     body columns a page, each with its marginal notes on its outer side (left column: notes far left;
@@ -541,7 +546,12 @@ def le1980_blocks(raw):
                    range(int(hi - 0.45 * (hi - lo)), int(hi) - 15)
             outer = (lambda x: [w for w in col if w[2] < x]) if side == "left" else (lambda x: [w for w in col if w[0] > x])
             best = min(span, key=lambda x: (sum(w[0] < x < w[2] for w in col), -len(outer(x))), default=None)
-            if best is None or len(outer(best)) < 3 or sum(w[0] < best < w[2] for w in col) > 0.1 * len(_lines(col)):
+            if best is None or len(outer(best)) < 3 or sum(w[0] < best < w[2] for w in col) > CROSS * len(_lines(col)):
+                return None
+            # past the old limit (0.1), a cut through a list's numbers ("(13)", "5.", "(b)": cap:421, cap:456,
+            # cap:215) is not the margin; under it nothing changed (swept 2026-10-18)
+            nums = sum(bool(LIST_NO.fullmatch(w[4].strip())) for w in outer(best))
+            if sum(w[0] < best < w[2] for w in col) > 0.1 * len(_lines(col)) and nums > 0.3 * len(outer(best)):
                 return None
             return best
         sl, sr = split(left, "left"), split(right, "right")

@@ -28,11 +28,16 @@ from etl.fetch import pg_connect
 from etl.structure import SCHED_HEAD, blocks, sched_name
 
 load_dotenv()
-BUILD = "2026-10-16"   # 16: contents pages dropped, path (breadcrumb), MAX 3000 -> 1500
+BUILD = "2026-10-18"   # 18: notes at the end of a chunk's first piece, cover furniture, titled contents pages, issue #23
+                       # 16: contents pages dropped, path (breadcrumb), MAX 3000 -> 1500
 BLOCK = re.compile(r"!\[([\w+-]+)\]\((\d+),(\d+),(\d+),(\d+)\)[ \t]*\n?(.*?)(?=\n!\[[\w+-]+\]\(\d|\Z)", re.S)
 DROP = {"header", "page_number", "footer", "image", "footer_image", "text+", "page_footer", "page_header"}
 OPENER = re.compile(r"^(\d{1,3}[A-Z]{0,4})\s*\.\s+\S")        # "22. (1) The ...", "12A. Where ..."; not "“25A." (quoted)
 HEADING = re.compile(r"^(?:#+\s*)?\**\s*(PART|CHAPTER)\s+([IVXLC]+[A-Z]?|\d+)\b", re.I)
+# the cover's printing lines, not law (act:24/2019 chunk 0 was cited, issue #23); only before the first section
+FURNITURE = re.compile(r"^(?:logo\b|QR code$|Printed (?:on the Orders? of Government|at the)|Published as a Supplement|"
+                       r"TO BE PURCHASED|(?:Price|Postage)\s*:|This Act can be downloaded|L\.\s*D\.\s*[—–-]\s*O\.|"
+                       r"\d+(?:st|nd|rd|th) Session\b)", re.I)
 MAX = 1500                                                    # chars; a longer chunk is cut at paragraph ends
 ROMAN = {"I": 1, "V": 5, "X": 10, "L": 50, "C": 100}
 MID_PART = re.compile(r"\n\s*\**\s*PART\s+[IVXLC]+[A-Z]?\b")       # an upper-case Part heading inside a paragraph
@@ -128,11 +133,17 @@ def drop_contents(paras):
     if len(ones) < 2 or ones[0] != ops[0]:
         return paras, 0
     a, b = ones[:2]
-    if len(paras[b]["text"].strip()) < 60 and not paras[b]["note"]:
+    # a section: 60+ chars, a note, or (1980 chapters printed without a margin: cap:235, cap:492) its note as the
+    # opener line, "1. Short title.", with the text in the paragraph after it
+    after = paras[b + 1]["text"].strip() if b + 1 < len(paras) else ""
+    text_after = not OPENER.match(after) and (len(after) >= 60 or (len(after) >= 30 and after.endswith(".")))
+    if len(paras[b]["text"].strip()) < 60 and not paras[b]["note"] and not text_after:
         return paras, 0
     lines = [t for p in paras[a:b] if OPENER.match(t := p["text"].strip())]
     entry = [t for t in lines if len(t) < 150 and not re.sub(r"\s+\d{1,4}$", "", t).rstrip("*").endswith((".", ":", "-", "—"))]
-    if len(lines) >= 5 and len(entry) >= 0.8 * len(lines):
+    # headed "Arrangement of Sections": its entries may end in a full stop ("1. Short title.", cap:235)
+    titled = any(re.search(r"arrangement\s+of\s+sections|^contents$", p["text"].strip(), re.I) for p in paras[max(0, a - 3):a])
+    if len(lines) >= 5 and (titled or len(entry) >= 0.8 * len(lines)):
         return paras[:a] + paras[b:], b - a
     return paras, 0
 
@@ -145,7 +156,10 @@ def roman(s):
 def chunks(paras, word="section", parts=True):
     """Paragraphs -> [(label, text, path)]: a new chunk at each section opener and each Part/Chapter/Schedule
     heading; a section's note follows its first line as an italic tail, the form LightOn prints. Over MAX, cut at a
-    paragraph end (the label stays on the first piece). The contents page is dropped first (drop_contents).
+    paragraph end (the label stays on the first piece). The contents page is dropped first (drop_contents), and
+    the cover's printing lines (FURNITURE). A chunk's notes go at the end of its first piece, not after the block
+    they were level with: LightOn splits a sentence into blocks, so that put a note mid-sentence (act:21/2006 s4,
+    issue #23); a piece ends at a paragraph end, and refs.py still reads the note-form links in the same chunk.
     A numbered paragraph opens a section only if it continues the sequence: the next number, a lettered one of
     the same base (12 -> 12A), or a jump of up to 10 with its own note (numbers lost to OCR). After a schedule
     heading, numbered items are the schedule's ("1. Name of applicant"), until the next section number appears
@@ -158,10 +172,16 @@ def chunks(paras, word="section", parts=True):
     Parts) or schedules; a note over 100 chars is left out; "(cont.)" only on a piece this function cut, and not
     once the chunk holds a rejected opener (a section may have been missed there)."""
     paras = drop_contents(paras)[0]
-    out, cur, label, last, in_sched = [], [], None, (0, ""), False
+    first = next((i for i, p in enumerate(paras) if OPENER.match(p["text"].strip())), len(paras))
+    paras = [p for i, p in enumerate(paras) if i >= first or not FURNITURE.match(p["text"].strip())]
+    out, cur, label, last, in_sched, notes = [], [], None, (0, ""), False, []
+    # a law printed without a margin (notes on under 10% of its numbered paragraphs) has no notes to vouch for a
+    # jump (cap:235 lost s34 to OCR, and every later section with it): there any jump of up to 10 opens a section
+    numbered = [p for p in paras if OPENER.match(p["text"].strip())]
+    noteless = sum(bool(p["note"]) for p in numbered) < 0.1 * len(numbered)
     head, seen, path, bad = None, {}, None, []        # bad[i]: cur[i] is an opener rejected outside a schedule
     def close():
-        piece, n, first, doubt = [], 0, True, False
+        piece, n, first, doubt, at = [], 0, True, False, len(out)
         for t, b in zip(cur, bad):
             if piece and n + len(t) > MAX:
                 out.append((label if first else None, "\n\n".join(piece),
@@ -171,6 +191,9 @@ def chunks(paras, word="section", parts=True):
         if piece:
             out.append((label if first else None, "\n\n".join(piece),
                         path if first else None if doubt or not path else path + " (cont.)"))
+        if notes and len(out) > at:
+            l, t, pa = out[at]
+            out[at] = (l, t + " " + " ".join(f"*{x}*" for x in notes), pa)
     for p in paras:
         t = p["text"].strip()
         m = OPENER.match(t)
@@ -178,7 +201,7 @@ def chunks(paras, word="section", parts=True):
         if m:
             n = num_key(m[1])
             ok = n > last and (n[0] == last[0] if n[1] else
-                               n[0] == last[0] + 1 or (bool(p["note"]) and n[0] <= last[0] + 10))
+                               n[0] == last[0] + 1 or ((bool(p["note"]) or noteless) and n[0] <= last[0] + 10))
             if in_sched and not (ok and p["note"] and not n[1]):
                 ok = False
             if not ok:
@@ -210,7 +233,7 @@ def chunks(paras, word="section", parts=True):
             # a Part/Chapter heading leads the section after it: no chunk of headings alone
             if not (m and cur and label is None and HEADING.match(cur[0]) and all(len(x) < 150 for x in cur)):
                 close()
-                cur, bad = [], []
+                cur, bad, notes = [], [], []
             label = m[1] if m else (sched_name(t) or "Schedule") if sched else None
             in_sched = in_sched or sched
             if sched:
@@ -220,7 +243,9 @@ def chunks(paras, word="section", parts=True):
                      and not re.search(r"\b(?:by|of|to|the|and|or|in|for|under|with|a|an|on|from)$", note.rstrip(" .,;"), re.I))
             what = (f"{word} {label}" + (f" — {note}" if whole else "")) if m else label
             path = " › ".join(x for x in ((None if sched else head), what) if x) or None
-        cur.append(t + (f" *{p['note']}*" if p["note"] else ""))
+        cur.append(t)
+        if p["note"]:
+            notes.append(p["note"])
         bad.append(rejected)
     close()
     return [(l, t, pa) for l, t, pa in out if t.strip()]
