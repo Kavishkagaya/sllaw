@@ -33,7 +33,11 @@ lawyer or the AI writes them; proper drafting of plaints and submissions comes l
   `links(chunk, direction, kinds)`, `as_of(section, date)` (the graph walk, code, no LLM). Returns an evidence pack,
   not prose: `{evidence: [{chunk_id, why}], gaps}`. It narrows the search; quoting and citing are the main agent's
   (user, 2026-10-18; quote and version dropped). `submit` rejects a chunk the agent never read or asOf'd in the run.
-- *Main agent* (stronger model): case summary and file list always in context; runs research agents (in parallel,
+- **Changed 2026-10-18 (user, after eval-chat; PIPELINE.md):** one main agent with the research tools (search with
+  each hit's change status, read, links grouped by law, asOf with every amendment's text) and no research
+  sub-agents: 20/20 gold cited at $0.014 a question; the sub-agents repeated each other's work on one law and ran out
+  of steps (3-5x the cost). Sub-agents may come back for case questions spanning several laws.
+- *Main agent* (stronger model, as first planned): case summary and file list always in context; runs research agents (in parallel,
   one per sub-question); loads the chunks it judges relevant into its context by `chunk_id`; answers citing only
   chunk ids it has loaded, so the UI can check every citation.
 
@@ -79,6 +83,13 @@ in v1; an entity graph can be built later from the same per-file JSON.
   chat); a case chat is a normal chat whose `ctx` also has that case's access. Every query filters by user, so
   another user's chat id reads as missing. The document viewer is a sidebar on the chat page: every citation in
   the chat is listed; clicking one loads that chunk (path, amended by / cited by) with "open full document".
+  Citations are inline (user, 2026-10-18): the main agent writes `[[chunkId|label]]` (label as a lawyer writes it:
+  "s. 22, Rent Act No. 7 of 1972"); the UI renders the answer with Streamdown and each citation as a button with
+  that label; a click fetches the chunk by id (`corpus.chunk`: text, changes split at the date, its law) into the
+  sidebar, with "open full document" and the source file (`docs.source_url`, the `documents.source_url` of the
+  law's file, carried by `etl.publish` from 2026-10-18; null until the next publish). A citation of an id the agent
+  never loaded in the chat is marked unverified. The client sends only the new message; history is read from the
+  database, so tool outputs cannot be forged.
 - **Files (user, 2026-10-18):** one `files` table is the base of an asset system: one row per file, with its
   extracted content (text, and the ingestion card: doc_type, summary, parties, dates, laws cited). Other tables
   say what a file is used for by referencing `files.id` (a case's files, a message's attachments). A case's

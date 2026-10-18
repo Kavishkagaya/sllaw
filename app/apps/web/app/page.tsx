@@ -1,24 +1,39 @@
-import { OrganizationSwitcher, Show, SignInButton, UserButton } from "@clerk/nextjs";
-import { createCaller, createContext } from "@sllaw/api";
-import { headers } from "next/headers";
+import { Show, SignInButton, OrganizationSwitcher, UserButton } from "@clerk/nextjs";
+import { randomUUID } from "node:crypto";
+import Link from "next/link";
+import { serverApi } from "../trpc/server";
 
-// ponytail: account check only (Clerk → webhook → our ids); replaced by the chat page.
-export default async function Home() {
+export default function Home() {
   return (
-    <main>
+    <main className="home">
       <Show when="signed-out">
+        <h1>sllaw</h1>
+        <p>Sri Lankan law, answered with citations.</p>
         <SignInButton />
       </Show>
       <Show when="signed-in">
-        <UserButton /> <OrganizationSwitcher />
-        <Me />
+        <header className="bar">
+          <OrganizationSwitcher hidePersonal />
+          <UserButton />
+        </header>
+        <Chats />
       </Show>
     </main>
   );
 }
 
-async function Me() {
-  const me = await createCaller(await createContext({ headers: await headers() })).user.me().catch((e: Error) => e);
-  if (me instanceof Error) return <p>{me.message}</p>;
-  return <pre>{JSON.stringify(me, null, 2)}</pre>;
+async function Chats() {
+  const chats = await (await serverApi()).chat.list().catch((e: Error) => e);
+  if (chats instanceof Error) return <p className="error">{chats.message}</p>;
+  return (
+    <>
+      {/* the client mints a chat's id; the row exists from its first message */}
+      <Link className="new" href={`/chat/${randomUUID()}`}>New chat</Link>
+      <ul className="chats">
+        {chats.map((c) => (
+          <li key={c.id}><Link href={`/chat/${c.id}`}>{c.title}</Link></li>
+        ))}
+      </ul>
+    </>
+  );
 }

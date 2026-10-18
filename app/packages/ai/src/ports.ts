@@ -17,14 +17,20 @@ export type Link = {
   context: string | null;
 };
 export type Direction = "out" | "in";
-/** A chunk as enacted plus the changes to it, split at ctx.asOfDate (text as of a date is not built yet). */
-export type AsOf = { chunk: Chunk; date: string; inForce: Link[]; later: Link[]; undated: Link[] };
+/** One change to a section: the amending law and section, and that section's text (the operative clause, cut). */
+export type Change = { date: string | null; kind: string; by: string; byTitle: string | null; byLabel: string | null; byChunk: number | null; clause: string };
+/** A section as enacted and the changes made to it up to ctx.asOfDate (undated ones included), oldest first; later
+ *  changes only named. The text as amended is not built: the agent reads it from the clauses. */
+export type AsOf = { chunk: Chunk; date: string; changes: Change[]; later: { date: string; kind: string; by: string }[] };
+/** How much a section was changed, for a search hit: amending sections, last change, date of a repeal. */
+export type Status = { changes: number; last: string | null; repealed: string | null };
 
 export interface Ports {
   search(query: string, opts: { mode?: Mode; filters?: Filters; limit?: number }): Promise<Hit[]>;
   read(chunkIds: number[]): Promise<Chunk[]>;
   links(target: { docKey: string; chunkId?: number | null }, direction: Direction, opts?: { kinds?: string[]; text?: string }): Promise<Link[]>;
   asOf(chunkId: number): Promise<AsOf | null>;
+  status(chunkIds: number[]): Promise<Record<number, Status>>;
 }
 
 export type Ctx = {

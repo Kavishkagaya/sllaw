@@ -1,6 +1,6 @@
 // The app tables (drizzle-kit migrations). Every row is keyed by our own ids (uuid); Clerk ids (user_..., org_...)
 // live only in users.clerk_id and workspaces.clerk_id, filled by the Clerk webhook (services/accounts.ts).
-import { pgTable, primaryKey, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { index, jsonb, pgTable, primaryKey, text, timestamp, uuid } from "drizzle-orm/pg-core";
 
 const createdAt = timestamp("created_at", { withTimezone: true }).notNull().defaultNow();
 
@@ -40,3 +40,31 @@ export const cases = pgTable("cases", {
   createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }), // null once the user is deleted
   createdAt,
 });
+
+// A chat is its creator's (docs/APP.md, Chats): the client mints the id, the first message creates the row.
+export const chats = pgTable(
+  "chats",
+  {
+    id: uuid().primaryKey(),
+    workspaceId: uuid("workspace_id").notNull().references(() => workspaces.id, { onDelete: "cascade" }),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    caseId: uuid("case_id").references(() => cases.id, { onDelete: "cascade" }), // null: plain chat
+    title: text().notNull(),
+    createdAt,
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index().on(t.userId, t.workspaceId, t.updatedAt)],
+);
+
+// One row per UI message (AI SDK UIMessage): parts as they streamed, tool calls and outputs included.
+export const messages = pgTable(
+  "messages",
+  {
+    id: text().primaryKey(),
+    chatId: uuid("chat_id").notNull().references(() => chats.id, { onDelete: "cascade" }),
+    role: text().notNull(), // user | assistant
+    parts: jsonb().notNull(),
+    createdAt,
+  },
+  (t) => [index().on(t.chatId, t.createdAt)],
+);

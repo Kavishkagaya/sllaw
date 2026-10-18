@@ -9,12 +9,19 @@
     "typecheck": "tsc"
   },
   "dependencies": {
+    "@ai-sdk/react": "^4.0.147",
     "@clerk/nextjs": "^7.9.17",
     "@sllaw/api": "workspace:*",
+    "@tanstack/react-query": "^5.104.4",
+    "@trpc/client": "11.19.0",
     "@trpc/server": "^11.19.0",
+    "@trpc/tanstack-react-query": "11.19.0",
+    "ai": "7.0.143",
     "next": "^16.4.2",
     "react": "^19.3.1",
-    "react-dom": "^19.3.1"
+    "react-dom": "^19.3.1",
+    "streamdown": "^2.7.0",
+    "superjson": "^2.2.6"
   },
   "devDependencies": {
     "@types/node": "^26.6.5",

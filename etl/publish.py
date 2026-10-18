@@ -16,7 +16,8 @@ from etl.fetch import pg_connect
 
 load_dotenv()
 
-# Schema as migrations 003 + 004 + 005, minus docs.document_id's FK: the app database has no `documents` table.
+# Schema as migrations 003 + 004 + 005, minus docs.document_id's FK: the app database has no `documents` table, so
+# docs carries its file's source_url (the official page or PDF the app links to as the source).
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS docs (
     key TEXT PRIMARY KEY, kind TEXT NOT NULL, title TEXT, year INT, certified DATE, commenced DATE,
@@ -26,6 +27,7 @@ CREATE TABLE IF NOT EXISTS chunks (
     id BIGSERIAL PRIMARY KEY, doc_key TEXT NOT NULL REFERENCES docs(key) ON DELETE CASCADE, seq INT NOT NULL,
     label TEXT, text TEXT NOT NULL, path TEXT, UNIQUE (doc_key, seq));
 ALTER TABLE chunks ADD COLUMN IF NOT EXISTS path TEXT;
+ALTER TABLE docs ADD COLUMN IF NOT EXISTS source_url TEXT;
 CREATE INDEX IF NOT EXISTS chunks_label_idx ON chunks (doc_key, label);
 CREATE TABLE IF NOT EXISTS links (
     id BIGSERIAL PRIMARY KEY, src_doc TEXT NOT NULL REFERENCES docs(key) ON DELETE CASCADE,
@@ -41,6 +43,10 @@ COLS = {"docs": "key, kind, title, year, certified, commenced, commencement, doc
         "chunks": "id, doc_key, seq, label, text, path",
         "links": "id, src_doc, src_chunk, kind, dst_doc, dst_label, dst_chunk, date, context, detail"}
 
+SELECT = {t: f"SELECT {c} FROM {t}" for t, c in COLS.items()}
+SELECT["docs"] = ("SELECT " + ", ".join(f"docs.{c.strip()}" for c in COLS["docs"].split(",")) +
+                  ", x.source_url FROM docs LEFT JOIN documents x ON x.id = docs.document_id")
+
 
 def main():
     src = psycopg2.connect(os.environ["DB_LOCAL_URL"])
@@ -51,9 +57,9 @@ def main():
         for t in TABLES:
             # ponytail: whole table in memory (~85 MB for chunks); stream through a pipe if it outgrows ada's RAM
             buf = io.BytesIO()
-            s.copy_expert(f"COPY {t} ({COLS[t]}) TO STDOUT", buf)
+            s.copy_expert(f"COPY ({SELECT[t]}) TO STDOUT", buf)
             buf.seek(0)
-            d.copy_expert(f"COPY {t} ({COLS[t]}) FROM STDIN", buf)
+            d.copy_expert(f"COPY {t} ({COLS[t]}{', source_url' if t == 'docs' else ''}) FROM STDIN", buf)
             s.execute(f"SELECT count(*) FROM {t}")
             d.execute(f"SELECT count(*) FROM {t}")
             n_src, n_dst = s.fetchone()[0], d.fetchone()[0]

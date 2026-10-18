@@ -1,4 +1,4 @@
-export * from "./agents/research";
+export * from "./agents/main";
 export * from "./models";
 export * from "./ports";
-export { researchTools } from "./tools/research";
+export { lawTools } from "./tools/law";

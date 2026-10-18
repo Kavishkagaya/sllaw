@@ -11,6 +11,7 @@ export const docs = pgTable("docs", {
   commenced: date(),
   commencement: jsonb(),
   meta: jsonb().notNull(),
+  sourceUrl: text("source_url"), // the official page or PDF the text was built from (etl.publish)
 });
 
 export const chunks = pgTable("chunks", {
