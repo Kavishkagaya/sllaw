@@ -1,0 +1,16 @@
+{
+  "name": "@sllaw/search",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc",
+    "eval": "tsx --env-file=../../apps/web/.env.local scripts/eval.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "typescript": "^7.0.2"
+  }
+}

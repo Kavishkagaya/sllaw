@@ -188,6 +188,26 @@ Not covered yet: 2000–2008 (384×552 booklet format, extraction still running 
   | weighted 0.7 dense / 0.3 BM25 (BM25 skipped for Sinhala/Tamil script) | 63 / 80 / 87 | = dense | = dense |
 
   **Decision: dense-only by default.** BM25 adds nothing on paraphrased questions and dilutes dense in fusion; the English analyzer reads no Sinhala or Tamil, so RRF fuses noise for them. Weights are per request (`"rerank": {"strategy": "weighted", "params": {"weights": [w_dense, w_bm25]}}`, checked live), so the agent can ask for weighted hybrid when a query carries exact strings (section or Act numbers, defined terms), which this set does not test. Cross-language: searching the English version scores 93% @5 against 60-73% in the original script, so the agent searches Sinhala/Tamil questions in English too and merges. Misses are often a sensible other answer (the same Act's s16 "Determination of compensation" for s12; Microfinance Act 6/2016 s8 register for 9/2026 s68): one gold per question understates recall. 30 questions = ~3 points each.
+- **Gold set checked against the law in force (2026-10-18, by hand with the research tools, `pnpm --filter
+  @sllaw/services tool`):** the 30 golds were sampled for retrieval, not for being current law. **7 are dead law:**
+  #2 Electricity 20/2009 s43 (Act repealed by 36/2024 s51 from the appointed date; s43 itself replaced 2013,
+  amended 2022), #3 NSB 30/1971 s69 (ss52-74 repealed by 28/1995 s34), #5 Estates (Control of Transfer) 2/1972
+  (repealed by 19/1982), #12 Penal Code s482 (Chapter XIX, defamation, repealed by 12/2002 s3), #15 Trade Marks
+  cap1956:150 s65 (Chapter 150 repealed by 52/1979 s190; now IP Act 36/2003 s185, chunk 129002), #24 Exchange
+  Control cap1956:423 s15 (repealed by Foreign Exchange Act 12/2017 s30), #9 Partition Act cap1956:69 s23
+  (replaced by the Partition Law No. 21 of 1977, **not found in the corpus** by dense or keyword search: only its amendments 5/1981 and
+  17/1997 are). **3 doubtful:** #25 Capital Levy 51/1971 and #28 Compulsory Savings 6/1971 (1970s one-off measures,
+  no repeal found in the corpus), #1 Non-Episcopalian Churches cap1956:331 (no 1980-edition text found). The other
+  20 are current, though 9 golds point at the 1956 edition where the 1980 text (cap:N) is the one in force; the hit
+  rule counts both by title. For an agent eval the gold must be the law as of the eval date.
+- **Research agent on the 20 current questions (2026-10-18, deepseek via AI Gateway, `eval-agent`, traces in
+  `logs/eval-agent-2026-10-18/`, issue #23):** 20/20 hit (gold section or its other edition in the pack); 7.8 steps,
+  90k input tokens (69k cached), 4.8k output on average; #13 and #20 used all 15 steps. Only 37 of 80 quotes are
+  verbatim, 65 once `*marginal notes*` and "..." are allowed; 3 packs cite chunks seen only as search snippets; 3
+  cite both editions (#18, #23, #30). ETL faults seen through it: marginal notes placed mid-sentence (act:21/2006 s4,
+  act:12/2026 s357), unmarked and spliced into the text line by line (cap:105 s305-306), cap:235 chunks with no
+  label and no path, a cover page cited (act:24/2019), Constitution Article 91 not in a dense top 10 for its own
+  heading, law:16/1974 with no chunks. An eval bug read the gold as the first row of an unordered query; fixed.
 - **`repeals_act` is mostly wrong (found 2026-10-18):** most rows come from "Section N of the principal enactment is
   hereby repealed" with the section part cut off, so a section repeal reads as the whole Act repealed (Penal Code:
   25 such rows from amendment Acts; Electricity 20/2009: from its 2013 and 2022 amendments). Real whole-Act repeals

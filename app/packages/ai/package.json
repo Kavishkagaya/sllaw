@@ -9,8 +9,8 @@
     "typecheck": "tsc"
   },
   "dependencies": {
-    "@ai-sdk/deepseek": "^3.0.67",
-    "ai": "^7.0.143"
+    "ai": "^7.0.143",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@types/node": "^26.6.5",

@@ -6,7 +6,10 @@
     ".": "./src/index.ts"
   },
   "scripts": {
-    "typecheck": "tsc"
+    "typecheck": "tsc",
+    "research": "tsx --env-file=../../apps/web/.env.local scripts/research.ts",
+    "tool": "tsx --env-file=../../apps/web/.env.local scripts/tool.ts",
+    "eval-agent": "tsx --env-file=../../apps/web/.env.local scripts/eval-agent.ts"
   },
   "devDependencies": {
     "@types/node": "^26.6.5",
@@ -15,6 +18,7 @@
   "dependencies": {
     "@sllaw/ai": "workspace:*",
     "@sllaw/db": "workspace:*",
-    "@sllaw/etl_db": "workspace:*"
+    "@sllaw/etl_db": "workspace:*",
+    "@sllaw/search": "workspace:*"
   }
 }
