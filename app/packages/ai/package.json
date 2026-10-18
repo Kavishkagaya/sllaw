@@ -1,0 +1,19 @@
+{
+  "name": "@sllaw/ai",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc"
+  },
+  "dependencies": {
+    "@ai-sdk/deepseek": "^3.0.67",
+    "ai": "^7.0.143"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "typescript": "^7.0.2"
+  }
+}

@@ -1,0 +1,9 @@
+node_modules/
+.next/
+.turbo/
+next-env.d.ts
+*.tsbuildinfo
+.env*
+!.env.example
+# the root .gitignore ignores *.json (ETL outputs); configs here are tracked
+!*.json

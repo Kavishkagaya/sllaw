@@ -15,6 +15,7 @@ docs/
   PIPELINE.md      decisions (extract once, router, engines), validation rules, measurements
   LAYOUT.md        how Act PDFs are laid out (columns, marginal notes, page types)
   APP.md           the app: who it is for, case-first product, decisions
+app/               the app: Turborepo (pnpm) — apps/web Next.js; api → services → db, etl_db, ai (ai has ports, services fills them); app/CLAUDE.md
 etl/               the pipeline, in run order
   fetch.py         1: list sources → files into R2 → `documents` rows; spiders/ = one listing per site
   spiders/acts.py  documents.gov.lk listing (Next.js Server Action)
