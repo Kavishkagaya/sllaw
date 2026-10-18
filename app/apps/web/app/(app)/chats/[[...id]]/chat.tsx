@@ -3,10 +3,9 @@ import { useChat } from "@ai-sdk/react";
 import type { AppRouter, ChatMessage } from "@sllaw/api";
 import { useQuery } from "@tanstack/react-query";
 import type { inferRouterOutputs } from "@trpc/server";
-import { DefaultChatTransport } from "ai";
-import { ArrowLeft, BookMarked, ExternalLink, FileText, GitCompareArrows, Link2, Loader2, Search, TriangleAlert } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { ArrowLeft, BookMarked, ExternalLink, Loader2, TriangleAlert } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { AnimatePresence, motion } from "motion/react";
 import { Streamdown } from "streamdown";
 import { Composer } from "@/components/composer";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -16,8 +15,10 @@ import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/s
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { useChatStore } from "@/stores/chat-store";
 import { cn } from "@/lib/utils";
 import { useTRPC } from "../../../../trpc/client";
+import { splitAnswer, Trail } from "./trail";
 
 type View = NonNullable<inferRouterOutputs<AppRouter>["corpus"]["chunk"]>;
 type Cite = { id: number; label: string };
@@ -27,15 +28,31 @@ type Cite = { id: number; label: string };
 const CITE = /\[\[(\d+)(?:\|([^\]|]*))?\]\]/g;
 const toLinks = (s: string) => s.replace(CITE, (_, id, label) => `[${(label || "source").trim()}](#cite-${id})`);
 
-export function Chat({ id, title, initial, first }: { id: string; title: string; initial: ChatMessage[]; first?: string }) {
-  const router = useRouter();
-  const { messages, sendMessage, status, error } = useChat<ChatMessage>({
-    id,
-    messages: initial,
-    // only the new message goes up: the server holds the history
-    transport: new DefaultChatTransport({ api: "/api/chat", prepareSendMessagesRequest: ({ id, messages }) => ({ body: { id, message: messages.at(-1) } }) }),
-    onFinish: () => router.refresh(), // the sidebar's chat list picks up a new chat and its title
-  });
+const EXAMPLES = [
+  "What notice must a landlord give to evict a tenant under the Rent Act?",
+  "Which Article of the Constitution protects freedom of expression, and what limits it?",
+  "What is the limitation period for an action on a written contract?",
+];
+const SPRING = { type: "spring", stiffness: 260, damping: 30 } as const;
+
+/** A chat: empty (fresh, at /chats) it shows the welcome and the question box in the middle; its first message
+ *  moves the box down, brings the thread in and makes the URL /chats/<id> in place, so nothing reloads. */
+export function Chat({ id, title, initial, fresh }: { id: string; title?: string; initial: ChatMessage[]; fresh?: boolean }) {
+  // the chat lives in the store: this page only shows it, and leaving the page does not stop an answer
+  const chat = useChatStore((s) => s.open)(id, initial);
+  const send = useChatStore((s) => s.send);
+  const stop = useChatStore((s) => s.stop);
+  const { messages, status, error } = useChat<ChatMessage>({ chat });
+  // this chat is on screen: its answer is read as it arrives, and an unread mark from before is cleared
+  const onScreen = useChatStore((s) => s.view);
+  useEffect(() => {
+    onScreen(id);
+    return () => onScreen(null);
+  }, [id, onScreen]);
+  // the server has more than an idle store copy (an answer stored after a reload cut its stream): take the server's
+  useEffect(() => {
+    if (chat.status === "ready" && initial.length > chat.messages.length) chat.messages = initial;
+  }, [chat, initial]);
   const [open, setOpen] = useState<Cite | null>(null);
   const [sheet, setSheet] = useState(false);
   // below xl the panel is a sheet; at xl it is always beside the thread
@@ -43,18 +60,6 @@ export function Chat({ id, title, initial, first }: { id: string; title: string;
   // the open citation, fetched by chunk id (corpus.chunk); cached, so reopening one is instant
   const trpc = useTRPC();
   const view = useQuery(trpc.corpus.chunk.queryOptions({ chunkId: open?.id ?? 0 }, { enabled: !!open }));
-
-  // the first question from the home page; the URL drops ?q= so a reload does not resend it. Deferred and cancelled
-  // on cleanup: useChat stops its chat on unmount, so a send in a mount that is torn down (Strict Mode mounts twice
-  // in dev) would be aborted; this way only the mount that stays sends.
-  useEffect(() => {
-    if (!first) return;
-    const t = setTimeout(() => {
-      sendMessage({ text: first });
-      window.history.replaceState(null, "", `/chat/${id}`);
-    });
-    return () => clearTimeout(t);
-  }, [first, id, sendMessage]);
 
   // ids the agent loaded (a citation of any other id is unverified) and every citation in its answers, in order
   const { loaded, cites } = useMemo(() => {
@@ -79,6 +84,13 @@ export function Chat({ id, title, initial, first }: { id: string; title: string;
   useEffect(() => end.current?.scrollIntoView({ block: "end" }), [messages]);
 
   const busy = status === "submitted" || status === "streaming";
+  const empty = messages.length === 0;
+  const ask = (text: string) => {
+    send(id, text);
+    // a fresh chat takes its own URL on its first message; Next syncs its router with pushState (no request)
+    if (fresh && !location.pathname.endsWith(id)) history.pushState(null, "", `${location.pathname}/${id}`); // /chats → /chats/<id>
+  };
+
 
   const components = useMemo(
     () => ({
@@ -118,62 +130,108 @@ export function Chat({ id, title, initial, first }: { id: string; title: string;
   return (
     <div className="flex h-full">
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex h-12 shrink-0 items-center gap-2 border-b px-3">
+        <header className="flex h-12 shrink-0 items-center gap-2 px-3" style={{ borderBottomWidth: empty ? 0 : 1 }}>
           <SidebarTrigger />
-          <h1 className="truncate text-sm font-medium">{title}</h1>
-          <Sheet open={sheet} onOpenChange={setSheet}>
-            <SheetTrigger asChild>
-              <Button variant="ghost" size="sm" className="ml-auto xl:hidden">
-                <BookMarked /> Citations {cites.length > 0 && <Badge variant="secondary">{cites.length}</Badge>}
-              </Button>
-            </SheetTrigger>
-            <SheetContent className="w-full gap-0 p-0 sm:max-w-md xl:hidden">
-              <SheetTitle className="sr-only">Citations</SheetTitle>
-              {panel}
-            </SheetContent>
-          </Sheet>
+          {!empty && (
+            <motion.h1 initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="truncate text-sm font-medium">
+              {title ?? messages.find((m) => m.role === "user")?.parts.find((p) => p.type === "text")?.text ?? "New chat"}
+            </motion.h1>
+          )}
+          {!empty && (
+            <Sheet open={sheet} onOpenChange={setSheet}>
+              <SheetTrigger asChild>
+                <Button variant="ghost" size="sm" className="ml-auto xl:hidden">
+                  <BookMarked /> Citations {cites.length > 0 && <Badge variant="secondary">{cites.length}</Badge>}
+                </Button>
+              </SheetTrigger>
+              <SheetContent className="w-full gap-0 p-0 sm:max-w-md xl:hidden">
+                <SheetTitle className="sr-only">Citations</SheetTitle>
+                {panel}
+              </SheetContent>
+            </Sheet>
+          )}
         </header>
-        <div className="flex-1 overflow-y-auto">
-          <div className="mx-auto flex max-w-3xl flex-col gap-6 px-4 py-6">
-            {messages.map((m) =>
-              m.role === "user" ? (
-                <div key={m.id} className="ml-auto max-w-[85%] rounded-2xl rounded-br-sm bg-secondary px-4 py-2.5 whitespace-pre-wrap text-secondary-foreground">
-                  {m.parts.map((p, i) => (p.type === "text" ? <span key={i}>{p.text}</span> : null))}
+        <div className={cn("flex min-h-0 flex-1 flex-col", empty && "justify-center pb-24")}>
+          <AnimatePresence mode="popLayout" initial={false}>
+            {empty ? (
+              <motion.div key="welcome" exit={{ opacity: 0, y: -12 }} transition={{ duration: 0.2 }} className="mx-auto w-full max-w-2xl space-y-2 px-4 pb-8 text-center">
+                <h2 className="font-serif text-3xl font-semibold tracking-tight sm:text-4xl">What would you like to research?</h2>
+                <p className="text-muted-foreground">Answers drawn from the Constitution and Acts of Sri Lanka, each with its citation.</p>
+              </motion.div>
+            ) : (
+              <motion.div key="thread" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3, delay: 0.1 }} className="min-h-0 flex-1 overflow-y-auto">
+                <div className="mx-auto flex max-w-3xl flex-col gap-6 px-4 py-6">
+                  {messages.map((m) =>
+                    m.role === "user" ? (
+                      <motion.div
+                        key={m.id}
+                        initial={{ opacity: 0, y: 12 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={SPRING}
+                        className="ml-auto max-w-[85%] rounded-2xl rounded-br-sm bg-secondary px-4 py-2.5 whitespace-pre-wrap text-secondary-foreground"
+                      >
+                        {m.parts.map((p, i) => (p.type === "text" ? <span key={i}>{p.text}</span> : null))}
+                      </motion.div>
+                    ) : (
+                      <motion.div key={m.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+                        <Answer parts={m.parts} live={busy && m.id === messages.at(-1)?.id} components={components} />
+                      </motion.div>
+                    ),
+                  )}
+                  {status === "submitted" && <Step icon={Loader2} spin>Researching…</Step>}
+                  {error && (
+                    <Alert variant="destructive">
+                      <TriangleAlert />
+                      <AlertDescription>Something went wrong: {error.message}</AlertDescription>
+                    </Alert>
+                  )}
+                  <div ref={end} />
                 </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+          {/* the same box in both states: layout animates it from the middle to the bottom */}
+          <motion.div layout transition={SPRING} className={cn("mx-auto w-full px-4", empty ? "max-w-2xl" : "max-w-3xl pb-4")}>
+            <Composer draftKey={fresh ? "new" : id} onSend={ask} onStop={() => stop(id)} busy={busy} autoFocus={empty} />
+            <AnimatePresence initial={false}>
+              {empty ? (
+                <motion.div key="examples" exit={{ opacity: 0, height: 0 }} transition={{ duration: 0.2 }} className="grid gap-2 overflow-hidden pt-4 sm:grid-cols-3">
+                  {EXAMPLES.map((q) => (
+                    <button
+                      key={q}
+                      onClick={() => ask(q)}
+                      className="rounded-lg border bg-card p-3 text-left text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+                    >
+                      {q}
+                    </button>
+                  ))}
+                </motion.div>
               ) : (
-                <div key={m.id} className="flex flex-col gap-2">
-                  {m.parts.map((p, i) => {
-                    if (p.type === "text")
-                      return (
-                        <Streamdown key={i} className="md" components={components} isAnimating={busy && m.id === messages.at(-1)?.id}>
-                          {toLinks(p.text)}
-                        </Streamdown>
-                      );
-                    if (p.type === "tool-search") return <Step key={i} icon={Search}>Searched “{p.input?.query}”</Step>;
-                    if (p.type === "tool-read") return <Step key={i} icon={FileText}>Read {p.input?.chunkIds?.length ?? ""} provisions</Step>;
-                    if (p.type === "tool-asOf") return <Step key={i} icon={GitCompareArrows}>Checked amendments</Step>;
-                    if (p.type === "tool-links") return <Step key={i} icon={Link2}>Followed links of {p.input?.docKey}</Step>;
-                    return null;
-                  })}
-                </div>
-              ),
-            )}
-            {status === "submitted" && <Step icon={Loader2} spin>Researching…</Step>}
-            {error && (
-              <Alert variant="destructive">
-                <TriangleAlert />
-                <AlertDescription>Something went wrong: {error.message}</AlertDescription>
-              </Alert>
-            )}
-            <div ref={end} />
-          </div>
-        </div>
-        <div className="mx-auto w-full max-w-3xl px-4 pb-4">
-          <Composer onSend={(text) => sendMessage({ text })} busy={busy} />
-          <p className="mt-2 text-center text-[11px] text-muted-foreground">Research aid, not legal advice. Check the cited text before relying on it.</p>
+                <motion.p key="note" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mt-2 text-center text-[11px] text-muted-foreground">
+                  Research aid, not legal advice. Check the cited text before relying on it.
+                </motion.p>
+              )}
+            </AnimatePresence>
+          </motion.div>
         </div>
       </div>
-      <aside className="hidden w-96 shrink-0 border-l bg-sidebar xl:block">{panel}</aside>
+      {!empty && <aside className="hidden w-96 shrink-0 border-l bg-sidebar xl:block">{panel}</aside>}
+    </div>
+  );
+}
+
+function Answer({ parts, live, components }: { parts: ChatMessage["parts"]; live: boolean; components: Record<string, unknown> }) {
+  const { trail, answer } = splitAnswer(parts);
+  return (
+    <div className="flex flex-col gap-3">
+      <Trail parts={trail} live={live && !answer.some((p) => p.type === "text" && p.text)} />
+      {answer.map((p, i) =>
+        p.type === "text" && (
+          <Streamdown key={i} className="md" components={components as never} isAnimating={live}>
+            {toLinks(p.text)}
+          </Streamdown>
+        ),
+      )}
     </div>
   );
 }

@@ -1,0 +1,5 @@
+{
+  "functions": {
+    "app/api/chat/route.ts": { "supportsCancellation": true }
+  }
+}

@@ -17,13 +17,23 @@ export async function openChat(a: Signed, chatId: string) {
 }
 
 /** One turn: the user message is stored first, then the main agent streams its answer, stored when it ends.
- *  History comes from the database, never from the client. null when the chat is not this user's. */
-export async function sendMessage(a: Signed, chatId: string, message: UserMessage) {
+ *  abortSignal is the request's: the stop button (useChat's stop) aborts the request and with it the agent, and so
+ *  does a closed tab; either way the answer so far is stored. waitUntil matters only then: on a normal end the SDK
+ *  holds the response open until onFinish resolves, but a stopped request has no response left to keep the function
+ *  alive for the write (on Vercel). History comes from the database, never from the client. null when the chat is
+ *  not this user's. */
+export async function sendMessage(
+  a: Signed,
+  chatId: string,
+  message: UserMessage,
+  waitUntil: (p: Promise<unknown>) => void,
+  abortSignal: AbortSignal,
+) {
   const title = message.parts.map((p) => p.text).join(" ").slice(0, 80);
   const chat = await createChat({ id: chatId, workspaceId: a.workspace.id, userId: a.user.id, title });
   if (chat.userId !== a.user.id || chat.workspaceId !== a.workspace.id) return null;
   const history = await messagesOf(chatId);
   await saveMessages(chatId, [message]);
   const ctx = agentCtx({ workspaceId: a.workspace.id, userId: a.user.id });
-  return streamChat(ctx, [...history, message], (m) => saveMessages(chatId, [m]));
+  return streamChat(ctx, [...history, message], (m) => waitUntil(saveMessages(chatId, [m])), abortSignal);
 }

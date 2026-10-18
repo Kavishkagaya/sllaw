@@ -1,15 +1,17 @@
 "use client";
 import { OrganizationSwitcher, UserButton } from "@clerk/nextjs";
-import { SquarePen } from "lucide-react";
+import { Loader2, SquarePen } from "lucide-react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { useEffect } from "react";
 import { Brand } from "@/components/brand";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 import {
   Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupLabel, SidebarHeader, SidebarMenu,
-  SidebarMenuButton, SidebarMenuItem, SidebarRail,
+  SidebarMenuBadge, SidebarMenuButton, SidebarMenuItem, SidebarRail,
 } from "@/components/ui/sidebar";
+import { useChatStore } from "@/stores/chat-store";
 
 type Chat = { id: string; title: string; updatedAt: Date };
 
@@ -21,13 +23,21 @@ const groupOf = (d: Date) => {
 
 export function AppSidebar({ chats, error }: { chats: Chat[]; error?: string }) {
   const path = usePathname();
+  const router = useRouter();
+  const busy = useChatStore((s) => s.busy);
+  const unread = useChatStore((s) => s.unread);
+  // the list is rendered on the server: re-render it when a chat was created or an answer stored
+  const listVersion = useChatStore((s) => s.listVersion);
+  useEffect(() => {
+    if (listVersion) router.refresh();
+  }, [listVersion, router]);
   const groups = Map.groupBy(chats, (c) => groupOf(c.updatedAt));
   return (
     <Sidebar>
       <SidebarHeader className="gap-3 p-3">
-        <Link href="/" className="px-1 py-1"><Brand /></Link>
+        <Link href="/chats" className="px-1 py-1"><Brand /></Link>
         <Button asChild variant="outline" className="justify-start">
-          <Link href="/"><SquarePen /> New chat</Link>
+          <Link href="/chats"><SquarePen /> New chat</Link>
         </Button>
       </SidebarHeader>
       <SidebarContent>
@@ -39,9 +49,17 @@ export function AppSidebar({ chats, error }: { chats: Chat[]; error?: string }) 
             <SidebarMenu>
               {items.map((c) => (
                 <SidebarMenuItem key={c.id}>
-                  <SidebarMenuButton asChild isActive={path === `/chat/${c.id}`}>
-                    <Link href={`/chat/${c.id}`}><span>{c.title}</span></Link>
+                  <SidebarMenuButton asChild isActive={path === `/chats/${c.id}`}>
+                    <Link href={`/chats/${c.id}`}>
+                      {busy[c.id] && <Loader2 className="animate-spin text-muted-foreground" />}
+                      <span>{c.title}</span>
+                    </Link>
                   </SidebarMenuButton>
+                  {unread[c.id] && !busy[c.id] && (
+                    <SidebarMenuBadge>
+                      <span className="size-2 rounded-full bg-brass" aria-label="New answer" />
+                    </SidebarMenuBadge>
+                  )}
                 </SidebarMenuItem>
               ))}
             </SidebarMenu>

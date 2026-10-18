@@ -63,13 +63,20 @@ export const mainAgent = (ctx: Ctx) =>
 export type ChatMessage = InferAgentUIMessage<ReturnType<typeof mainAgent>>;
 
 /** Run the main agent over a chat's messages (history + the new user message) as a UI message stream response;
- *  onFinish gets the assistant message to store (also when the client went away mid-answer). */
-export async function streamChat(ctx: Ctx, messages: unknown[], onFinish: (m: ChatMessage) => Promise<void>) {
+ *  onFinish gets the assistant message to store, whole or as far as it got when abortSignal fired (the request's:
+ *  the stop button, a closed tab or a lost connection all end the run). */
+export async function streamChat(
+  ctx: Ctx,
+  messages: unknown[],
+  onFinish: (m: ChatMessage) => Promise<void> | void,
+  abortSignal?: AbortSignal,
+) {
   const uiMessages = await validateUIMessages<ChatMessage>({ messages, tools: mainTools(ctx) });
   return createAgentUIStreamResponse({
     agent: mainAgent(ctx),
     uiMessages,
     originalMessages: uiMessages,
+    abortSignal,
     generateMessageId: () => crypto.randomUUID(),
     onFinish: ({ responseMessage }) => onFinish(responseMessage),
   });

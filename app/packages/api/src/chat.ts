@@ -15,13 +15,15 @@ const body = z.object({
 });
 
 /** POST /api/chat: one turn of a chat (useChat), streamed. Outside tRPC because it streams AI SDK UI messages. */
-export async function chatRoute(req: Request) {
+/** req.signal ends the run when the client stops (useChat's stop aborts the request) or leaves; waitUntil (Next's
+ *  after()) lets the answer so far be stored after that, when no response is left to keep the function alive. */
+export async function chatRoute(req: Request, waitUntil: (p: Promise<unknown>) => void) {
   try {
     const account = await signedAccount(await createContext({ headers: req.headers }));
     if (!account.workspace) return new Response("no active workspace", { status: 403 });
     const input = body.safeParse(await req.json().catch(() => null));
     if (!input.success) return new Response("bad request", { status: 400 });
-    const res = await sendMessage({ ...account, workspace: account.workspace }, input.data.id, input.data.message);
+    const res = await sendMessage({ ...account, workspace: account.workspace }, input.data.id, input.data.message, waitUntil, req.signal);
     return res ?? new Response("not found", { status: 404 });
   } catch (e) {
     if (e instanceof TRPCError) return new Response(e.message, { status: getHTTPStatusCodeFromError(e) });

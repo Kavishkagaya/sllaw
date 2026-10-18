@@ -77,8 +77,9 @@ export const lawTools = ({ ports }: Ctx) => ({
     description:
       "A section as enacted and every change made to it up to the question's date, oldest first: the amending law " +
       "and section, the kind (amends, inserts, replaces, repeals) and that amending section's text, which holds the " +
-      "new words. Changes after the date are only named. Use it before saying what a section says now; one call " +
-      "covers all its amendments.",
+      "new words. A long amending text is cut short and marked '…[truncated]': read that chunk before saying what " +
+      "the rest of it changes. Changes after the date are only named. Use it before saying what a section says now; " +
+      "one call covers all its amendments.",
     inputSchema: z.object({ chunkId }),
     execute: ({ chunkId }) => ports.asOf(chunkId),
   }),
