@@ -27,13 +27,15 @@ LIST = rf"{ITEM}(?:\s*\(\w{{1,5}}\))*(?:{SEP}(?:sections?\s*)?{ITEM}(?:\s*\(\w{{
 ORD = r"(?:first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth)"
 PARTS = (rf"(?:(?:sections?|articles?)\s*{LIST}"
          rf"|(?:the\s+)?{ORD}(?:\s*(?:,|and)\s*{ORD})*\s+Schedules?|Schedules?\s+(?:[A-Z]{{1,2}}|[IVX]+|\d+)\b"
-         rf"|(?:the\s+)?Schedule\b|Part\s+[IVXL]+[A-Z]?\b|(?:the\s+)?long\s+title|(?:the\s+)?preamble)")
+         rf"|(?:the\s+)?Schedule\b|(?:Part|Chapter)s?\s+[IVXL]+[A-Z]?(?:\s*(?:,|and)\s*[IVXL]+[A-Z]?)*\b|(?:the\s+)?long\s+title|(?:the\s+)?preamble)")
 NAME = r"(?:[A-Z][\w’'-]*\s+(?:(?:of|and|for|the|in|on|to|\([^)]{1,40}\))\s+)*){1,12}?(?:Act|Law|Ordinance|Code|Order\s+in\s+Council)"
 LAW = (rf"(?:the\s+)?principal\s+(?:enactment|Act|Law|Ordinance)|that\s+(?:enactment|Act|Law|Ordinance|Code)"
        rf"|the\s+Constitution|(?:the\s+)?{NAME}(?:,?\s*\(?\s*No[.,:]?\s*\d+\s*of\s*\d{{4}}\)?)?(?:\s*\((?:Chapter|Cap\.?)\s*\d+\w?\))?"
        rf"|(?:Act|Law|Ordinance)\W{{0,3}}No[.,:]?\s*\d+\s*of\s*\d{{4}}|Chapter\s+\d+")
+# a gap inside one clause: not across a section opener ("PART VIII REPEALS 43. (1) The X Act ...", "Ordinance. 16. Section 26")
+G = r"(?:(?!\s\d{1,3}[A-Z]{0,2}\.\s+[(A-Z]|\.\s+(?:[A-Z^*†]|\(\d))[^;:])"
 PATTERNS = [
-    ("operative", re.compile(rf"(?P<parts>{PARTS})[^;:]{{0,120}}?\b(?:of|to|in)\s+(?P<law>{LAW})[^;:]{{0,250}}?"
+    ("operative", re.compile(rf"(?P<parts>{PARTS}){G}{{0,120}}?\b(?:of|to|in)\s+(?P<law>{LAW}){G}{{0,250}}?"
                              rf"\b(?:is|are)\s+(?:hereby\s+)?(?:further\s+)?(?P<verb>amended|repealed)"
                              rf"(?P<subst>[,\s]*and\s+(?:the\s+following|there\s+shall\s+be)[^.;]{{0,120}}?substituted)?", re.I)),
     ("note", re.compile(rf"\b(?P<verb>Amendment|Replacement|Substitution|Repeal|Insertion|Addition)s?\s+(?:of\s+|to\s+)?(?:new\s+)?"
@@ -44,9 +46,10 @@ PATTERNS = [
                           rf"(?:[^.;:]{{0,40}}?\b(?:of|in|to)\s+(?P<law>{LAW}))?", re.I)),
     ("substitute", re.compile(rf"\bthere\s+shall\s+be\s+(?P<verb>substituted)\s+for\s+(?P<parts>{PARTS})[^;:]{{0,60}}?\b(?:of|to|in)\s+(?P<law>{LAW})", re.I)),
     ("in_law", re.compile(rf"\bIn\s+(?P<law>{LAW})[^.;]{{0,100}}?\bthere\s+shall\s+be\s+(?P<verb>substituted)\b", re.I)),
-    ("whole", re.compile(rf"(?<!\bof\s)(?P<law>{LAW})[^;:]{{0,160}}?\b(?:is|are)\s+(?:hereby\s+)?(?:further\s+)?(?P<verb>amended|repealed)\b", re.I)),
+    ("whole", re.compile(rf"(?<!\bof\s)(?P<law>{LAW}){G}{{0,160}}?\b(?:is|are)\s+(?:hereby\s+)?(?:further\s+)?(?P<verb>amended|repealed)\b", re.I)),
 ]
-CITE_PART = re.compile(rf"(?P<parts>{PARTS}|Chapter\s+[IVXL]+[A-Z]*)\s+(?:of|in|to|under)\s+(?P<law>(?:the\s+)?principal\s+(?:enactment|Act|Law|Ordinance)"
+ALSO = re.compile(rf"\s*\(\s*((?:sections?|articles?)\s+{LIST})", re.I)     # "Part IXA (sections 801 to 833R)"
+CITE_PART = re.compile(rf"(?P<parts>{PARTS})\s+(?:of|in|to|under)\s+(?P<law>(?:the\s+)?principal\s+(?:enactment|Act|Law|Ordinance)"
                        rf"|that\s+(?:enactment|Act|Law|Ordinance)|the\s+Constitution)", re.I)
 CONST = re.compile(r"\bthe\s+Constitution\b")
 PRINC = re.compile(r"\bprincipal\s+(?:enactment|Act|Law|Ordinance)\b", re.I)
@@ -141,8 +144,8 @@ def labels(parts):
     if re.search(r"Schedule", parts, re.I):
         return (sched_names(parts) or [f"Schedule {x}" for x in re.findall(r"Schedules?\s+([A-Z]{1,2}|[IVX]+|\d+)\b", parts)]
                 or ["Schedule"])
-    if (m := re.match(r"Part\s+(\S+)", parts)):
-        return [f"Part {m[1]}"]
+    if (m := re.match(r"(Part|Chapter)s?\s+(.+)", parts, re.I)):           # "Chapters II and IV" -> each
+        return [f"{m[1].title()} {x.upper()}" for x in re.findall(r"[IVXL]+[A-Z]?", m[2], re.I)]
     return ["long title" if "title" in parts.lower() else "preamble"]
 
 
@@ -237,8 +240,19 @@ class Doc:
         m = re.match(r"\s*AN?\s+(?:ACT|LAW)\s+(?:TO|FOR)\s+(?:\w+\s+){0,3}?(AMEND|REPEAL|PROVIDE\s+FOR\s+THE\s+REPEAL)", self.lt, re.I)
         if not m:
             return []
-        kind = "repeals_act" if "REPEAL" in m[1].upper() else "amends_act"
+        # "AN ACT TO REPEAL SECTION 5 | PART IX | CERTAIN PROVISIONS OF ..." changes the law, it does not repeal it
+        part = re.match(rf"\s+(?:OF\s+)?(?:AND\s+(?:RE-?ENACT|REPLACE|SUBSTITUTE)\s+)?(?:CERTAIN\s+)?(?:THE\s+)?(?:{PARTS}|PROVISIONS?|SO\s+MUCH)",
+                        self.lt[m.end():], re.I)
+        kind = "repeals_act" if "REPEAL" in m[1].upper() and not part else "amends_act"
         return [(None, kind, k, None, self.lt[:300], {"via": "long_title"}) for k in self.lt_keys()]
+
+    @staticmethod
+    def whole(t, m):
+        """A "<law> is hereby amended|repealed" match is the whole law only if its clause names no part before it:
+        "Section 5 of the principal enactment is hereby repealed" matched from "principal enactment" (issue #9)."""
+        pre = re.split(r"[.;:\n]", t[max(0, m.start() - 300):m.start()])[-1]
+        return not (re.match(r"(?:of|to|in)\s", m["law"], re.I) or re.search(rf"(?:so\s+much|{PARTS}|\b(?:sub-?)?(?:sections?|paragraphs?|clauses?|Articles?)\b)[^.;]{{0,40}}?\b(?:of|to|in)\s", m["law"], re.I) or re.search(r"\b(?:of|to|in)\s+(?:the\s+)?$", pre, re.I)
+                    or re.search(rf"{PARTS}|\b(?:sub-?)?(?:sections?|paragraphs?|clauses?|provisions?|Schedules?|Tables?|Articles?)\b|\bso\s+much\b", pre, re.I))
 
     def chunk(self, i, t):
         out = []
@@ -248,6 +262,8 @@ class Doc:
                 self.principal = keys[-1]
         for name, r in PATTERNS:
             for m in r.finditer(t):
+                if name == "whole" and not self.whole(t, m):
+                    continue
                 verb = m["verb"].lower()
                 kind = "replaces" if name == "operative" and verb == "repealed" and m["subst"] else KIND[verb]
                 laws = self.law(m["law"]) if m["law"] else ([self.principal] if self.principal else [])
@@ -260,11 +276,14 @@ class Doc:
                         det["ops"] = ops(t[m.start():m.end() + 600])
                     out += [(i, ("amends" if name == "in_law" else kind) + "_act", k, None, ctx, det) for k in laws]
                 else:
-                    out += [(i, kind, k, l, ctx, det) for k in laws for l in labels(m["parts"])]
+                    # "Part IXA (sections 801 to 833R both inclusive) of", "Chapter VIIA of the Constitution (Articles 41A to 41H)"
+                    ls = labels(m["parts"])
+                    if name == "operative" and re.match(r"(?:Part|Chapter)\b", m["parts"], re.I):
+                        ls += [l for e in ("parts", "law") if (x := ALSO.match(t, m.end(e))) for l in labels(x[1])]
+                    out += [(i, kind, k, l, ctx, det) for k in laws for l in ls]
         for m in CITE_PART.finditer(t):                # "Article 154 of the Constitution", "section 127 of the principal Act"
             ctx = re.sub(r"\s+", " ", t[max(0, m.start() - 80):m.end() + 120]).strip()
-            ls = [f"Chapter {m['parts'].split()[-1]}"] if re.match(r"Chapter", m["parts"], re.I) else labels(m["parts"])
-            out += [(i, "cites", k, l, ctx, {"via": "cite"}) for k in self.law(m["law"]) for l in ls]
+            out += [(i, "cites", k, l, ctx, {"via": "cite"}) for k in self.law(m["law"]) for l in labels(m["parts"])]
         if self.principal:                             # "under the principal enactment", "amendment made to the principal enactment"
             out += [(i, "cites", self.principal, None, re.sub(r"\s+", " ", t[max(0, m.start() - 120):m.end() + 120]).strip(), {"via": "cite"})
                     for m in PRINC.finditer(t)]

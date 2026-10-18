@@ -70,3 +70,36 @@ assert not [x for x in links("law:5/1976", "", ["Section 3 of Law No. 48 of 1978
 print("ok refs year guard")
 assert ("cites", "cap:19", None) in ls("the Penal Code (Chapter 19)", key="act:1/1964")       # a 1980 chapter is not "a 1980 law"
 print("ok refs chapters undated")
+
+# issue #9: repeals_act only for the whole law; a part's repeal is the part
+for s in ("Section 5 of the principal enactment is hereby repealed.", "Sections 52 to 74 of the principal enactment are hereby repealed.",
+          "Part IX of the principal enactment is hereby repealed.", "Chapter XIX of the principal enactment is hereby repealed.",
+          "So much of the Finance Act, No. 11 of 1963 as relates to licences is hereby repealed."):
+    assert not [x for x in ls(P + s) if x[0].endswith("_act")], (s, ls(P + s))
+assert ("repeals", F, "Chapter XIX") in ls(P + "Chapter XIX of the principal enactment is hereby repealed.")
+assert ("repeals", F, "74") in ls(P + "Sections 52 to 74 of the principal enactment are hereby repealed.")
+assert ("amends_act", F, None) in ls("", lt="AN ACT TO REPEAL PART IX OF THE FINANCE ACT, NO. 11 OF 1963")
+assert ("repeals_act", F, None) in ls("", lt="AN ACT TO REPEAL THE FINANCE ACT, NO. 11 OF 1963")
+print("ok refs whole repeals")
+for s in ("The long title to the Finance Act, No. 11 of 1963 is hereby repealed.", "Part II and Part III of the Finance Act, No. 11 of 1963, are hereby repealed.",
+          "The Second Schedule to the principal enactment as last amended by Act, No. 11 of 1963, is hereby repealed.",
+          "means any person registered under the Finance Act, No. 11 of 1963.’. 16. Section 26 of the principal Act is hereby repealed."):
+    assert not [x for x in ls(s) if x[0].endswith("_act")], (s, ls(s))
+r = ls("PART VIII REPEALS AND TRANSITIONAL PROVISIONS 43. (1) The Natural Resources Energy and Science Authority of Sri Lanka Act, No. 78 of 1981 is hereby repealed.")
+assert ("repeals_act", "act:78/1981", None) in r and not [x for x in r if x[0] == "repeals"], r
+r = ls(P + "Part IXA (sections 801 to 833R both inclusive) of the principal enactment is hereby repealed.")
+assert {("repeals", F, "Part IXA"), ("repeals", F, "801"), ("repeals", F, "833R")} <= set(r), r
+print("ok refs part repeals")
+for s in ("The Finance Act, No. 11 of 1963, shall not apply to any year after 1963. (3) The Double Taxation Act is hereby repealed.",
+          "Subsection (2) is repealed by Act No. 11 of 1963. ^ Subsections (4) and (5) are repealed",
+          "Schedules ‘A’, ‘B’ and ‘C’ of the Finance Act, No. 11 of 1963 are hereby repealed."):
+    assert not [x for x in ls(s) if x[0] == "repeals_act" and x[1] == F], (s, ls(s))
+r = ls("Chapter VIIA of the Constitution (Articles 41A to 41H) is hereby repealed.")
+assert {("repeals", "constitution", "Chapter VIIA"), ("repeals", "constitution", "41A"), ("repeals", "constitution", "41H")} <= set(r), r
+print("ok refs gaps")
+r = ls("Chapters II and IV of the Finance Act, No. 11 of 1963, are hereby repealed.")
+assert {("repeals", F, "Chapter II"), ("repeals", F, "Chapter IV")} <= set(r) and not [x for x in r if x[0].endswith("_act")], r
+assert not [x for x in ls("The sections of the Finance Act, No. 11 of 1963 specified in Column I are hereby amended.") if x[0].endswith("_act")]
+print("ok refs chapters list")
+assert not [x for x in ls("23. Table ‘A’, Table ‘B’ and Table ‘C’ of the Finance Act, No. 11 of 1963 are hereby repealed and the following tables are substituted therefor") if x[0].endswith("_act")]
+print("ok refs tables")

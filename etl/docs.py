@@ -401,6 +401,21 @@ def links():
                            UNION ALL SELECT substr(context, 6), dst_doc FROM links WHERE kind = 'same_as' AND context LIKE 'also %%') x
                        WHERE a <> b""")
         cur.execute("CREATE INDEX ON alias (a)")
+        # a repealed Part or Chapter: one repeals link per section under it (chunks.path), from the target document,
+        # else from the first same_as twin that has that heading (issue #9: asOf(section) missed "Chapter XIX ... repealed")
+        cur.execute("DELETE FROM links WHERE detail ? 'part'")
+        cur.execute("""INSERT INTO links (src_doc, src_chunk, kind, dst_doc, dst_label, date, context, detail)
+                       WITH hit AS (
+                           SELECT l.id, x.doc, x.pref, c.label FROM links l
+                           CROSS JOIN LATERAL (SELECT l.dst_doc doc, 0 pref UNION ALL SELECT b, 1 FROM alias WHERE a = l.dst_doc) x
+                           JOIN chunks c ON c.doc_key = x.doc AND c.label IS NOT NULL
+                                        AND (c.path = l.dst_label OR c.path LIKE l.dst_label || ' %%')
+                           WHERE l.kind = 'repeals' AND l.dst_label ~ '^(Part|Chapter) [IVXL]+[A-Z]?$'),
+                       best AS (SELECT DISTINCT ON (id) id, doc FROM hit ORDER BY id, pref, doc)
+                       SELECT DISTINCT ON (l.id, h.label) l.src_doc, l.src_chunk, l.kind, h.doc, h.label, l.date, l.context,
+                              l.detail || jsonb_build_object('part', l.dst_label)
+                       FROM best b JOIN hit h ON h.id = b.id AND h.doc = b.doc JOIN links l ON l.id = b.id""")
+        print(f"{cur.rowcount} section repeals from repealed Parts/Chapters", flush=True)
         cur.execute("""CREATE TEMP TABLE want ON COMMIT DROP AS
                        SELECT id, dst_doc doc, dst_label label, 0 pref FROM links WHERE dst_label IS NOT NULL
                        UNION ALL SELECT l.id, al.b, l.dst_label, 1 FROM links l JOIN alias al ON al.a = l.dst_doc
