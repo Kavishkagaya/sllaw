@@ -1,2 +1,3 @@
-// Queries on the app's database go here, one file per area; the first (workspaces, cases) comes with #14.
+// Queries on the app's database, one file per area.
+export * from "./accounts";
 export { db } from "./client";

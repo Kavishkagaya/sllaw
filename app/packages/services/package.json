@@ -7,6 +7,7 @@
   },
   "scripts": {
     "typecheck": "tsc",
+    "check-accounts": "tsx --env-file=../../apps/web/.env.local scripts/check-accounts.ts",
     "research": "tsx --env-file=../../apps/web/.env.local scripts/research.ts",
     "tool": "tsx --env-file=../../apps/web/.env.local scripts/tool.ts",
     "eval-agent": "tsx --env-file=../../apps/web/.env.local scripts/eval-agent.ts"
@@ -16,6 +17,7 @@
     "typescript": "^7.0.2"
   },
   "dependencies": {
+    "@clerk/backend": "3.25.0",
     "@sllaw/ai": "workspace:*",
     "@sllaw/db": "workspace:*",
     "@sllaw/etl_db": "workspace:*",

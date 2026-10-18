@@ -9,6 +9,8 @@
     "typecheck": "tsc"
   },
   "dependencies": {
+    "@clerk/backend": "3.25.0",
+    "@clerk/nextjs": "^7.9.17",
     "@sllaw/services": "workspace:*",
     "@trpc/server": "^11.19.0",
     "superjson": "^2.2.6",

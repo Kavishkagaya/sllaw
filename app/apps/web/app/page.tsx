@@ -1,9 +1,24 @@
-import { createCaller } from "@sllaw/api";
+import { OrganizationSwitcher, Show, SignInButton, UserButton } from "@clerk/nextjs";
+import { createCaller, createContext } from "@sllaw/api";
 import { headers } from "next/headers";
 
-// ponytail: wiring check only (web → api → services → db); replaced by the app's first real page.
+// ponytail: account check only (Clerk → webhook → our ids); replaced by the chat page.
 export default async function Home() {
-  const api = createCaller({ headers: await headers() });
-  const doc = await api.corpus.doc({ key: "constitution" });
-  return <main>{doc ? `${doc.title}: ${doc.chunks.length} chunks` : "constitution not found"}</main>;
+  return (
+    <main>
+      <Show when="signed-out">
+        <SignInButton />
+      </Show>
+      <Show when="signed-in">
+        <UserButton /> <OrganizationSwitcher />
+        <Me />
+      </Show>
+    </main>
+  );
+}
+
+async function Me() {
+  const me = await createCaller(await createContext({ headers: await headers() })).user.me().catch((e: Error) => e);
+  if (me instanceof Error) return <p>{me.message}</p>;
+  return <pre>{JSON.stringify(me, null, 2)}</pre>;
 }

@@ -100,6 +100,14 @@ in v1; an entity graph can be built later from the same per-file JSON.
   them and a rebuild renumbers chunks. Pinned authorities and saved citations store `doc_key` + `label` + the quote;
   a chunk id is a cache, looked up again when gone.
 
+- **Accounts (user, 2026-10-18):** `users`, `workspaces`, `workspace_users` (role: admin | member, Clerk's org role
+  without `org:`) keyed by our own uuid, each with its `clerk_id`; everything else in the app refers to our ids. A
+  Clerk webhook (`/api/webhooks/clerk`, Svix-verified) keeps them in step: user, organization and
+  organizationMembership events, upserts by `clerk_id`; a membership event carries its organization and user, so it
+  upserts both and event order does not matter. `signedUser` turns the Clerk session into our account (user, their
+  workspaces, the active one = Clerk's active org); `user.me` returns it. A user deleted in Clerk leaves their cases
+  with `created_by` null. The app database is `app` in Neon sllaw-app (created 2026-10-18), beside the corpus
+  (`neondb`); both share the branch's 512 MB (corpus 179 MB that day). Check: `pnpm --filter @sllaw/services check-accounts`.
 - **Auth: Clerk, multi-user workspaces from the start** (Clerk Organizations). Sign-up creates the user's
   workspace; all data is keyed by `workspace_id`, with members and roles in the model. v1 only hides inviting
   members, so opening it later is a UI change.
