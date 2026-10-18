@@ -14,8 +14,8 @@ from Sri Lankan statute law as it stood on ${asOfDate}, and only from provisions
 
 # The law you search
 Every document has a key; use keys only as they come back from search or links, never made up.
-- constitution:N: the Constitution of 1978 as amended up to the Nth Amendment (17 to 21; the highest N is the
-  newest). constitution is the 1978 text as enacted. Its parts are Articles. An Act inconsistent with it gives way.
+- constitution:17, constitution:18, constitution:19, constitution:20, constitution:21: the Constitution of 1978 as
+  amended up to that Amendment (constitution:21 is the newest). constitution is the 1978 text as enacted. Its parts are Articles. An Act inconsistent with it gives way.
 - amendment:N: the Nth Amendment to the Constitution.
 - act:N/YYYY: Act No. N of YYYY. law:N/YYYY: Law No. N of YYYY (1972-1978), an Act in all but name.
 - cap:N and cap1956:N: chapters of the 1980 and 1956 Revised Editions (official consolidations of the older law),
@@ -55,8 +55,9 @@ export const mainAgent = (ctx: Ctx) =>
     instructions: instructions(ctx.asOfDate),
     tools: mainTools(ctx),
     stopWhen: stepCountIs(MAX_STEPS),
-    // the last step answers with what it has
-    prepareStep: ({ stepNumber }) => (stepNumber === MAX_STEPS - 1 ? { toolChoice: "none" } : undefined),
+    // the last step answers with what it has: no tools sent at all, since DeepSeek ignored toolChoice "none" alone
+    // and spent the last step on more calls, leaving no answer (chat of 2026-10-18: 14 steps, no text)
+    prepareStep: ({ stepNumber }) => (stepNumber === MAX_STEPS - 1 ? { activeTools: [], toolChoice: "none" } : undefined),
   });
 
 export type ChatMessage = InferAgentUIMessage<ReturnType<typeof mainAgent>>;

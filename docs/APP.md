@@ -111,6 +111,7 @@ in v1; an entity graph can be built later from the same per-file JSON.
   them and a rebuild renumbers chunks. Pinned authorities and saved citations store `doc_key` + `label` + the quote;
   a chunk id is a cache, looked up again when gone.
 
+- **UI (2026-10-18):** shadcn/ui (radix, `apps/web/components/ui`) on Tailwind v4; light/dark/system via next-themes (class on `<html>`). Palette: warm paper + navy ink in light, navy + brass in dark (tokens in `app/globals.css`); Geist for the interface, Source Serif 4 for headings and statute text, so the law reads apart from the answer. Clerk's own `<SignIn/>`/`<SignUp/>` at `/sign-in`, `/sign-up`, styled by mapping `appearance.variables` to the theme's CSS variables; every other page needs a session (`proxy.ts`). Signed in: sidebar of chats (Today / 7 days / Older), `/` is a new chat (first question goes as `?q=`, sent once), citations beside the thread at xl, in a sheet below.
 - **Accounts (user, 2026-10-18):** `users`, `workspaces`, `workspace_users` (role: admin | member, Clerk's org role
   without `org:`) keyed by our own uuid, each with its `clerk_id`; everything else in the app refers to our ids. A
   Clerk webhook (`/api/webhooks/clerk`, Svix-verified) keeps them in step: user, organization and
