@@ -14,6 +14,7 @@ from dotenv import load_dotenv
 from etl.fetch import pg_connect, r2
 
 load_dotenv()
+csv.field_size_limit(sys.maxsize)   # acts.doc holds a whole Act as JSON: past csv's 128 KB default (2026-10-19)
 
 
 def backup(table):
