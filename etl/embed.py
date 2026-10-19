@@ -79,13 +79,17 @@ def texts(cur):
     return out
 
 
-def stored(top):
-    """{id: hash} for every entity, read in id ranges up to `top`."""
-    have = {}
-    for lo in range(0, top + 1, SPAN):
+def stored():
+    """{id: hash} for every entity, read in id ranges until all Zilliz holds is seen: a rebuild on a fresh database
+    numbers chunks from 1 while the stored ids are the old database's (ada's ran 90,778-199,554), so scanning only up
+    to the new top missed 75k vectors, which would have been embedded again and never deleted (2026-10-19)."""
+    total = zilliz("entities/query", {"collectionName": COLL, "filter": "id >= 0", "outputFields": ["count(*)"]})[0]["count(*)"]
+    have, lo = {}, 0
+    while len(have) < total and lo < 100_000_000:
         for e in zilliz("entities/query", {"collectionName": COLL, "filter": f"id >= {lo} and id < {lo + SPAN}",
                                            "outputFields": ["id", "hash"], "limit": SPAN}):
             have[e["id"]] = e["hash"]
+        lo += SPAN
     return have
 
 
@@ -96,12 +100,13 @@ def embed_local(texts):
     """bge-m3 dense vectors on this machine's GPU, the same open weights Workers AI runs (CLS token, normalized):
     for testing and development when the Workers AI free allocation is spent (user, 2026-10-17). On with
     EMBED_LOCAL=1; the weights come from the Hugging Face cache (ada: HF_HOME=/var/tmp/e19309/hf)."""
-    import torch
-    from transformers import AutoModel, AutoTokenizer
-    with _lock:
-        if not _local:
-            _local["tok"] = AutoTokenizer.from_pretrained("BAAI/bge-m3")
-            _local["model"] = AutoModel.from_pretrained("BAAI/bge-m3", dtype=torch.float16).cuda().eval()
+    with _lock:             # the imports too: transformers' lazy import is not thread-safe (4 threads, 2026-10-19)
+        import torch
+        from transformers import AutoModel, AutoTokenizer
+        if not _local:      # both or neither: a failed load (CUDA OOM on a shared card) must not leave half a cache
+            tok = AutoTokenizer.from_pretrained("BAAI/bge-m3")
+            model = AutoModel.from_pretrained("BAAI/bge-m3", dtype=torch.float16).cuda().eval()
+            _local.update(tok=tok, model=model)
         out = []
         for i in range(0, len(texts), 16):
             b = _local["tok"](texts[i:i + 16], padding=True, truncation=True, max_length=8192,
@@ -136,9 +141,10 @@ def sync(batch, old):
     vec = {}
     if copy:
         got = zilliz("entities/query", {"collectionName": COLL, "filter": f"id in {list(set(copy.values()))}",
-                                        "outputFields": ["id", "vec"], "limit": len(copy)})
-        by_id = {e["id"]: e["vec"] for e in got}
-        vec = {h: by_id[i] for h, i in copy.items() if i in by_id}
+                                        "outputFields": ["id", "vec", "hash"], "limit": len(copy)})
+        # the hash must still match: when new ids overlap old ones another batch may have overwritten that id already
+        by_id = {e["id"]: (e["vec"], e["hash"]) for e in got}
+        vec = {h: by_id[i][0] for h, i in copy.items() if i in by_id and by_id[i][1] == h}
     new = list({e["hash"]: e["text"] for e in batch if e["hash"] not in vec}.items())
     if new:
         vec.update(zip([h for h, _ in new], embed([t for _, t in new])))
@@ -166,7 +172,7 @@ def main():
     if here != there:
         raise SystemExit(f"chunk ids differ: ada {here}, Neon {there}; run etl.publish first")
     ids = {e["id"] for e in rows}
-    have = stored(max(ids))
+    have = stored()
     old = {h: i for i, h in have.items()}
     todo = [e for e in rows if have.get(e["id"]) != e["hash"]][:a.limit]
     gone = [i for i in have if i not in ids]
