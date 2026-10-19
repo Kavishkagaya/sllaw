@@ -61,6 +61,13 @@ cp .env.example .env                     # fill DATABASE_URL and R2_*
 
 Fetching and extraction run on **ada**, never locally: no source files on this machine. Use the `/ada-ssh` skill.
 
+**ada (10.40.18.12) has been down since 2026-10-18** (the cluster rebooted; ada never came back: "No route to host"). **The work
+host is now ampere** (10.40.18.10, DNS `ibm`; `ssh ampere`, ProxyJump tesla; same LDAP login): 32 threads, 125 GB, 2× RTX
+A6000 48 GB, shared and busy. Same paths: `/var/tmp/e19309` is per host, `~/sllaw` is the shared NFS home. No pip there:
+`/var/tmp/e19309/bin/uv` (0.8.0) built `etl_venv` (boto3, psycopg2, dotenv, pgserver: fetch, structure, graph, docs,
+publish); a GPU venv (LightOn, bge-m3) is not built yet. Other hosts: turing .3 (RTX 3090 Ti), tesla .7 (no GPU), kepler .9
+(K40c, too old). Everything below that says ada now means the work host.
+
 - ada: 3× NVIDIA RTX 6000 Ada (49 GB each), **shared with other users**: check `nvidia-smi` and pick the idle card. Project dir `~/sllaw/`. There is no conda env and no sudo.
 - **`/var/tmp/e19309` survives reboots; `/tmp` does not** (wiped 2026-10-05 and 2026-10-09). Everything lives there: `sllaw_venv` (docling, extract), `lighton_venv` (vllm 0.31, torch, boto3, psycopg2: ocr, graph, fetch), `models/LightOnOCR-3-{0.8B,4B}`, `hf`, `pip_cache`, `cache/`; `~/.cache/{torch,docling,vllm,flashinfer,triton}` link there. `bash ~/sllaw/etl/ada_setup.sh` builds `sllaw_venv` if missing and starts 3 extraction workers.
 - **Run Python on ada from `/var/tmp/e19309/{sllaw,lighton}_venv/bin/python`, not `~/sllaw/.venv`.** The home directory is NFS (`/new-home`, 8 KB reads; under 3 MB/s bulk): loading docling/torch from it took over 25 minutes on 2026-10-05, against 27 seconds from local disk. Extraction workers exit when the queue is empty: start them after a fetch, not before.
@@ -88,7 +95,8 @@ Rules:
 
 ## Database
 
-**Since 2026-10-10 the working database is Postgres on ada** (`etl/db_ada.sh`: Postgres 16 + pgvector from the
+**Since 2026-10-10 the working database is Postgres on the work host (ada, ampere since 2026-10-19: rebuilt from R2 there;
+`documents` restored from `backups/documents_20261010_1354.csv.gz` + the 6 Constitution rows refetched)** (`etl/db_ada.sh`: Postgres 16 + pgvector from the
 pgserver wheel, data in `/var/tmp/e19309/pgdata`, `localhost:5433`, URL `DB_LOCAL_URL` in ada's `~/sllaw/.env`;
 from here: `ssh -L 5433:localhost:5433 ada`). Neon's free transfer quota (5 GB egress/month) was hit; Neon keeps
 the old copy. **The app reads from a new Neon project (decision 2026-10-15)**, filled push-only from ada by `python -m etl.publish` (`APP_DATABASE_URL` in ada's .env; issue #12);

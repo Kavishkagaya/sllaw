@@ -228,7 +228,7 @@ def chunks(paras, word="section", parts=True):
                 parts = head = None
         elif head and cur and not label and not m and not sched and len(cur) == 1 and HEADING.match(cur[0]) \
                 and "—" not in head and len(t) <= 100 and not re.search(r"\d|\.$", t):
-            head += f" — {re.sub(r'\s+', ' ', t.replace('*', ''))}"   # the Part's title on the line after it
+            head += " — " + re.sub(r"\s+", " ", t.replace("*", ""))   # the Part's title on the line after it
         if m or sched or heading:
             # a Part/Chapter heading leads the section after it: no chunk of headings alone
             if not (m and cur and label is None and HEADING.match(cur[0]) and all(len(x) < 150 for x in cur)):
