@@ -645,10 +645,12 @@
   "kind": "cites",
   "context": "21. During the operation of this Act, the Tea Control Act, No. 51 of 1957, shall have effect as t",
   "dst": [
-   "cap1956:435"
+   "cap1956:435",
+   "act:51/1957"
   ],
   "label": null,
-  "stored_ok": true
+  "stored_ok": true,
+  "note": "'Tea Control Act, No. 51 of 1957': the number (act:51/1957) or its 1956-edition twin"
  },
  {
   "src": "act:7/2024",
@@ -765,11 +767,7 @@
   ],
   "label": null,
   "stored_ok": false,
-  "note": "principal is the Local Authorities Elections Ordinance, not the amending Act 14/2004",
-  "was": [
-   "act:14/2004",
-   null
-  ]
+  "note": "principal is the Local Authorities Elections Ordinance, not the amending Act 14/2004"
  },
  {
   "src": "act:14/2002",
