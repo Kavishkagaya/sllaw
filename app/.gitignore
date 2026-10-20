@@ -7,3 +7,4 @@ next-env.d.ts
 !.env.example
 # the root .gitignore ignores *.json (ETL outputs); configs here are tracked
 !*.json
+.vercel
