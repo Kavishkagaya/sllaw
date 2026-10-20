@@ -5,10 +5,14 @@
 #   bash ~/sllaw/etl/lighton_setup.sh > ~/sllaw/logs/lighton_setup.log 2>&1      # in tmux; then etl/ocr_ada.sh
 set -e
 T=/var/tmp/e19309; export UV_CACHE_DIR=$T/pip_cache HF_HOME=$T/hf
+# GitHub resets the connection mid-wheel from here (2026-10-20, twice): fetch it alone, resuming
+W=$T/wheels/vllm-0.31.0+cu129-cp38-abi3-manylinux_2_28_x86_64.whl; mkdir -p $T/wheels
+until curl -sSfL -C - --retry 20 -o $W https://github.com/vllm-project/vllm/releases/download/v0.31.0/$(basename $W) \
+      && python3 -c "import zipfile,sys; zipfile.ZipFile(sys.argv[1]).testzip()" $W; do sleep 10; done
 [ -x $T/lighton_venv/bin/python ] || $T/bin/uv venv $T/lighton_venv --python /usr/bin/python3.10
 $T/bin/uv pip install -p $T/lighton_venv/bin/python --index-strategy unsafe-best-match \
     --extra-index-url https://download.pytorch.org/whl/cu129 \
-    "vllm @ https://github.com/vllm-project/vllm/releases/download/v0.31.0/vllm-0.31.0+cu129-cp38-abi3-manylinux_2_28_x86_64.whl" \
+    "vllm @ file://$W" \
     "torch==2.13.0+cu129" ninja boto3 psycopg2-binary python-dotenv pypdfium2 requests
 $T/lighton_venv/bin/python -c "import torch, vllm; print('torch', torch.__version__, torch.version.cuda, torch.cuda.is_available(), 'vllm', vllm.__version__)"
 $T/lighton_venv/bin/hf download lightonai/LightOnOCR-3-0.8B --local-dir $T/models/LightOnOCR-3-0.8B
