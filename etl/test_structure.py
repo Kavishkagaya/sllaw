@@ -169,3 +169,15 @@ assert ch[2] == ("2", "2. (1) The Director shall inform the Council of such fact
 ch = chunks([P(f"{n}. Section {n} of the Customs Ordinance says this much and no more.") for n in (1, 2, 4, 5)])
 assert [c[0] for c in ch] == ["1", "2", "4", "5"], ch
 print("ok chunks: notes, cover, gaps")
+
+# one sentence LightOn cut into two blocks is one paragraph again; not a cover line, a heading or a new item
+from etl.docs import join_split
+j = join_split([P("4. Where the Director-General is satisfied, he shall notify the Regulatory Council of such fact and the"),
+                P("Regulatory Council shall thereupon register the product.", "Effect of registering.")])
+assert len(j) == 1 and j[0]["text"].endswith("fact and the Regulatory Council shall thereupon register the product.") \
+    and j[0]["note"] == "Effect of registering.", j
+L = "(a) a person who carries on business in the manner set out in this section and the"
+for nxt in ("(b) any other person.", "5. This Act shall apply.", "THIRD SCHEDULE", "PART II"):
+    assert len(join_split([P(L), P(nxt)])) == 2, nxt
+assert len(join_split([P("Printed on the Order of Government"), P("Published as a Supplement to Part II")])) == 2
+print("ok join split sentences")

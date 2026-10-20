@@ -1,0 +1,2134 @@
+[
+ {
+  "src": "act:3/1956",
+  "kind": "amends",
+  "context": "Section 52 of the principal enactment is hereby amended",
+  "dst": [
+   "cap1956:242"
+  ],
+  "label": "52",
+  "stored_ok": true
+ },
+ {
+  "src": "act:11/2026",
+  "kind": "amends",
+  "context": "Section 90 of the principal enactment is hereby amended",
+  "dst": [
+   "act:24/2017"
+  ],
+  "label": "90",
+  "stored_ok": true
+ },
+ {
+  "src": "act:19/2026",
+  "kind": "amends",
+  "context": "Section 38 of the Animals Act, No. 29 of 1958 is hereby amended",
+  "dst": [
+   "act:29/1958"
+  ],
+  "label": "38",
+  "stored_ok": true
+ },
+ {
+  "src": "act:9/2011",
+  "kind": "amends",
+  "context": "Section 25H of the principal enactment is hereby amended",
+  "dst": [
+   "act:14/2002"
+  ],
+  "label": "25H",
+  "stored_ok": true
+ },
+ {
+  "src": "act:16/1969",
+  "kind": "amends",
+  "context": "Amendment of section 2 of Chapter 464",
+  "dst": [
+   "chapter:464"
+  ],
+  "label": "2",
+  "stored_ok": true
+ },
+ {
+  "src": "act:24/2003",
+  "kind": "amends",
+  "context": "Section 16 of the principal enactment is hereby amended",
+  "dst": [
+   "law:10/1973"
+  ],
+  "label": "16",
+  "stored_ok": true
+ },
+ {
+  "src": "act:55/1980",
+  "kind": "amends",
+  "context": "Section 22 of the principal enactment, as amended by Law No. 10 of 1977, is hereby further amended",
+  "dst": [
+   "act:7/1972"
+  ],
+  "label": "22",
+  "stored_ok": true
+ },
+ {
+  "src": "act:49/1991",
+  "kind": "amends",
+  "context": "Section 151 of the principal enactment is hereby amended",
+  "dst": [
+   "act:28/1979"
+  ],
+  "label": "151",
+  "stored_ok": true
+ },
+ {
+  "src": "act:35/1958",
+  "kind": "amends",
+  "context": "Section 12 of the principal enactment is hereby amended",
+  "dst": [
+   "cap1956:226"
+  ],
+  "label": "12",
+  "stored_ok": true
+ },
+ {
+  "src": "act:40/1990",
+  "kind": "amends",
+  "context": "Section 20 of the principal enactment is hereby amended",
+  "dst": [
+   "act:13/1989"
+  ],
+  "label": "20",
+  "stored_ok": true
+ },
+ {
+  "src": "act:53/1998",
+  "kind": "amends",
+  "context": "Section 18 of the State Lands (Recovery of Possession) Act, No. 7 of 1979 is hereby amended",
+  "dst": [
+   "act:7/1979"
+  ],
+  "label": "18",
+  "stored_ok": true
+ },
+ {
+  "src": "act:51/1982",
+  "kind": "amends",
+  "context": "Section 8 of the Criminal Procedure (Special Provisions) Law, No. 15 of 1978 (hereinafter referred to as the “principal enactment”) as last amended by Act No. 54 of 1980, is hereby further amended",
+  "dst": [
+   "law:15/1978"
+  ],
+  "label": "8",
+  "stored_ok": true
+ },
+ {
+  "src": "act:11/1993",
+  "kind": "amends",
+  "context": "Section 52 of the principal enactment is hereby amended",
+  "dst": [
+   "cap:626"
+  ],
+  "label": "52",
+  "stored_ok": true
+ },
+ {
+  "src": "act:5/1988",
+  "kind": "amends",
+  "context": "Section 11 of the principal enactment is hereby amended",
+  "dst": [
+   "act:73/1981"
+  ],
+  "label": "11",
+  "stored_ok": true
+ },
+ {
+  "src": "act:30/1961",
+  "kind": "amends",
+  "context": "Amendment of section 14 of Chapter 68",
+  "dst": [
+   "chapter:68"
+  ],
+  "label": "14",
+  "stored_ok": true
+ },
+ {
+  "src": "act:30/1956",
+  "kind": "amends",
+  "context": "Section 2 of the Fisheries Ordinance, No. 24 of 1940, hereinafter referred to as the “principal enactment”, is hereby amended",
+  "dst": [
+   "ordinance:24/1940"
+  ],
+  "label": "2",
+  "stored_ok": true
+ },
+ {
+  "src": "act:9/1980",
+  "kind": "amends",
+  "context": "Section 26A of the principal enactment (inserted by Law No. 38 of 1974) is hereby amended",
+  "dst": [
+   "cap:36"
+  ],
+  "label": "26A",
+  "stored_ok": true
+ },
+ {
+  "src": "act:8/1987",
+  "kind": "amends",
+  "context": "Section 15 of the principal enactment is hereby amended",
+  "dst": [
+   "act:28/1979"
+  ],
+  "label": "15",
+  "stored_ok": true
+ },
+ {
+  "src": "act:13/2004",
+  "kind": "amends",
+  "context": "Section 26 of the principal enactment is hereby amended",
+  "dst": [
+   "act:14/2002"
+  ],
+  "label": "26",
+  "stored_ok": true
+ },
+ {
+  "src": "law:37/1973",
+  "kind": "amends",
+  "context": "Section 40 of the principal enactment is hereby amended",
+  "dst": [
+   "cap:522"
+  ],
+  "label": "40",
+  "stored_ok": true
+ },
+ {
+  "src": "act:22/1958",
+  "kind": "amends",
+  "context": "Section 40 of the principal enactment is hereby amended",
+  "dst": [
+   "cap1956:117"
+  ],
+  "label": "40",
+  "stored_ok": true
+ },
+ {
+  "src": "act:67/1979",
+  "kind": "amends",
+  "context": "Amendment of section 42A of Chapter 192",
+  "dst": [
+   "chapter:192"
+  ],
+  "label": "42A",
+  "stored_ok": true,
+  "unverified": true
+ },
+ {
+  "src": "act:32/2006",
+  "kind": "amends",
+  "context": "Section 9 of the principal enactment is hereby amended",
+  "dst": [
+   "act:45/2000"
+  ],
+  "label": "9",
+  "stored_ok": true
+ },
+ {
+  "src": "act:18/1965",
+  "kind": "amends",
+  "context": "Section 23A of the principal Act (inserted therein by Act No. 12 of 1964) is hereby amended",
+  "dst": [
+   "act:4/1963"
+  ],
+  "label": "23A",
+  "stored_ok": true
+ },
+ {
+  "src": "act:9/1970",
+  "kind": "amends",
+  "context": "Section 49 of the principal enactment is hereby amended",
+  "dst": [
+   "cap1956:381"
+  ],
+  "label": "49",
+  "stored_ok": true
+ },
+ {
+  "src": "act:45/1956",
+  "kind": "amends",
+  "context": "Section 4 of the Roads (Transfer of Control) Act, No. 11 of 1951, (hereinafter referred to as “the principal Act”), is hereby amended",
+  "dst": [
+   "act:11/1951"
+  ],
+  "label": "4",
+  "stored_ok": true
+ },
+ {
+  "src": "act:40/2011",
+  "kind": "amends",
+  "context": "Amendment of section 20 of the principal enactment",
+  "dst": [
+   "act:5/2006"
+  ],
+  "label": "20",
+  "stored_ok": true
+ },
+ {
+  "src": "act:7/2005",
+  "kind": "amends",
+  "context": "Section 11 of the principal enactment is hereby amended",
+  "dst": [
+   "act:11/2004"
+  ],
+  "label": "11",
+  "stored_ok": true
+ },
+ {
+  "src": "act:18/2005",
+  "kind": "amends",
+  "context": "Section 27 of the principal enactment is hereby amended",
+  "dst": [
+   "cap:633"
+  ],
+  "label": "27",
+  "stored_ok": true
+ },
+ {
+  "src": "law:20/1977",
+  "kind": "amends",
+  "context": "Section 758 of the principal enactment is hereby amended",
+  "dst": [
+   "cap:105"
+  ],
+  "label": "758",
+  "stored_ok": true
+ },
+ {
+  "src": "act:35/2006",
+  "kind": "amends_act",
+  "context": "The principal enactment is hereby amended",
+  "dst": [
+   "act:15/1968"
+  ],
+  "label": null,
+  "stored_ok": true
+ },
+ {
+  "src": "act:22/1971",
+  "kind": "amends_act",
+  "context": "The Army Act, hereinafter referred to as the “principal Act”, is hereby amended",
+  "dst": [
+   "cap:625"
+  ],
+  "label": null,
+  "stored_ok": true
+ },
+ {
+  "src": "act:20/1980",
+  "kind": "amends_act",
+  "context": "AN ACT TO AMEND THE STATE AGRICULTURAL CORPORATIONS ACT, NO. 11 OF 1972.",
+  "dst": [
+   "act:11/1972"
+  ],
+  "label": null,
+  "stored_ok": true
+ },
+ {
+  "src": "act:32/2022",
+  "kind": "amends_act",
+  "context": "AN ACT TO AMEND THE REGISTRATION OF DOCUMENTS ORDINANCE (CHAPTER 117)",
+  "dst": [
+   "chapter:117"
+  ],
+  "label": null,
+  "stored_ok": true
+ },
+ {
+  "src": "act:44/1957",
+  "kind": "amends_act",
+  "context": "AN ACT TO AMEND THE CONTROL OF PRICES ACT, No. 29 OF 1950.",
+  "dst": [
+   "act:29/1950"
+  ],
+  "label": null,
+  "stored_ok": true
+ },
+ {
+  "src": "act:14/1983",
+  "kind": "amends_act",
+  "context": "AN ACT TO AMEND THE FINANCE ACT, No. 38 OF 1971.",
+  "dst": [
+   "act:38/1971"
+  ],
+  "label": null,
+  "stored_ok": true
+ },
+ {
+  "src": "act:33/2007",
+  "kind": "amends_act",
+  "context": "AN ACT TO AMEND THE FINANCE LEASING ACT, NO. 56 OF 2000",
+  "dst": [
+   "act:56/2000"
+  ],
+  "label": null,
+  "stored_ok": true
+ },
+ {
+  "src": "act:15/2011",
+  "kind": "amends_act",
+  "context": "AN ACT TO AMEND THE FINANCE ACT, NO. 11 OF 2006, THE FINANCE ACT, NO. 5 OF 2005, THE FINANCE ACT, NO. 25 OF 2003 AND THE FINANCE ACT, NO. 16 OF 1995",
+  "dst": [
+   "act:16/1995"
+  ],
+  "label": null,
+  "stored_ok": true
+ },
+ {
+  "src": "act:22/2025",
+  "kind": "amends_act",
+  "context": "AN ACT TO AMEND THE PERSONAL DATA PROTECTION ACT, NO. 9 OF 2022",
+  "dst": [
+   "act:9/2022"
+  ],
+  "label": null,
+  "stored_ok": true
+ },
+ {
+  "src": "act:21/2026",
+  "kind": "amends_act",
+  "context": "AN ACT TO AMEND THE EMPLOYMENT OF WOMEN, YOUNG PERSONS AND CHILDREN ACT, NO. 47 OF 1956",
+  "dst": [
+   "act:47/1956"
+  ],
+  "label": null,
+  "stored_ok": true
+ },
+ {
+  "src": "act:21/2025",
+  "kind": "amends_act",
+  "context": "AN ACT TO AMEND THE CONVENTION AGAINST DOPING IN SPORT ACT, NO. 33 OF 2013",
+  "dst": [
+   "act:33/2013"
+  ],
+  "label": null,
+  "stored_ok": true
+ },
+ {
+  "src": "act:30/2018",
+  "kind": "amends_act",
+  "context": "AN ACT TO AMEND THE PRADESHIYA SABHAS ACT, NO. 15 OF 1987",
+  "dst": [
+   "act:15/1987"
+  ],
+  "label": null,
+  "stored_ok": true
+ },
+ {
+  "src": "act:24/2019",
+  "kind": "amends_act",
+  "context": "The Extradition Law, No. 8 of 1977 is hereby amended",
+  "dst": [
+   "law:8/1977"
+  ],
+  "label": null,
+  "stored_ok": true
+ },
+ {
+  "src": "amendment:19",
+  "kind": "amends_act",
+  "context": "AN ACT TO AMEND THE CONSTITUTION OF THE DEMOCRATIC SOCIALIST REPUBLIC OF SRI LANKA",
+  "dst": [
+   "constitution"
+  ],
+  "label": null,
+  "stored_ok": true
+ },
+ {
+  "src": "act:30/2022",
+  "kind": "amends_act",
+  "context": "AN ACT TO AMEND THE PREVENTION OF FRAUDS ORDINANCE (CHAPTER 70)",
+  "dst": [
+   "cap:84"
+  ],
+  "label": null,
+  "stored_ok": true
+ },
+ {
+  "src": "act:12/2007",
+  "kind": "amends_act",
+  "context": "AN ACT TO AMEND THE DEBITS TAX ACT, NO. 16 OF 2002",
+  "dst": [
+   "act:16/2002"
+  ],
+  "label": null,
+  "stored_ok": true
+ },
+ {
+  "src": "act:21/1995",
+  "kind": "amends_act",
+  "context": "In the principal enactment and in any other written law there shall be substituted",
+  "dst": [
+   "act:5/1972"
+  ],
+  "label": null,
+  "stored_ok": true
+ },
+ {
+  "src": "act:49/2000",
+  "kind": "amends_act",
+  "context": "The Town and Country Planning Ordinance, No. 13 of 1946, (hereinafter referred to as “the principal enactment”) is hereby amended",
+  "dst": [
+   "ordinance:13/1946"
+  ],
+  "label": null,
+  "stored_ok": true
+ },
+ {
+  "src": "act:8/2013",
+  "kind": "amends_act",
+  "context": "AN ACT TO AMEND THE TELECOMMUNICATION LEVY ACT, No. 21 OF 2011",
+  "dst": [
+   "act:21/2011"
+  ],
+  "label": null,
+  "stored_ok": true
+ },
+ {
+  "src": "act:45/1982",
+  "kind": "amends_act",
+  "context": "AN ACT TO AMEND THE APARTMENT OWNERSHIP LAW, No. 11 OF 1973.",
+  "dst": [
+   "law:11/1973"
+  ],
+  "label": null,
+  "stored_ok": true
+ },
+ {
+  "src": "act:18/2003",
+  "kind": "cites",
+  "context": "29th April, 2003] [Certified on 29th April, 2003] AN ACT TO AMEND THE SECURITIES AND EXCHANGE COMMISSION OF SRI LANKA ACT, NO. 36 OF 1987 BE it enacted by the Parliament of the",
+  "dst": [
+   "act:36/1987"
+  ],
+  "label": null,
+  "stored_ok": true
+ },
+ {
+  "src": "act:7/1997",
+  "kind": "cites",
+  "context": "29. The provisions of the Debt Conciliation Ordinance (Chapter 81) and the Money Lending Ordinance (Chapt",
+  "dst": [
+   "chapter:81"
+  ],
+  "label": null,
+  "stored_ok": true
+ },
+ {
+  "src": "act:2/2021",
+  "kind": "cites",
+  "context": "6. Section 20 of the principal enactment is amended as follows:- (1) in subsection (1) thereof, by the substitution for the words “No child or young person who",
+  "dst": [
+   "act:47/1956"
+  ],
+  "label": "20",
+  "stored_ok": true
+ },
+ {
+  "src": "act:4/1995",
+  "kind": "cites",
+  "context": "2. Section 291 of the Code of Criminal Procedure Act, No. 15 of 1979 (hereinafter referred to as the “principal enactment”) is hereby amended by the repeal of subsection (4) of that section and the substitution therefor of the following subs",
+  "dst": [
+   "act:15/1979"
+  ],
+  "label": null,
+  "stored_ok": true
+ },
+ {
+  "src": "act:21/2021",
+  "kind": "cites",
+  "context": "ate of the speaker is endorsed in respect of this Act in terms of Article 79 of the Constitution. (3) The provisions of Part V of this Act shall come into operation on such da",
+  "dst": [
+   "constitution"
+  ],
+  "label": null,
+  "stored_ok": true
+ },
+ {
+  "src": "cap:51",
+  "kind": "cites",
+  "context": "(3) In any area in respect of which an Order is made under subsection (1), section 95 of the Code of Criminal Procedure Act shall have effect as if the expression",
+  "dst": [
+   "cap:26"
+  ],
+  "label": "95",
+  "stored_ok": true
+ },
+ {
+  "src": "act:54/1981",
+  "kind": "cites",
+  "context": "ed acquisition, that property shall be deemed to be required for a public purpose and may accordingly be acquired under the Land Acquisition Act and be transferred to the Agency. (2)",
+  "dst": [
+   "cap1956:460"
+  ],
+  "label": null,
+  "stored_ok": true
+ },
+ {
+  "src": "act:1/1983",
+  "kind": "cites",
+  "context": "ition or conditionally. 8. The provisions of sections 306 to 309 (inclusive of both) of the Code of Criminal Procedure Act, No. 15 of 1979, shall not apply to a person charged wi",
+  "dst": [
+   "act:15/1979"
+  ],
+  "label": "309",
+  "stored_ok": true
+ },
+ {
+  "src": "act:3/1987",
+  "kind": "cites",
+  "context": "an investigation under this Act certified by the Chairman as having been so obtained shall subject to the provisions of the Evidence Ordinance and notwithstanding the provisions of a",
+  "dst": [
+   "cap:21"
+  ],
+  "label": null,
+  "stored_ok": true
+ },
+ {
+  "src": "act:26/1991",
+  "kind": "cites",
+  "context": "ection is hereby inserted immediately after section 51 and shall have effect as section 51A of the principal enactment— 51A. The Commission may having regard to the circumstances in which the offence under this Act was committed, compoun",
+  "dst": [
+   "act:36/1987"
+  ],
+  "label": "51A",
+  "stored_ok": true
+ },
+ {
+  "src": "act:19/2018",
+  "kind": "cites",
+  "context": "he meaning of the Banking Act, No. 30 of 1988; (c) any banking institution within the meaning of the Monetary Law Act (Chapter 422); (d) any registered finance company w",
+  "dst": [
+   "cap:323"
+  ],
+  "label": null,
+  "stored_ok": true
+ },
+ {
+  "src": "act:39/2024",
+  "kind": "cites",
+  "context": "officer of the Customs nominated by the Director-General of Customs appointed under section 2 of the Customs Ordinance (Chapter 235); *Insertion of new sections 22AA and 2",
+  "dst": [
+   "cap:235"
+  ],
+  "label": "2",
+  "stored_ok": true
+ },
+ {
+  "src": "act:33/1982",
+  "kind": "cites",
+  "context": "wing heading is hereby substituted for the heading appearing immediately before section 2 of the principal enactment:— “PART I The Staff, the Board and the Tribunal”.",
+  "dst": [
+   "act:51/1956"
+  ],
+  "label": "2",
+  "stored_ok": true
+ },
+ {
+  "src": "law:30/1978",
+  "kind": "cites",
+  "context": "21. Section 38 of the principal enactment is hereby repealed and the following new section substituted therefor :- 38. (1) The wealth tax payable by any person",
+  "dst": [
+   "act:4/1963"
+  ],
+  "label": "38",
+  "stored_ok": true
+ },
+ {
+  "src": "act:16/1959",
+  "kind": "cites",
+  "context": "21. During the operation of this Act, the Tea Control Act, No. 51 of 1957, shall have effect as t",
+  "dst": [
+   "cap1956:435"
+  ],
+  "label": null,
+  "stored_ok": true
+ },
+ {
+  "src": "act:7/2024",
+  "kind": "cites",
+  "context": "and all other transactions of the Office. (3) The provisions of Article 154 of the Constitution relating to the audit of the accounts of public corporations shall apply to the",
+  "dst": [
+   "constitution"
+  ],
+  "label": null,
+  "stored_ok": true
+ },
+ {
+  "src": "act:21/2012",
+  "kind": "cites",
+  "context": "hereupon proceed to fill such vacancy in the manner provided for the same in the Local Authorities Elections Ordinance (Cap. 262).” *Amendment of section 14 of the prin",
+  "dst": [
+   "chapter:262"
+  ],
+  "label": null,
+  "stored_ok": true
+ },
+ {
+  "src": "act:45/1990",
+  "kind": "cites",
+  "context": "part of his net wealth referred to in paragraph (a) (ii); or (ii) the Finance Act, No. 11 of 1963 or the Turnover Tax Act, No. 69 of 1981 in relation to any quarter ending on or",
+  "dst": [
+   "act:69/1981"
+  ],
+  "label": null,
+  "stored_ok": true
+ },
+ {
+  "src": "act:9/1998",
+  "kind": "cites",
+  "context": "4. Sections 2A and 2B of the principal enactment are hereby repealed. *Repeal of sections 2A and 2B of the principal enactment.*",
+  "dst": [
+   "chapter:437"
+  ],
+  "label": "2A",
+  "stored_ok": true
+ },
+ {
+  "src": "act:42/1987",
+  "kind": "cites",
+  "context": "oath, or made or subscribed the affirmation, set out in the Fourth Schedule to the Constitution. *Oath or affirmation by members.*",
+  "dst": [
+   "constitution"
+  ],
+  "label": null,
+  "stored_ok": true
+ },
+ {
+  "src": "act:20/1968",
+  "kind": "cites",
+  "context": "ay provided between two rows of seats in the lower deck of a double-decked omnibus.”. *Insertion of new section 156A in Chapter 203.*",
+  "dst": [
+   "chapter:203"
+  ],
+  "label": "156A",
+  "stored_ok": true
+ },
+ {
+  "src": "act:13/1989",
+  "kind": "cites",
+  "context": "sions of subsection (1) of section 291 (except paragraphs (a), (d), and (i) thereof) of the Code of Criminal Procedure Act, No. 15 of 1979, relating to default of payment of a fi",
+  "dst": [
+   "act:15/1979"
+  ],
+  "label": null,
+  "stored_ok": true
+ },
+ {
+  "src": "act:47/1984",
+  "kind": "cites",
+  "context": "3. Section 10 of the principal enactment as amended by Act No. 39 of 1983, is hereby amended by the substitution",
+  "dst": [
+   "act:39/1983"
+  ],
+  "label": null,
+  "stored_ok": false,
+  "note": "s10 is the principal enactment's (69/1981), not 39/1983's",
+  "was": [
+   "act:39/1983",
+   "10"
+  ]
+ },
+ {
+  "src": "act:19/2023",
+  "kind": "cites",
+  "context": "the Commissioner-General of Ayurveda”. (4) Every reference to the “Council” in sections 11 to 21, 42, 50 to 63, 71 and 81 in the principal enactment shall be read and construed as a reference to “the Ayurveda Medical Council”.",
+  "dst": [
+   "act:31/1961"
+  ],
+  "label": "71",
+  "stored_ok": true
+ },
+ {
+  "src": "law:49/1973",
+  "kind": "cites",
+  "context": "art thereof shall be exempt from income tax, and the provisions of sections 25 (1) (b) and 27 (1) of the Inland Revenue Act, No. 4 of 1963, shall not apply to such-dividend or pa",
+  "dst": [
+   "act:4/1963"
+  ],
+  "label": "25",
+  "stored_ok": true
+ },
+ {
+  "src": "act:22/2012",
+  "kind": "cites",
+  "context": "74. The First Schedule to the principal enactment is hereby repealed and the following Schedule is substituted therefor :— “FIRST SCHEDULE [Section 28 (2)] FORM OF NOM",
+  "dst": [
+   "chapter:262",
+   "cap1956:262"
+  ],
+  "label": null,
+  "stored_ok": false,
+  "note": "principal is the Local Authorities Elections Ordinance, not the amending Act 14/2004",
+  "was": [
+   "act:14/2004",
+   null
+  ]
+ },
+ {
+  "src": "act:14/2002",
+  "kind": "cites",
+  "context": "er, or such part thereof as he may deem necessary for recovery of the tax, and the provisions of sections 226 to 297 of the Civil Procedure Code shall, mutatis, mutandis, apply to such",
+  "dst": [
+   "cap:105"
+  ],
+  "label": "261",
+  "stored_ok": true
+ },
+ {
+  "src": "act:2/1965",
+  "kind": "cites",
+  "context": "f the principal Act, as amended by Act No. 40 of 1958, and shall have effect as section 8 and section 9 of the principal Act:— *“Application of the Criminal Procedure Code.* *Insertion of new sections 8 and 9 in the principal Act.*",
+  "dst": [
+   "cap:36"
+  ],
+  "label": "8",
+  "stored_ok": true
+ },
+ {
+  "src": "cap:154",
+  "kind": "cites",
+  "context": "under this Act, the accused shall, upon complaint duly made by him in accordance with the provisions of section 136 of the Code of Criminal Procedure Act and on giving to the prosecution not le",
+  "dst": [
+   "cap:26"
+  ],
+  "label": "136",
+  "stored_ok": true
+ },
+ {
+  "src": "act:38/2000",
+  "kind": "cites",
+  "context": "f the Inland Revenue Act, No. 4 of 1963, or under paragraph \\$(a)\\$ of subsection 9 of section 31 of the Inland Revenue Act No. 28 of 1979 or any such public charitable trust or",
+  "dst": [
+   "act:28/1979"
+  ],
+  "label": "31",
+  "stored_ok": false,
+  "note": "'subsection 9 of section 31': section 31",
+  "was": [
+   "act:28/1979",
+   "9"
+  ]
+ },
+ {
+  "src": "law:10/1973",
+  "kind": "cites",
+  "context": "wner or such part thereof as may be necessary for the recovery of that sum and the provisions of sections 226 to 297 of the Civil Procedure Code shall, mutatis mutandis, apply to the e",
+  "dst": [
+   "cap:105"
+  ],
+  "label": "237",
+  "stored_ok": true
+ },
+ {
+  "src": "act:13/1980",
+  "kind": "cites",
+  "context": "e that is not below the price, if any, stated by the Commissioner-General, and the provisions of sections 226 to 297 of the Civil Procedure Code, shall, mutatis mutandis, apply to such",
+  "dst": [
+   "cap:105"
+  ],
+  "label": "264",
+  "stored_ok": true
+ },
+ {
+  "src": "cap:137",
+  "kind": "cites",
+  "context": "10. Nothing in section 7 of the Sannases and Old Deeds Ordinance shall apply to any instrument which is",
+  "dst": [
+   "cap:136"
+  ],
+  "label": "7",
+  "stored_ok": true
+ },
+ {
+  "src": "act:1/2018",
+  "kind": "cites",
+  "context": "ection is hereby inserted immediately after section 20 and shall have effect as section 20A of the principal enactment:— “Appointment of a panel of experts. 20A. (1) The Director-General in consultation with the Secretary shall appoint",
+  "dst": [
+   "act:59/1979"
+  ],
+  "label": "20A",
+  "stored_ok": true
+ },
+ {
+  "src": "act:20/2016",
+  "kind": "cites",
+  "context": "15. Section 76 of the principal enactment is hereby amended as follows:– (1) in subsection (1) of that section by the substitution for the words “such supply su",
+  "dst": [
+   "act:14/2002"
+  ],
+  "label": null,
+  "stored_ok": true
+ },
+ {
+  "src": "act:8/2009",
+  "kind": "cites",
+  "context": "41. Section 139B of the principal enactment is hereby amended by the repeal of subsection (2) of that section and the substitution therefor of the following subsec",
+  "dst": [
+   "chapter:203"
+  ],
+  "label": "139B",
+  "stored_ok": true
+ },
+ {
+  "src": "act:15/2012",
+  "kind": "cites",
+  "context": "15. Section 23 of the principal enactment is hereby amended in subsection (1) by the addition immediately at the end of that subsection of the words \"If upon suc",
+  "dst": [
+   "act:26/1996"
+  ],
+  "label": null,
+  "stored_ok": true
+ },
+ {
+  "src": "act:28/1998",
+  "kind": "cites",
+  "context": "ection is hereby inserted immediately after section 43 and shall have effect as section 43A of the principal enactment :— “Special provisions regarding persons arrested in respect of child abuse. 43A (1) The provisions of sections 36 an",
+  "dst": [
+   "act:15/1979"
+  ],
+  "label": "43A",
+  "stored_ok": true
+ },
+ {
+  "src": "act:27/1996",
+  "kind": "cites",
+  "context": "ection is hereby inserted immediately after section 22 and shall have effect as section 22A of the principal enactment :— *Insertion of new section 22A in the principal enactment.*",
+  "dst": [
+   "act:25/1991"
+  ],
+  "label": "22A",
+  "stored_ok": true
+ },
+ {
+  "src": "act:16/1985",
+  "kind": "cites",
+  "context": "by the Tea Small Holdings Development Law, No. 35 of 1975; (xLvii) the Co-operative Development Fund established under the Finance Act, No. 11 of 1963; (xLviii) the Greater",
+  "dst": [
+   "act:11/1963"
+  ],
+  "label": null,
+  "stored_ok": false,
+  "note": "'Finance Act, No. 11 of 1963' named with its number; not law:47/1973 Finance Law by name",
+  "was": [
+   "law:47/1973",
+   null
+  ]
+ },
+ {
+  "src": "act:11/1988",
+  "kind": "cites",
+  "context": "Act, there is pending in any High Court, a trial (a) for any offence set out in the Second Schedule to the Judicature Act, No, 2 of 1978; and (b) in which no evidence has been",
+  "dst": [
+   "act:2/1978"
+  ],
+  "label": "Second Schedule",
+  "stored_ok": true
+ },
+ {
+  "src": "act:5/1978",
+  "kind": "cites",
+  "context": "presented by such moneys or to pay, for any quarter ending on or before March 31, 1977, any business turnover tax under the Finance Act, No. 11 of 1963, on the turnover from w",
+  "dst": [
+   "act:11/1963"
+  ],
+  "label": null,
+  "stored_ok": false,
+  "note": "'Finance Act, No. 11 of 1963' named with its number; not law:47/1973 Finance Law by name",
+  "was": [
+   "law:47/1973",
+   null
+  ]
+ },
+ {
+  "src": "act:4/2023",
+  "kind": "cites",
+  "context": "Column I | Column II | Column III Section of this Act | Section of the principal enactment which is amended | Date of operation 3 | 10 | 01.04.2021 7 | 18 | 01.04.2021 8 | 19(4) | 01.04.2018 9 | 46 | 01.04.2021",
+  "dst": [
+   "act:24/2017"
+  ],
+  "label": null,
+  "stored_ok": true
+ },
+ {
+  "src": "act:15/2026",
+  "kind": "cites",
+  "context": "6. Section 10 of the principal enactment is hereby amended as follows:- (1) by the insertion immediately after paragraph (h) of that section, of the following",
+  "dst": [
+   "act:47/1980"
+  ],
+  "label": "10",
+  "stored_ok": true
+ },
+ {
+  "src": "act:10/2017",
+  "kind": "cites",
+  "context": "published in the Gazette. (b) The provisions of subsections (7) to (16) of section 14 of the Registration of Electors Act, No. 44 of 1980 shall mutatis mutandis apply to objecti",
+  "dst": [
+   "act:44/1980"
+  ],
+  "label": "14",
+  "stored_ok": true
+ },
+ {
+  "src": "act:8/1989",
+  "kind": "cites",
+  "context": "urcharge payable under this Act, for that year and shall be determined accordingly; and (e) where under Chapter XXI of the Inland Revenue Act, a certificate is issued to a Magistrat",
+  "dst": [
+   "act:28/1979"
+  ],
+  "label": "Chapter XXI",
+  "stored_ok": false,
+  "note": "the Inland Revenue Act in 1989 is 28/1979; act:31/1988 is an amending Act lankalaw titles 'Inland Revenue'",
+  "was": [
+   "act:31/1988",
+   "Chapter XXI"
+  ]
+ },
+ {
+  "src": "act:16/1969",
+  "kind": "cites",
+  "context": "58. Section 114 of the principal enactment is hereby amended in sub-section (1) of that section by the substitution, for the words “thirty days”, of the words “fo",
+  "dst": [
+   "cap1956:464"
+  ],
+  "label": null,
+  "stored_ok": true
+ },
+ {
+  "src": "law:27/1973",
+  "kind": "cites",
+  "context": "ant cultivator \", \" landlord \" and \" agricultural labourers \" have the same meanings respectively as in the Paddy Lands Act, No. 1 of 1958, (3) The Board may, with the approval",
+  "dst": [
+   "act:1/1958"
+  ],
+  "label": null,
+  "stored_ok": true
+ },
+ {
+  "src": "act:15/2026",
+  "kind": "cites",
+  "context": "35. Section 27 of the principal enactment is hereby repealed and the following substituted therefor:- 27. All members, officers and employees of the Authority s",
+  "dst": [
+   "act:47/1980"
+  ],
+  "label": null,
+  "stored_ok": true
+ },
+ {
+  "src": "act:16/1978",
+  "kind": "cites",
+  "context": "PART XX REPEAL AND TRANSITORY PROVISIONS 138. The University of Ceylon Act, No. 1 of 1972, is hereby repealed with effect from th",
+  "dst": [
+   "act:1/1972"
+  ],
+  "label": null,
+  "stored_ok": true
+ },
+ {
+  "src": "cap:105",
+  "kind": "consolidates",
+  "context": "07, 31 of 1909, 9 of 1917, 39 of 1921, 42 of 1921, 21 of 1927, 23 of 1927, 25 of 1927, 15 of 1930, 26 of 1930, 4 of 1940, 18 of 1944, 39 of 1945, Acts Nos. 7 of 1949, 43 of",
+  "dst": [
+   "ordinance:18/1944"
+  ],
+  "label": null,
+  "stored_ok": true
+ },
+ {
+  "src": "cap:498",
+  "kind": "consolidates",
+  "context": "Act No. 13 of 1957.",
+  "dst": [
+   "act:13/1957"
+  ],
+  "label": null,
+  "stored_ok": true
+ },
+ {
+  "src": "cap:612",
+  "kind": "consolidates",
+  "context": "Ordinances Nos. 14 of 1890, 12 of 1897, 9 of 1903, 10 of 1928, 15",
+  "dst": [
+   "ordinance:14/1890"
+  ],
+  "label": null,
+  "stored_ok": true
+ },
+ {
+  "src": "cap1956:202",
+  "kind": "consolidates",
+  "context": "VEHICLES VEHICLES AN ORDINANCE TO AMEND AND CONSOLIDATE THE LAW RELATING TO VEHICLES OTHER THAN MOTOR VEHICLES. Ordinance Nos, 4 of 1916 13 of 1920 29 of 1921 20 of 1927 17",
+  "dst": [
+   "ordinance:4/1916"
+  ],
+  "label": null,
+  "stored_ok": true
+ },
+ {
+  "src": "cap1956:28",
+  "kind": "consolidates",
+  "context": "INFORMERS REWARDS INFORMERS REWARDS AN ORDINANCE TO MAKE PROVISION FOR THE REWARDING OF INFORMERS IN CERTAIN CASES. Ordinance Nos, 1 of 1914 24 of 1928 25 of 1930 32 of 1933 [",
+  "dst": [
+   "ordinance:1/1914"
+  ],
+  "label": null,
+  "stored_ok": true
+ },
+ {
+  "src": "cap1956:220",
+  "kind": "consolidates",
+  "context": "STRATION OF NURSING HOMES AND GENERALLY FOR THE REGULATION, SUPERVISION AND INSPECTION OF NURSING HOMES SO REGISTERED. Act Nos, 16 of 1949 12 of 1952 29 of 1953 [ 26 th March",
+  "dst": [
+   "act:16/1949"
+  ],
+  "label": null,
+  "stored_ok": true
+ },
+ {
+  "src": "cap1956:348",
+  "kind": "consolidates",
+  "context": "t therefore enacted by the Governor of Ceylon, with the advice and consent of the State Council thereof, as follows :- Ordinance Nos, 15 of 1947 [ 13 th March , 1947 ]",
+  "dst": [
+   "ordinance:15/1947"
+  ],
+  "label": null,
+  "stored_ok": true
+ },
+ {
+  "src": "cap:159",
+  "kind": "consolidates",
+  "context": "Ordinances No's. 1 of 26 of 44 of 22 of Act No. 9 of 1966.",
+  "dst": [
+   "act:9/1966"
+  ],
+  "label": null,
+  "stored_ok": true
+ },
+ {
+  "src": "cap:29",
+  "kind": "consolidates",
+  "context": "Ordinances Nos. 2 of 1926, 27 of 1928, 24 of 1933, 20 of 1937, 69 of 1938, 55",
+  "dst": [
+   "ordinance:27/1928"
+  ],
+  "label": null,
+  "stored_ok": true
+ },
+ {
+  "src": "cap:595",
+  "kind": "consolidates",
+  "context": "Ordinance No. 57 of 1946, Act No. 22 of 1955.",
+  "dst": [
+   "ordinance:57/1946"
+  ],
+  "label": null,
+  "stored_ok": true
+ },
+ {
+  "src": "cap:311",
+  "kind": "consolidates",
+  "context": "Ordinances Nos. 4 of 1865, 10 of 1926, 43 of 1942, 31 of 1947, Acts Nos. 2 of 1950, 5 of 1952, Law No. 33 of 1973.",
+  "dst": [
+   "law:33/1973"
+  ],
+  "label": null,
+  "stored_ok": true
+ },
+ {
+  "src": "cap1956:457",
+  "kind": "consolidates",
+  "context": "TION OF BOUNDARIES AN ORDINANCE TO MAKE PROVISION FOR THE MORE EASILY ASCERTAINING THE BOUNDARIES OF LANDS IN CEYLON. Ordinance Nos, 1 of 1844 13 of 1905 28 of 1919 27 of 1933 8",
+  "dst": [
+   "ordinance:1/1844"
+  ],
+  "label": null,
+  "stored_ok": true
+ },
+ {
+  "src": "cap:198",
+  "kind": "consolidates",
+  "context": "Ordinance No. 8 of 1940, Act No. 32 of 1953.",
+  "dst": [
+   "act:32/1953"
+  ],
+  "label": null,
+  "stored_ok": true
+ },
+ {
+  "src": "cap1956:189",
+  "kind": "consolidates",
+  "context": "TREASURE TROVE TREASURE TROVE AN ORDINANCE TO PROVIDE AGAINST THE CONCEALMENT OF TREASURE TROVE. Ordinance Nos, 17 of 1887 3 of 1891 9 of 1940 [ 17 th February",
+  "dst": [
+   "ordinance:17/1887"
+  ],
+  "label": null,
+  "stored_ok": true
+ },
+ {
+  "src": "cap1956:206",
+  "kind": "consolidates",
+  "context": "GAS GAS AN ORDINANCE RELATING TO THE SUPPLY OF GAS TO MUNICIPAL AND OTHER TOWNS IN CEYLON. Ordinance Nos, 1 of 1869 15 of 1926 61 of 1939 3 of 1946 29",
+  "dst": [
+   "ordinance:1/1869"
+  ],
+  "label": null,
+  "stored_ok": true
+ },
+ {
+  "src": "act:59/1957",
+  "kind": "inserts",
+  "context": "Insertion of new sections 59A, 59B, 59c and 59D in Act No. 19 of 1950",
+  "dst": [
+   "act:19/1950"
+  ],
+  "label": "59A",
+  "stored_ok": true
+ },
+ {
+  "src": "act:17/2017",
+  "kind": "inserts",
+  "context": "Insertion of new section 3A to the principal enactment",
+  "dst": [
+   "act:2/1988"
+  ],
+  "label": "3A",
+  "stored_ok": true
+ },
+ {
+  "src": "act:52/1998",
+  "kind": "inserts",
+  "context": "Insertion of new sections 32EEEE and 32EEEE in the principal enactment",
+  "dst": [
+   "act:28/1979"
+  ],
+  "label": "32EEEE",
+  "stored_ok": true
+ },
+ {
+  "src": "act:7/1984",
+  "kind": "inserts",
+  "context": "Insertion of new sections 66A, 66B, 66C, 66D, 66E, 66F, 66G, 66H, 66J, 66K and 66L in the principal enactment",
+  "dst": [
+   "act:51/1979"
+  ],
+  "label": "66C",
+  "stored_ok": true
+ },
+ {
+  "src": "law:12/1976",
+  "kind": "inserts",
+  "context": "Insertion of new sections 58A and 58B in the principal enactment",
+  "dst": [
+   "cap1956:128"
+  ],
+  "label": "58B",
+  "stored_ok": true
+ },
+ {
+  "src": "act:23/2022",
+  "kind": "inserts",
+  "context": "Insertion of new sections 10A and 10B in the principal enactment",
+  "dst": [
+   "act:45/1971"
+  ],
+  "label": "10B",
+  "stored_ok": true
+ },
+ {
+  "src": "act:4/1991",
+  "kind": "inserts",
+  "context": "Insertion of new section 62A in the principal enactment",
+  "dst": [
+   "act:58/1979"
+  ],
+  "label": "62A",
+  "stored_ok": true
+ },
+ {
+  "src": "act:36/1988",
+  "kind": "inserts",
+  "context": "following new Part and sections are hereby inserted immediately after section 123 of the Merchant Shipping Act, No. 52 of 1971 (hereinafter referred to as the “principal enactment”) and shall have effect as Part IIIA",
+  "dst": [
+   "act:52/1971"
+  ],
+  "label": "Part IIIA",
+  "stored_ok": true
+ },
+ {
+  "src": "act:37/2003",
+  "kind": "inserts",
+  "context": "Insertion of new Chapter XVIB in the principal enactment",
+  "dst": [
+   "act:38/2000"
+  ],
+  "label": "Chapter XVIB",
+  "stored_ok": true
+ },
+ {
+  "src": "act:44/1981",
+  "kind": "inserts",
+  "context": "Insertion of new sections 57A, 57B, 57C, 57D, 57E and 57F in the principal enactment",
+  "dst": [
+   "cap1956:431"
+  ],
+  "label": "57E",
+  "stored_ok": true
+ },
+ {
+  "src": "act:56/1985",
+  "kind": "inserts",
+  "context": "Insertion of Chapter XVA in the principal enactment",
+  "dst": [
+   "act:28/1979"
+  ],
+  "label": "Chapter XVA",
+  "stored_ok": true
+ },
+ {
+  "src": "law:25/1975",
+  "kind": "inserts",
+  "context": "Insertion of new Chapter VI in the principal enactment",
+  "dst": [
+   "law:44/1973"
+  ],
+  "label": "Chapter VI",
+  "stored_ok": true
+ },
+ {
+  "src": "act:1/1970",
+  "kind": "inserts",
+  "context": "following new sections are hereby inserted In Part VI immediately after section 67, and shall have effect as sections 67A, 67B, 67C, 67D, 67E and 67F, of the principal enactment",
+  "dst": [
+   "cap:567"
+  ],
+  "label": "67C",
+  "stored_ok": true
+ },
+ {
+  "src": "act:42/1986",
+  "kind": "inserts",
+  "context": "Insertion of new sections 19A, 19B, 19c and 19d of the principal enactment",
+  "dst": [
+   "act:25/1962"
+  ],
+  "label": "19B",
+  "stored_ok": true
+ },
+ {
+  "src": "act:18/2017",
+  "kind": "inserts",
+  "context": "Insertion of new section 128C in the principal enactment",
+  "dst": [
+   "chapter:203"
+  ],
+  "label": "128C",
+  "stored_ok": true
+ },
+ {
+  "src": "act:62/1957",
+  "kind": "inserts",
+  "context": "Insertion of new section 44A in the principal Act",
+  "dst": [
+   "act:43/1950"
+  ],
+  "label": "44A",
+  "stored_ok": true
+ },
+ {
+  "src": "act:62/1957",
+  "kind": "inserts",
+  "context": "Insertion of new sections 46B, 46C and 46D in the principal Act",
+  "dst": [
+   "act:43/1950"
+  ],
+  "label": "46D",
+  "stored_ok": true
+ },
+ {
+  "src": "act:9/1963",
+  "kind": "inserts",
+  "context": "Insertion of new sections 27A to 27E in the principal enactment",
+  "dst": [
+   "cap1956:262"
+  ],
+  "label": "27D",
+  "stored_ok": true
+ },
+ {
+  "src": "act:42/1979",
+  "kind": "inserts",
+  "context": "Insertion of new sections 247A, 247B, 247C, 247D and 247E in the principal enactment",
+  "dst": [
+   "cap:576"
+  ],
+  "label": "247A",
+  "stored_ok": true
+ },
+ {
+  "src": "act:1/2026",
+  "kind": "inserts",
+  "context": "Insertion of new sections 42A, 42B, 42C, 42D, 42E, and 42F in the principal enactment",
+  "dst": [
+   "act:11/2021"
+  ],
+  "label": "42B",
+  "stored_ok": true
+ },
+ {
+  "src": "act:15/1979",
+  "kind": "repeals",
+  "context": "REPEAL CHAPTERS II AND IV OF THE ADMINISTRATION OF JUSTICE LAW, NO. 44 OF 1973",
+  "dst": [
+   "law:44/1973"
+  ],
+  "label": "236",
+  "stored_ok": true
+ },
+ {
+  "src": "law:44/1973",
+  "kind": "repeals",
+  "context": "Sections 516 to 554, sections 712 to 744, sections 753 to 778 and sections 801 to 833A of the Civil Procedure Code and sections 19 to 21 and sections 26 to 36 of the Public Trustee Ordinance are hereby repealed",
+  "dst": [
+   "cap:105"
+  ],
+  "label": "518",
+  "stored_ok": true
+ },
+ {
+  "src": "amendment:18",
+  "kind": "repeals",
+  "context": "Chapter VIIA of the Constitution (Articles 41A to 41H) is hereby repealed",
+  "dst": [
+   "constitution"
+  ],
+  "label": "41D",
+  "stored_ok": true
+ },
+ {
+  "src": "act:15/1979",
+  "kind": "repeals",
+  "context": "Chapters II and IV of the Administration of Justice Law, No. 44 of 1973, are hereby repealed",
+  "dst": [
+   "law:44/1973"
+  ],
+  "label": "114",
+  "stored_ok": true
+ },
+ {
+  "src": "act:8/2017",
+  "kind": "repeals",
+  "context": "Sections 146, 147 and 148 of the principal enactment are hereby repealed",
+  "dst": [
+   "cap:105"
+  ],
+  "label": "147",
+  "stored_ok": true
+ },
+ {
+  "src": "act:32/1988",
+  "kind": "repeals",
+  "context": "Sections 26 to 30 of the principal enactment are hereby repealed",
+  "dst": [
+   "act:17/1969"
+  ],
+  "label": "26",
+  "stored_ok": true
+ },
+ {
+  "src": "act:48/1968",
+  "kind": "repeals",
+  "context": "Part IV of the principal enactment is hereby repealed",
+  "dst": [
+   "cap1956:453"
+  ],
+  "label": "25",
+  "stored_ok": true
+ },
+ {
+  "src": "act:28/1995",
+  "kind": "repeals",
+  "context": "Sections 52 to 74 of the principal enactment (inclusive of both these sections) other than section 60 are hereby repealed",
+  "dst": [
+   "act:30/1971"
+  ],
+  "label": "62",
+  "stored_ok": true
+ },
+ {
+  "src": "act:15/1979",
+  "kind": "repeals",
+  "context": "REPEAL CHAPTERS II AND IV OF THE ADMINISTRATION OF JUSTICE LAW, NO. 44 OF 1973",
+  "dst": [
+   "law:44/1973"
+  ],
+  "label": "82",
+  "stored_ok": true
+ },
+ {
+  "src": "act:2/1978",
+  "kind": "repeals",
+  "context": "Chapter I of the Administration of Justice Law, No. 44 of 1973, and the Conciliation Boards Act, No. 10 of 1958, are hereby repealed",
+  "dst": [
+   "law:44/1973"
+  ],
+  "label": "40",
+  "stored_ok": true
+ },
+ {
+  "src": "act:15/1979",
+  "kind": "repeals",
+  "context": "Chapters II and IV of the Administration of Justice Law, No. 44 of 1973, are hereby repealed",
+  "dst": [
+   "law:44/1973"
+  ],
+  "label": "85",
+  "stored_ok": true
+ },
+ {
+  "src": "act:25/1962",
+  "kind": "repeals",
+  "context": "Sections 11, 12, 13, 16 and 30 of the Insurance Corporation Act, No. 2 of 1961, are hereby repealed",
+  "dst": [
+   "act:2/1961"
+  ],
+  "label": "12",
+  "stored_ok": true
+ },
+ {
+  "src": "law:24/1977",
+  "kind": "repeals",
+  "context": "Section 6 of the principal enactment is hereby repealed",
+  "dst": [
+   "cap:578"
+  ],
+  "label": "6",
+  "stored_ok": true
+ },
+ {
+  "src": "act:15/1979",
+  "kind": "repeals",
+  "context": "REPEAL CHAPTERS II AND IV OF THE ADMINISTRATION OF JUSTICE LAW, NO. 44 OF 1973",
+  "dst": [
+   "law:44/1973"
+  ],
+  "label": "354",
+  "stored_ok": true
+ },
+ {
+  "src": "act:24/2024",
+  "kind": "repeals",
+  "context": "Part VIIA of the principal enactment is hereby repealed",
+  "dst": [
+   "act:30/1988"
+  ],
+  "label": "Part VIIA",
+  "stored_ok": true
+ },
+ {
+  "src": "act:38/1981",
+  "kind": "repeals",
+  "context": "Section 14 of the principal enactment is hereby repealed",
+  "dst": [
+   "law:23/1975"
+  ],
+  "label": "14",
+  "stored_ok": true
+ },
+ {
+  "src": "act:21/1981",
+  "kind": "repeals",
+  "context": "Sections 65, 66, 67, 68, 69, 70, 71, 72, 73 and 73A of the principal enactment are hereby repealed",
+  "dst": [
+   "cap1956:203"
+  ],
+  "label": "71",
+  "stored_ok": true
+ },
+ {
+  "src": "act:15/1979",
+  "kind": "repeals",
+  "context": "REPEAL CHAPTERS II AND IV OF THE ADMINISTRATION OF JUSTICE LAW, NO. 44 OF 1973",
+  "dst": [
+   "law:44/1973"
+  ],
+  "label": "316",
+  "stored_ok": true
+ },
+ {
+  "src": "law:44/1973",
+  "kind": "repeals",
+  "context": "Sections 516 to 554, sections 712 to 744, sections 753 to 778 and sections 801 to 833A of the Civil Procedure Code and sections 19 to 21 and sections 26 to 36 of the Public Trustee Ordinance are hereby repealed",
+  "dst": [
+   "cap:105"
+  ],
+  "label": "770",
+  "stored_ok": true
+ },
+ {
+  "src": "act:15/1979",
+  "kind": "repeals",
+  "context": "Chapters II and IV of the Administration of Justice Law, No. 44 of 1973, are hereby repealed",
+  "dst": [
+   "law:44/1973"
+  ],
+  "label": "98",
+  "stored_ok": true
+ },
+ {
+  "src": "act:4/1963",
+  "kind": "repeals_act",
+  "context": "The Double Taxation (Relief) Act is hereby repealed",
+  "dst": [
+   "cap1956:244"
+  ],
+  "label": null,
+  "stored_ok": true
+ },
+ {
+  "src": "act:9/2026",
+  "kind": "repeals_act",
+  "context": "The Microfinance Act, No. 6 of 2016 is hereby repealed",
+  "dst": [
+   "act:6/2016"
+  ],
+  "label": null,
+  "stored_ok": true
+ },
+ {
+  "src": "act:38/1983",
+  "kind": "repeals_act",
+  "context": "The Mahaweli Development Board Act, No. 14 of 1970, is hereby repealed",
+  "dst": [
+   "act:14/1970"
+  ],
+  "label": null,
+  "stored_ok": true
+ },
+ {
+  "src": "act:20/2009",
+  "kind": "repeals_act",
+  "context": "The Electricity Act (Chapter 205) is hereby repealed",
+  "dst": [
+   "chapter:205"
+  ],
+  "label": null,
+  "stored_ok": true
+ },
+ {
+  "src": "act:10/1965",
+  "kind": "repeals_act",
+  "context": "The Bank Debits Tax Act, No. 42 of 1957, is hereby repealed",
+  "dst": [
+   "act:42/1957"
+  ],
+  "label": null,
+  "stored_ok": true
+ },
+ {
+  "src": "act:2/1982",
+  "kind": "repeals_act",
+  "context": "The Airports Authority Act, No. 46 of 1979, is hereby repealed",
+  "dst": [
+   "act:46/1979"
+  ],
+  "label": null,
+  "stored_ok": true
+ },
+ {
+  "src": "act:15/1970",
+  "kind": "repeals_act",
+  "context": "The Tea Research Ordinance is hereby repealed",
+  "dst": [
+   "cap1956:438"
+  ],
+  "label": null,
+  "stored_ok": true
+ },
+ {
+  "src": "act:19/1962",
+  "kind": "repeals_act",
+  "context": "The Revenue Protection Ordinance is hereby repealed",
+  "dst": [
+   "cap:360"
+  ],
+  "label": null,
+  "stored_ok": true
+ },
+ {
+  "src": "act:78/1988",
+  "kind": "repeals_act",
+  "context": "The Control of Finance Companies Act, No. 27 of 1979, is hereby repealed",
+  "dst": [
+   "act:27/1979"
+  ],
+  "label": null,
+  "stored_ok": true
+ },
+ {
+  "src": "act:52/1979",
+  "kind": "repeals_act",
+  "context": "The Designs Ordinance (Chapter 153) is hereby repealed",
+  "dst": [
+   "chapter:153"
+  ],
+  "label": null,
+  "stored_ok": true
+ },
+ {
+  "src": "act:42/2011",
+  "kind": "repeals_act",
+  "context": "The Finance Companies Act, No 78 of 1988 is hereby repealed",
+  "dst": [
+   "act:78/1988"
+  ],
+  "label": null,
+  "stored_ok": true
+ },
+ {
+  "src": "cap1956:329",
+  "kind": "repeals_act",
+  "context": "Ordinance No. 12 of 1896 entitled \"The Ordinance for Incorporating the Consistory of the Dutch Reformed Church at Wolfendahl, Colombo \" is hereby repealed",
+  "dst": [
+   "ordinance:12/1896"
+  ],
+  "label": null,
+  "stored_ok": true
+ },
+ {
+  "src": "act:13/2026",
+  "kind": "repeals_act",
+  "context": "The Commercial Mediation Center of Sri Lanka Act, No. 44 of 2000 is hereby repealed",
+  "dst": [
+   "act:44/2000"
+  ],
+  "label": null,
+  "stored_ok": true
+ },
+ {
+  "src": "act:6/2004",
+  "kind": "repeals_act",
+  "context": "AN ACT TO REPEAL THE SRI LANKA INSTITUTE OF CO-OPERATIVE MANAGEMENT ACT, NO. 37 OF 1983",
+  "dst": [
+   "act:37/1983"
+  ],
+  "label": null,
+  "stored_ok": true
+ },
+ {
+  "src": "act:6/2025",
+  "kind": "repeals_act",
+  "context": "AN ACT TO REPEAL THE FOREIGN LOANS ACT, No. 29 OF 1957",
+  "dst": [
+   "act:29/1957"
+  ],
+  "label": null,
+  "stored_ok": true
+ },
+ {
+  "src": "law:43/1978",
+  "kind": "repeals_act",
+  "context": "The Peoples Committees Act, No. 16 of 1971, is hereby repealed",
+  "dst": [
+   "act:16/1971"
+  ],
+  "label": null,
+  "stored_ok": true
+ },
+ {
+  "src": "act:6/1984",
+  "kind": "repeals_act",
+  "context": "The Bureau of Ceylon Standards Act, No. 38 of 1964, is hereby repealed",
+  "dst": [
+   "act:38/1964"
+  ],
+  "label": null,
+  "stored_ok": true
+ },
+ {
+  "src": "cap:597",
+  "kind": "repeals_act",
+  "context": "The Rent Restriction Act (No 29 of 1948), as amended from time to time is hereby repealed",
+  "dst": [
+   "act:29/1948"
+  ],
+  "label": null,
+  "stored_ok": true
+ },
+ {
+  "src": "act:22/2026",
+  "kind": "repeals_act",
+  "context": "AN ACT TO REPEAL THE CHIEF OF DEFENCE STAFF ACT, NO. 35 OF 2009 AND TO PROVIDE FOR MATTERS CONNECTED THEREWITH OR INCIDENTAL THERETO.",
+  "dst": [
+   "act:35/2009"
+  ],
+  "label": null,
+  "stored_ok": true
+ },
+ {
+  "src": "act:25/1959",
+  "kind": "repeals_act",
+  "context": "The Suspension of Capital Punishment Act, No. 20 of 1958, is hereby repealed",
+  "dst": [
+   "act:20/1958"
+  ],
+  "label": null,
+  "stored_ok": true
+ },
+ {
+  "src": "act:13/1965",
+  "kind": "replaces",
+  "context": "Section 14 of the principal Act is hereby repealed and the following section is substituted",
+  "dst": [
+   "act:31/1958"
+  ],
+  "label": "14",
+  "stored_ok": true
+ },
+ {
+  "src": "act:49/1993",
+  "kind": "replaces",
+  "context": "The long title to the Fauna and Flora Protection Ordinance (hereinafter referred to as the “principal enactment”) is hereby repealed and the following long title substituted",
+  "dst": [
+   "cap:567"
+  ],
+  "label": "long title",
+  "stored_ok": true
+ },
+ {
+  "src": "amendment:18",
+  "kind": "replaces",
+  "context": "Article 155M of the Constitution is hereby repealed and the following Article substituted",
+  "dst": [
+   "constitution"
+  ],
+  "label": "155M",
+  "stored_ok": true
+ },
+ {
+  "src": "act:57/1957",
+  "kind": "replaces",
+  "context": "Replacement of the First and Second Schedules to the principal enactment",
+  "dst": [
+   "cap:364"
+  ],
+  "label": "First Schedule",
+  "stored_ok": true
+ },
+ {
+  "src": "act:21/2017",
+  "kind": "replaces",
+  "context": "Section 5 of the Urban Councils Ordinance (Chapter 255) is hereby repealed and the following section substituted",
+  "dst": [
+   "chapter:255"
+  ],
+  "label": "5",
+  "stored_ok": true
+ },
+ {
+  "src": "act:63/1992",
+  "kind": "replaces",
+  "context": "Section 96 of the principal enactment is hereby repealed and the following section substituted",
+  "dst": [
+   "act:28/1979"
+  ],
+  "label": "96",
+  "stored_ok": true
+ },
+ {
+  "src": "act:55/1992",
+  "kind": "replaces",
+  "context": "Section 20 of the Air Navigation Act (hereinafter in this Part of this Act referred to as the “principal enactment”) is hereby repealed and the following section is substituted",
+  "dst": [
+   "cap1956:365"
+  ],
+  "label": "20",
+  "stored_ok": true
+ },
+ {
+  "src": "act:79/1988",
+  "kind": "replaces",
+  "context": "Sections 754 to 760A of the principal enactment are hereby repealed, and the following sections substituted",
+  "dst": [
+   "cap:105"
+  ],
+  "label": "756",
+  "stored_ok": true
+ },
+ {
+  "src": "act:12/2004",
+  "kind": "replaces",
+  "context": "Section 123B of the principal enactment is hereby repealed and the following section is substituted",
+  "dst": [
+   "act:38/2000"
+  ],
+  "label": "123B",
+  "stored_ok": true
+ },
+ {
+  "src": "law:37/1974",
+  "kind": "replaces",
+  "context": "Section 13 of the principal enactment is hereby repealed and the following new section substituted",
+  "dst": [
+   "cap:323"
+  ],
+  "label": "13",
+  "stored_ok": true
+ },
+ {
+  "src": "act:7/2001",
+  "kind": "replaces",
+  "context": "The Schedule to the principal enactment is hereby repealed and the following Schedule substituted",
+  "dst": [
+   "act:40/1988"
+  ],
+  "label": "Schedule",
+  "stored_ok": true
+ },
+ {
+  "src": "act:24/1964",
+  "kind": "replaces",
+  "context": "Replacement of section 4 of Chapter 81",
+  "dst": [
+   "chapter:81"
+  ],
+  "label": "4",
+  "stored_ok": true
+ },
+ {
+  "src": "act:17/1985",
+  "kind": "replaces",
+  "context": "Section 24 of the principal enactment is hereby repealed and the following section substituted",
+  "dst": [
+   "law:14/1975"
+  ],
+  "label": "24",
+  "stored_ok": true
+ },
+ {
+  "src": "act:31/1962",
+  "kind": "replaces",
+  "context": "Section 440A of the Criminal Procedure Code is hereby repealed and the following new section substituted",
+  "dst": [
+   "cap1956:20"
+  ],
+  "label": "440A",
+  "stored_ok": true
+ },
+ {
+  "src": "act:22/1993",
+  "kind": "replaces",
+  "context": "Section 39 of the principal enactment is hereby repealed and the following section substituted",
+  "dst": [
+   "cap1956:464"
+  ],
+  "label": "39",
+  "stored_ok": true
+ },
+ {
+  "src": "law:20/1977",
+  "kind": "replaces",
+  "context": "Section 521 of the principal enactment is hereby repealed and the following new section substituted",
+  "dst": [
+   "cap:105"
+  ],
+  "label": "521",
+  "stored_ok": true
+ },
+ {
+  "src": "act:27/1981",
+  "kind": "replaces",
+  "context": "Chapters II and III of the principal enactment are hereby repealed and the following chapters substituted",
+  "dst": [
+   "cap1956:464"
+  ],
+  "label": "Chapter II",
+  "stored_ok": true
+ },
+ {
+  "src": "act:22/2009",
+  "kind": "replaces",
+  "context": "Replacement of section 12 of the principal enactment",
+  "dst": [
+   "cap:567"
+  ],
+  "label": "12",
+  "stored_ok": true
+ },
+ {
+  "src": "law:24/1977",
+  "kind": "replaces",
+  "context": "section 6 of the principal enactment is hereby repealed and the following subheading substituted",
+  "dst": [
+   "cap:578"
+  ],
+  "label": "6",
+  "stored_ok": true
+ },
+ {
+  "src": "act:39/1987",
+  "kind": "replaces",
+  "context": "Section 3 of the Rubber Research Ordinance (hereinafter referred to as the “principal enactment”) is hereby repealed and the following section substituted",
+  "dst": [
+   "cap1956:439"
+  ],
+  "label": "3",
+  "stored_ok": true
+ },
+ {
+  "src": "cap1956:118",
+  "kind": "same_as",
+  "context": "also cap1956:118",
+  "dst": [
+   "cap:136"
+  ],
+  "label": null,
+  "stored_ok": true
+ },
+ {
+  "src": "cap1956:370",
+  "kind": "same_as",
+  "context": "also cap1956:370",
+  "dst": [
+   "chapter:370"
+  ],
+  "label": null,
+  "stored_ok": true
+ },
+ {
+  "src": "cap:168",
+  "kind": "same_as",
+  "context": "also cap:168",
+  "dst": [
+   "act:65/1979"
+  ],
+  "label": null,
+  "stored_ok": true
+ },
+ {
+  "src": "cap1956:318",
+  "kind": "same_as",
+  "context": "also cap1956:318",
+  "dst": [
+   "chapter:318"
+  ],
+  "label": null,
+  "stored_ok": true
+ },
+ {
+  "src": "cap1956:407",
+  "kind": "same_as",
+  "context": "also cap1956:407",
+  "dst": [
+   "chapter:407"
+  ],
+  "label": null,
+  "stored_ok": true
+ },
+ {
+  "src": "cap1956:354",
+  "kind": "same_as",
+  "context": "also cap1956:354",
+  "dst": [
+   "cap:614"
+  ],
+  "label": null,
+  "stored_ok": true
+ },
+ {
+  "src": "cap1956:340",
+  "kind": "same_as",
+  "context": "also cap1956:340",
+  "dst": [
+   "cap:436"
+  ],
+  "label": null,
+  "stored_ok": true
+ },
+ {
+  "src": "cap1956:106",
+  "kind": "same_as",
+  "context": "also cap1956:106",
+  "dst": [
+   "chapter:106"
+  ],
+  "label": null,
+  "stored_ok": true
+ },
+ {
+  "src": "cap1956:341",
+  "kind": "same_as",
+  "context": "also cap1956:341",
+  "dst": [
+   "chapter:341"
+  ],
+  "label": null,
+  "stored_ok": true
+ },
+ {
+  "src": "cap1956:480",
+  "kind": "same_as",
+  "context": "also cap1956:480",
+  "dst": [
+   "ordinance:19/1908"
+  ],
+  "label": null,
+  "stored_ok": true
+ },
+ {
+  "src": "cap1956:65",
+  "kind": "same_as",
+  "context": "also cap1956:65",
+  "dst": [
+   "ordinance:25/1933"
+  ],
+  "label": null,
+  "stored_ok": true
+ },
+ {
+  "src": "cap:193",
+  "kind": "same_as",
+  "context": "also cap:193",
+  "dst": [
+   "law:30/1975"
+  ],
+  "label": null,
+  "stored_ok": true
+ },
+ {
+  "src": "cap1956:355",
+  "kind": "same_as",
+  "context": "also cap1956:355",
+  "dst": [
+   "cap:616"
+  ],
+  "label": null,
+  "stored_ok": true
+ },
+ {
+  "src": "cap1956:37",
+  "kind": "same_as",
+  "context": "also cap1956:37",
+  "dst": [
+   "ordinance:12/1905"
+  ],
+  "label": null,
+  "stored_ok": true
+ },
+ {
+  "src": "cap1956:418",
+  "kind": "same_as",
+  "context": "also cap1956:418",
+  "dst": [
+   "chapter:418"
+  ],
+  "label": null,
+  "stored_ok": true
+ }
+]

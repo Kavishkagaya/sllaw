@@ -25,7 +25,7 @@ ITEM = r"\d{1,3}[A-Za-z]{0,5}"
 SEP = r"(?:\s*,\s*(?:and\s+)?|\s+and\s+|\s*(?:to|-|–)\s*|\s+(?=\d))"
 LIST = rf"{ITEM}(?:\s*\(\w{{1,5}}\))*(?:{SEP}(?:sections?\s*)?{ITEM}(?:\s*\(\w{{1,5}}\))*)*"
 ORD = r"(?:first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth)"
-PARTS = (rf"(?:(?:sections?|articles?)\s*{LIST}"
+PARTS = (rf"(?:(?<!sub)(?<!sub-)(?:sections?|articles?)\s*{LIST}"   # not "subsection 9 of section 31" -> 9
          rf"|(?:the\s+)?{ORD}(?:\s*(?:,|and)\s*{ORD})*\s+Schedules?|Schedules?\s+(?:[A-Z]{{1,2}}|[IVX]+|\d+)\b"
          rf"|(?:the\s+)?Schedule\b|(?:Part|Chapter)s?\s+[IVXL]+[A-Z]?(?:\s*(?:,|and)\s*[IVXL]+[A-Z]?)*\b|(?:the\s+)?long\s+title|(?:the\s+)?preamble)")
 NAME = r"(?:[A-Z][\w’'-]*\s+(?:(?:of|and|for|the|in|on|to|\([^)]{1,40}\))\s+)*){1,12}?(?:Act|Law|Ordinance|Code|Order\s+in\s+Council)"
@@ -52,6 +52,9 @@ ALSO = re.compile(rf"\s*\(\s*((?:sections?|articles?)\s+{LIST})", re.I)     # "P
 CITE_PART = re.compile(rf"(?P<parts>{PARTS})\s+(?:of|in|to|under)\s+(?P<law>(?:the\s+)?principal\s+(?:enactment|Act|Law|Ordinance)"
                        rf"|that\s+(?:enactment|Act|Law|Ordinance)|the\s+Constitution)", re.I)
 CONST = re.compile(r"\bthe\s+Constitution\b")
+AMENDED_BY = re.compile(r"\bas\s+(?:last\s+|further\s+)?amended\s+by\b|\bamended\s+by\b", re.I)
+# what may follow "amended by" to the end of the phrase: only amending laws' numbers and joiners
+AMENDERS = re.compile(r"(?:[\s\W\d]|\b(?:Acts?|Laws?|Ordinances?|Nos?|of|and|the|hereinafter|hereafter|in|this|Part)\b)*", re.I)
 PRINC = re.compile(r"\bprincipal\s+(?:enactment|Act|Law|Ordinance)\b", re.I)
 KIND = {"amendment": "amends", "amended": "amends", "replacement": "replaces", "substitution": "replaces",
         "substituted": "replaces", "repeal": "repeals", "repealed": "repeals", "insertion": "inserts",
@@ -81,12 +84,15 @@ NAMES = {}          # normalised title -> (key, tier), every held document (load
 
 def load_names(cur):
     """Every held law by its title: 1980 chapters (graph.CHAPTERS), then 1956 chapters, then non-amending Acts/Laws;
-    a name two laws of one tier share is left out."""
+    a name two laws of one tier share is left out. An amending law is known by its long title too: lankalaw titles
+    act:31/1988 "Inland Revenue" ("AN ACT TO AMEND THE INLAND REVENUE ACT"), and "the Inland Revenue Act" in a 1989
+    Act went to it, not to 28/1979 (2026-10-20)."""
     tiers = [{n: {k} for n, k in graph.CHAPTERS.items()}, {}, {}]
-    cur.execute("SELECT key, title FROM docs WHERE title IS NOT NULL")
-    for k, t in cur.fetchall():
+    cur.execute("SELECT key, title, meta->>'long_title' FROM docs WHERE title IS NOT NULL")
+    for k, t, lt in cur.fetchall():
         tier = 0 if k.startswith("cap:") else 1 if k.startswith("cap1956:") else 2
-        if tier == 2 and (not re.match(r"(act|law|ordinance):", k) or re.search(r"amendment|appropriation", t, re.I)):
+        if tier == 2 and (not re.match(r"(act|law|ordinance):", k) or re.search(r"amendment|appropriation", t, re.I)
+                          or re.match(r"\s*AN?\s+(?:ACT|LAW|ORDINANCE)\s+TO\s+AMEND\b", lt or "", re.I)):
             continue
         if (n := graph.norm_name(re.sub(r",?\s*No\.?\s*\d+\s+of\s+\d{4}.*$", "", t, flags=re.I))):
             tiers[tier].setdefault(n, set()).add(k)
@@ -257,7 +263,13 @@ class Doc:
     def chunk(self, i, t):
         out = []
         for m in PRINCIPAL.finditer(t):                # "(hereinafter referred to as the principal enactment)"
-            law = list(re.finditer(LAW, t[max(0, m.start() - 300):m.start()]))
+            w = t[max(0, m.start() - 300):m.start()]
+            # "<law> as last amended by Act, No. 14 of 2004 (hereinafter ...)": the principal is <law>, not the amending
+            # Act (24 laws, act:22/2012 -> 14/2004, 2026-10-20); only a clause that ends the phrase, not "Section 53, as
+            # amended by Ordinance No. 24 of 1938, of the Ceylon State Mortgage Bank Ordinance"
+            if (am := list(AMENDED_BY.finditer(w))) and AMENDERS.fullmatch(w[am[-1].end():]):
+                w = w[:am[-1].start()]
+            law = list(re.finditer(LAW, w))
             if law and (keys := self.law(law[-1][0])):
                 self.principal = keys[-1]
         for name, r in PATTERNS:
@@ -289,10 +301,20 @@ class Doc:
                     for m in PRINC.finditer(t)]
         out += [(i, "cites", "constitution", None, re.sub(r"\s+", " ", t[max(0, m.start() - 80):m.end() + 80]).strip(), {"via": "cite"})
                 for m in CONST.finditer(t)]
-        for s, e, k in cites_in(t, bare=self.key.startswith("cap")) + [(m.start(), m.end(), by_name(m[1], self.year)) for m in NAMED.finditer(t)]:
+        nums = cites_in(t, bare=self.key.startswith("cap"))
+        # a name printed with its number is the number's link only: "the Finance Act, No. 11 of 1963" also gave
+        # law:47/1973 "Finance Law" by name (28 links, 2026-10-20); a misprinted number (fails ok()) leaves the name
+        dated = [s for s, _, k in nums if re.search(r"/\d{4}$", k) and self.ok([k])]
+        named = [(m.start(), m.end(), by_name(m[1], self.year)) for m in NAMED.finditer(t)
+                 if not any(m.start() <= s <= m.end() + 5 for s in dated)]
+        for s, e, k in nums + named:
             if not k or not self.ok([k]):
                 continue
             before = re.search(rf"({PARTS})[^.;]{{0,40}}?\b(?:of|in|under|to)\s+(?:the\s+)?[^.;]{{0,100}}$", t[max(0, s - 180):s], re.I)
+            # "Section 10 of the principal enactment as amended by Act No. 39 of 1983": s10 is the principal's, not 39/1983's
+            if before and re.search(r"\bprincipal\b|\bamended\s+by\b|\bthat\s+(?:enactment|Act|Law|Ordinance)\b",
+                                    t[max(0, s - 180):s][before.end(1):], re.I):
+                before = None
             kind = "consolidates" if self.key.startswith("cap") and i == 0 else "cites"
             ctx = re.sub(r"\s+", " ", t[max(0, s - 120):e + 40]).strip()
             out += [(i, kind, k, l, ctx, {"via": "cite"}) for l in (labels(before[1]) if before else [None])]

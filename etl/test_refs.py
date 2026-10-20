@@ -23,6 +23,22 @@ op = next(x for x in r if x[3] == "38")[5]["ops"][0]
 assert op["op"] == "substitute" and op["old"] == "Municipal Councils" and op["new"] == "local authorities" and "subsection (1)" in op["loc"], op
 # the note is text too
 assert ("amends", F, "50") in ls(P + "*Amendment of section 50 of the principal enactment.*")
+# "<law> as last amended by Act No. N (hereinafter ...)": the principal is <law> (act:11/2013 -> 9/2009, not 9/2012)
+A = "2. Section 2 of the Nation Building Tax Act, No. 9 of 2009 as last amended by Act, No. 9 of 2012 (hereinafter referred to as the “principal enactment”) is hereby amended.\n\n"
+assert ("amends", "act:9/2009", "5") in ls(A + "3. Section 5 of the principal enactment is hereby amended.", key="act:11/2013")
+A = "2. Section 53, as amended by Ordinance No. 24 of 1938, of the Finance Act, No. 11 of 1963 (hereinafter referred to as the “principal enactment”) is hereby amended.\n\n"
+assert ("amends", F, "5") in ls(A + "3. Section 5 of the principal enactment is hereby amended.")
+# a name printed with its number links the number only, not also a same-titled law by name
+graph.TITLES["finance"] = "law:47/1973"
+r = ls("the Co-operative Development Fund established under the Finance Act, No. 11 of 1963;", key="act:16/1985")
+assert ("cites", "act:11/1963", None) in r and not any(d == "law:47/1973" for _, d, _ in r), r
+assert ("cites", "law:47/1973", None) in ls("any tax under the Finance Act;", key="act:16/1985")
+
+# the part before a numbered cite: the section, not a subsection; not across the principal enactment's own section
+r = ls("under paragraph (a) of subsection 9 of section 31 of the Inland Revenue Act No. 28 of 1979 or", key="act:38/2000")
+assert ("cites", "act:28/1979", "31") in r and ("cites", "act:28/1979", "9") not in r, r
+r = ls(P + "3. Section 10 of the principal enactment as amended by Act No. 39 of 1983, is hereby amended.", key="act:47/1984")
+assert ("cites", "act:39/1983", None) in r and ("cites", "act:39/1983", "10") not in r and ("amends", F, "10") in r, r
 
 assert {("repeals", F, "49"), ("repeals", F, "50")} <= set(ls(P + "Sections 49 and 50 of the principal enactment are hereby repealed."))
 assert ("repeals", F, "73A") in ls(P + "Sections 65 to 73A of the principal enactment are hereby repealed.")

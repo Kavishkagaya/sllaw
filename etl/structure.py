@@ -1489,6 +1489,10 @@ def build(limit=None, workers=16, local=None, full=False):
                      -- 15/1972 Institute of Chemistry): there the title must match too
                      -- a listing that links another Act's file (meta.wrong_file: what the file prints; SOURCES.md)
                      AND NOT d.meta ? 'wrong_file'
+                     -- and the same file under the same number elsewhere: lankalaw re-hosts parliament.lk's scans, so it
+                     -- served 3 of the 9 wrong files too (30/1991, 34/1990, 9/1991 built another law's text, 2026-10-20)
+                     AND NOT EXISTS (SELECT 1 FROM documents w WHERE w.sha256 = d.sha256 AND w.meta ? 'wrong_file'
+                                     AND w.meta->>'act_no' = d.meta->>'act_no')
                      -- CommonLII (retyped 2007 text) only for laws no official file covers (user, 2026-10-10)
                      AND NOT (d.source = 'commonlii' AND EXISTS (
                          SELECT 1 FROM documents o WHERE o.source IN ('acts', 'parliament') AND o.raw_key IS NOT NULL

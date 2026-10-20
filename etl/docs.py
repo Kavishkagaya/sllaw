@@ -115,6 +115,31 @@ def block_paras(bs):
     return out
 
 
+SPLIT_END = re.compile(r"[a-z,]$")                              # "... of such fact and the" / "Regulatory Council shall"
+SPLIT_START = re.compile(r"^(?![A-Z]{2,}\b)[A-Za-z]")          # not a heading: "THIRD SCHEDULE", "PART II"
+
+
+def join_split(paras):
+    """One sentence that LightOn cut into two blocks (or across a page) back into one paragraph: the first is a
+    line of body text (60+ chars) ending mid-sentence (a lower-case letter or a comma), the second opens nothing (no
+    number, "(a)", heading, table, cover line). act:21/2006 s4 read "...of such fact and the" / "Regulatory Council
+    shall thereupon..." (issue #23). LightOn only: the HTML and 1980 docling text joined titles to long titles and
+    1980 lines out of order (18% of docling paragraphs, measured 2026-10-20); shorter first blocks were cover lines,
+    table cells and headings ("Ministry of Samurdhi" / "Recurrent")."""
+    out = []
+    for p in paras:
+        a = out[-1]["text"].rstrip() if out else ""
+        if (len(a) >= 60 and SPLIT_END.search(a) and SPLIT_START.match(p["text"]) and not a.startswith("#")
+                and not FURNITURE.match(a) and not FURNITURE.match(p["text"])
+                and " | " not in a + p["text"] and not HEADING.match(p["text"])):
+            q = out[-1]
+            q["text"] = f"{a} {p['text']}"
+            q["note"] = " ".join(n for n in (q["note"], p["note"]) if n) or None
+        else:
+            out.append(p)
+    return out
+
+
 def num_key(n):
     m = re.match(r"(\d+)([A-Z]*)", n)
     return int(m[1]), m[2]
@@ -288,7 +313,8 @@ def text_of(raw, lo, le1980=False, spread=False):
     if lo and lo.get("pages"):
         raw = {**raw, "lighton": lo}
     src = "lighton" if lo and lo.get("pages") else "html" if raw.get("format") == "html" else "docling"
-    return block_paras(blocks(raw, le1980=le1980)), src
+    paras = block_paras(blocks(raw, le1980=le1980))
+    return (join_split(paras) if src == "lighton" else paras), src
 
 
 KIND = {"act": "act", "law": "law", "ordinance": "ordinance", "cap": "chapter1980", "cap1956": "chapter1956",
@@ -528,6 +554,33 @@ def keys(fix=False):
     conn.close()
 
 
+def gold(path="etl/gold_links.json"):
+    """The hand-labelled links (issue #9, 210 sampled by kind 2026-10-20) against the links table: each one's right
+    target (and section) is there, and a wrong target it once had is gone. Link ids change on every relink, so a link
+    is matched by source law, kind, target and label."""
+    conn = pg_connect()
+    cur = conn.cursor()
+    n, bad = {}, []
+    for g in json.load(open(path)):
+        cur.execute("SELECT 1 FROM links WHERE src_doc = %s AND kind = %s AND dst_doc = ANY(%s) AND dst_label IS NOT DISTINCT FROM %s",
+                    (g["src"], g["kind"], g["dst"], g["label"]))
+        ok = cur.fetchone() is not None
+        if ok and g.get("was"):
+            cur.execute("SELECT 1 FROM links WHERE src_doc = %s AND kind = %s AND dst_doc = %s AND dst_label IS NOT DISTINCT FROM %s",
+                        (g["src"], g["kind"], *g["was"]))
+            ok = cur.fetchone() is None
+        t = n.setdefault(g["kind"], [0, 0])
+        t[0] += ok; t[1] += 1
+        if not ok:
+            bad.append(g)
+    for k, (ok, all_) in sorted(n.items()):
+        print(f"{k:13} {ok}/{all_}")
+    print(f"total {sum(v[0] for v in n.values())}/{sum(v[1] for v in n.values())}")
+    for g in bad:
+        print("MISS", g["src"], g["kind"], g["dst"], g["label"], "|", (g.get("note") or g["context"] or "")[:120])
+    conn.close()
+
+
 def show(key):
     conn = pg_connect()
     cur = conn.cursor()
@@ -549,6 +602,7 @@ def main():
     r.add_argument("--keys", help="comma-separated keys (default: every document)")
     k = sub.add_parser("keys", help="Acts/Laws whose short title prints another number: report; --fix switches or drops")
     k.add_argument("--fix", action="store_true")
+    sub.add_parser("gold", help="the hand-labelled links (etl/gold_links.json) against the links table")
     s = sub.add_parser("show")
     s.add_argument("key")
     args = a.parse_args()
@@ -558,6 +612,8 @@ def main():
         links()
     elif args.cmd == "keys":
         keys(args.fix)
+    elif args.cmd == "gold":
+        gold()
     elif args.cmd == "relink":
         relink(args.keys.split(",") if args.keys else None)
     else:
