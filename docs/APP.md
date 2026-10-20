@@ -135,6 +135,14 @@ in v1; an entity graph can be built later from the same per-file JSON.
   `providerOptions.gateway.user` = workspace id and `tags` = task (`ai/models.ts`), so spend reports group by
   workspace; fallbacks (`models`), `zeroDataRetention` / `disallowPromptTraining` filters. Cost per workspace is
   what pricing is set from. Embeddings stay on Workers AI (bge-m3, `packages/search`).
+- **Usage per message (user, 2026-10-20):** each assistant message stores `usage` (jsonb: model, providers, steps,
+  input/cached/output tokens, `cost` = inference, `gatewayCost` = billed, ms, the gateway's generation ids), summed
+  over its steps in `streamChat`'s `onStepEnd`. Checked against the gateway's per-generation records. Each `tags`
+  entry is billed $0.00015 per call (20% of a 6-step turn, $0.0045). `messages.parts` is **json, not jsonb**:
+  jsonb reorders keys, so replayed tool-call inputs differed from what the model sent and the provider's prompt
+  cache missed from the first tool call on (turn 2 of a chat: 2,432 of 18,186 input tokens cached). Weighed and
+  dropped: keep jsonb and sort keys in a model middleware; `parts` is never queried, and any path around the
+  middleware would silently break the cache.
 - **Drafting:** later. v1 documents are markdown.
 - **Users:** reach lawyers once a working base exists.
 

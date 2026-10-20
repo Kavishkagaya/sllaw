@@ -89,15 +89,34 @@ export const mainAgent = (ctx: Ctx) =>
 
 export type ChatMessage = InferAgentUIMessage<ReturnType<typeof mainAgent>>;
 
+/** What one assistant message cost, summed over its steps from the gateway's providerMetadata. cost is inference,
+ *  gatewayCost what is billed (inference + surcharges such as the reporting tag); generations are the gateway's ids,
+ *  for its per-call detail. */
+export type Usage = {
+  model: string;
+  providers: string[];
+  steps: number;
+  input: number; // all input tokens
+  cached: number; // of which read from the provider's cache
+  output: number; // reasoning included
+  reasoning: number;
+  cost: number;
+  gatewayCost: number;
+  ms: number;
+  generations: string[];
+};
+
 /** Run the main agent over a chat's messages (history + the new user message) as a UI message stream response;
  *  onFinish gets the assistant message to store, whole or as far as it got when abortSignal fired (the request's:
  *  the stop button, a closed tab or a lost connection all end the run). */
 export async function streamChat(
   ctx: Ctx,
   messages: unknown[],
-  onFinish: (m: ChatMessage) => Promise<void> | void,
+  onFinish: (m: ChatMessage, usage: Usage) => Promise<void> | void,
   abortSignal?: AbortSignal,
 ) {
+  const t0 = Date.now();
+  const usage: Usage = { model: "", providers: [], steps: 0, input: 0, cached: 0, output: 0, reasoning: 0, cost: 0, gatewayCost: 0, ms: 0, generations: [] };
   const uiMessages = await validateUIMessages<ChatMessage>({ messages, tools: mainTools(ctx) });
   return createAgentUIStreamResponse({
     agent: mainAgent(ctx),
@@ -105,6 +124,21 @@ export async function streamChat(
     originalMessages: uiMessages,
     abortSignal,
     generateMessageId: () => crypto.randomUUID(),
-    onFinish: ({ responseMessage }) => onFinish(responseMessage),
+    // ponytail: a step cut off by the stop button reports no usage, so a stopped turn undercounts by that step
+    onStepEnd: (step) => {
+      const g = (step.providerMetadata?.gateway ?? {}) as { cost?: string; gatewayCost?: string; generationId?: string; routing?: { finalProvider?: string } };
+      usage.model = step.model.modelId;
+      usage.steps++;
+      usage.input += step.usage.inputTokens ?? 0;
+      usage.cached += step.usage.inputTokenDetails.cacheReadTokens ?? 0;
+      usage.output += step.usage.outputTokens ?? 0;
+      usage.reasoning += step.usage.outputTokenDetails.reasoningTokens ?? 0;
+      usage.cost += Number(g.cost ?? 0);
+      usage.gatewayCost += Number(g.gatewayCost ?? g.cost ?? 0);
+      if (g.generationId) usage.generations.push(g.generationId);
+      const p = g.routing?.finalProvider;
+      if (p && !usage.providers.includes(p)) usage.providers.push(p);
+    },
+    onFinish: ({ responseMessage }) => onFinish(responseMessage, { ...usage, ms: Date.now() - t0 }),
   });
 }

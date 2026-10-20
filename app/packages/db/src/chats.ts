@@ -2,7 +2,7 @@ import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { db } from "./client";
 import { chats, messages } from "./schema";
 
-export type StoredMessage = { id: string; role: string; parts: unknown };
+export type StoredMessage = { id: string; role: string; parts: unknown; usage?: unknown };
 
 export async function chatById(id: string) {
   const [c] = await db.select().from(chats).where(eq(chats.id, id));
@@ -30,12 +30,12 @@ export const messagesOf = (chatId: string): Promise<StoredMessage[]> =>
     .where(eq(messages.chatId, chatId))
     .orderBy(asc(messages.createdAt));
 
-/** Upserts by message id (a continued assistant message replaces its parts) and touches the chat. */
+/** Upserts by message id (a continued assistant message replaces its parts and usage) and touches the chat. */
 export async function saveMessages(chatId: string, ms: StoredMessage[]) {
   if (!ms.length) return;
   await db
     .insert(messages)
     .values(ms.map((m) => ({ ...m, chatId })))
-    .onConflictDoUpdate({ target: messages.id, set: { parts: sql`excluded.parts` } });
+    .onConflictDoUpdate({ target: messages.id, set: { parts: sql`excluded.parts`, usage: sql`excluded.usage` } });
   await db.update(chats).set({ updatedAt: new Date() }).where(eq(chats.id, chatId));
 }

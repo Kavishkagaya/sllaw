@@ -1,6 +1,6 @@
 // The app tables (drizzle-kit migrations). Every row is keyed by our own ids (uuid); Clerk ids (user_..., org_...)
 // live only in users.clerk_id and workspaces.clerk_id, filled by the Clerk webhook (services/accounts.ts).
-import { index, jsonb, pgTable, primaryKey, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { index, json, jsonb, pgTable, primaryKey, text, timestamp, uuid } from "drizzle-orm/pg-core";
 
 const createdAt = timestamp("created_at", { withTimezone: true }).notNull().defaultNow();
 
@@ -63,7 +63,10 @@ export const messages = pgTable(
     id: text().primaryKey(),
     chatId: uuid("chat_id").notNull().references(() => chats.id, { onDelete: "cascade" }),
     role: text().notNull(), // user | assistant
-    parts: jsonb().notNull(),
+    // json, not jsonb: jsonb reorders keys, so replayed tool-call inputs no longer matched what the model sent and the
+    // provider's prompt cache missed from the first tool call on (chat of 2026-10-20: 2,432 of 18,186 tokens cached)
+    parts: json().notNull(),
+    usage: jsonb(), // assistant only: tokens and cost of the turn (ai's Usage)
     createdAt,
   },
   (t) => [index().on(t.chatId, t.createdAt)],

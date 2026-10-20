@@ -35,5 +35,5 @@ export async function sendMessage(
   const history = await messagesOf(chatId);
   await saveMessages(chatId, [message]);
   const ctx = agentCtx({ workspaceId: a.workspace.id, userId: a.user.id });
-  return streamChat(ctx, [...history, message], (m) => waitUntil(saveMessages(chatId, [m])), abortSignal);
+  return streamChat(ctx, [...history, message], (m, usage) => waitUntil(saveMessages(chatId, [{ ...m, usage }])), abortSignal);
 }

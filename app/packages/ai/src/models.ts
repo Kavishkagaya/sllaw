@@ -23,8 +23,8 @@ export type Call = {
   gateway: unknown; // providerMetadata.gateway as returned (cost, generation id, routing)
 };
 let recorder: ((c: Call) => void) | null = null;
-/** Sees every non-streamed call (agents' generate); evals use it to count usage. ponytail: streams (the chat) not
- *  recorded yet; wrapStream when per-turn cost is stored. */
+/** Sees every non-streamed call (agents' generate); evals use it to count usage. The chat (streamed) sums its own
+ *  per message: streamChat's Usage. */
 export const recordCalls = (f: ((c: Call) => void) | null) => void (recorder = f);
 
 /** The model for a task; each call is attributed to the workspace (spend per workspace sets pricing). */
