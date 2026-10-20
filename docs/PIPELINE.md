@@ -252,6 +252,30 @@ Not covered yet: 2000–2008 (384×552 booklet format, extraction still running 
   price, cause not found. Same turn at list prices: deepinfra $0.008, `deepseek-v4.1-flash` $0.006 (cache read
   $0.002/M against $0.028/M). Estimate at $0.02-0.04 a turn: 15 questions a day ≈ $7-13 a month per user. **Default
   for `main` and `files` is now `deepseek/deepseek-v4.1-flash`** (models.ts); not yet evaluated on the chat eval.
+- **Provider pinned for `deepseek-v4.1-flash` (eval-chat, 2026-10-20).** 9 questions (#4, 6, 7, 8, 10, 11, 14, 16,
+  17), same prompt, gateway `only`/`order` per run; all 9/9 gold cited:
+
+  | provider | cost | calls | output tokens | median / slowest |
+  |---|---|---|---|---|
+  | gateway's pick (digitalocean) | $0.081 | 60 | 36k | 45 s / 72 s |
+  | deepseek (first party) | $0.094 | 70 | 41k | 36 s / 60 s |
+  | pareto | $0.046 | 65 | 29k | 65 s / 193 s |
+  | **deepinfra (fp8)** | **$0.017** | 43 | 11k | 21 s / 38 s |
+
+  The endpoint list (`/v1/models/<model>/endpoints`) is not what is billed: deepseek lists in $0.15/M, cached
+  $0.003/M, out $0.60/M but billed $0.30 / $0.006 / $1.20 (a call at 01:23 UTC; DeepSeek's off-peak discount ends
+  00:30 UTC, likely the cause, not checked). deepinfra billed its list ($0.14 / $0.004 / $0.42). Its answers are as
+  complete on reading (#10: all three release routes of s. 357, the s. 419 exception, the notice duty) in fewer steps.
+  **Pinned: deepinfra, then deepseek** (models.ts `PROVIDERS`, `MODEL_PROVIDERS` to override). Each tagged call also
+  pays a $0.00015 `reportingTagWriteCost` (the `tags` option), not in the eval's `cost`.
+- **Junior-lawyer prompt (main.ts, 2026-10-20), same 9 questions on deepinfra.** A first version ("ask what else could
+  change the answer, search for these") cost +72% and two questions used all 14 steps; one returned raw tool-call
+  markup (`<｜DSML｜ calls>`) on its tool-less last step, now told in its instructions that it is the last step.
+  Limits are now followed only where the text points to them. Citations of chunks never read (seen only as a
+  search snippet) were 8 of 47, all side points (a nearby offence, a repeal, a saving): a step "before you write,
+  read every hit you will cite in one call, or leave it out" took them to 4 of 48, $0.0184, 9/9 gold. The chat
+  marks the rest as unverified. The eval scores by law + label now (chunk ids in eval_questions.json predate the
+  rebuild) and writes unread ids and tool outputs to the trace.
 - **What the app's link tools return (measured 2026-10-18 on Neon, before the repeals fix was published).** Motor
   Traffic Act (`cap1956:203`): `links in` on the whole law, kinds `repeals_act`, gives 50 rows from 3 amending Acts
   (law:12/1975, act:31/1979, act:21/1981), all section repeals: the fix above, not yet published. **App bug: aliases

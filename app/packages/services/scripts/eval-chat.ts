@@ -10,7 +10,11 @@ type Q = { n: string; doc?: string; label?: string; id?: number; en: string };
 const gold: { id: number; doc: string; label: string; en: string }[] = JSON.parse(
   readFileSync(new URL("../../../../etl/eval_questions.json", import.meta.url), "utf8"),
 );
-const extra: Record<string, Q> = { dl: { n: "dl", en: "What is the procedure for get a driving license" } };
+const extra: Record<string, Q> = {
+  dl: { n: "dl", en: "What is the procedure for get a driving license" },
+  // a section over several chunks: the limits that matter (15(7), 15(8)) are in Art. 15's "(cont.)" chunks (chat 2026-10-20)
+  fx: { n: "fx", doc: "constitution:21", label: "15", en: "Which Article of the Constitution protects freedom of expression, and what limits it?" },
+};
 const arg = process.argv[2] ?? "dl";
 // "current": every question whose law is still in force (status "current"), as eval-agent runs them
 const pick = arg === "current" ? gold.flatMap((q, i) => ((q as { status?: string }).status === "current" ? [String(i + 1)] : [])) : arg.split(",");
@@ -42,14 +46,13 @@ const one = async (q: Q) => {
       };
       for (const s of r.steps) for (const t of s.toolResults) if (SEEN.has(t.toolName)) collect(t.output);
       const cited = [...new Set([...r.text.matchAll(CITE)].map((m) => Number(m[1])))];
-      const got = await ctx.ports.read(q.id ? [q.id, ...cited] : cited);
-      const g = got.find((c) => c.chunkId === q.id);
-      const norm = (s: string | null) => (s ?? "").trim().toLowerCase();
-      const hit = q.id ? cited.includes(q.id) || got.some((c) => cited.includes(c.chunkId) && norm(c.title) === norm(g?.title ?? null) && c.label === g?.label) : "-";
+      // gold by law + label, not chunk id: a rebuild renumbers chunks (the ids in eval_questions.json are pre-rebuild)
+      const got = await ctx.ports.read(cited);
+      const hit = q.doc ? got.some((c) => c.docKey === q.doc && c.label === q.label) : "-";
       const mine = calls.filter((c) => c.workspaceId === ws);
       const cost = mine.reduce((a, c) => a + Number((c.gateway as { cost?: unknown } | undefined)?.cost ?? NaN), 0);
       const row = {
-        q: q.n, hit, cited: cited.length, unread: cited.filter((id) => !seen.has(id)).length, steps: r.steps.length,
+        q: q.n, hit, cited: cited.length, unread: cited.filter((id) => !seen.has(id)).length, unreadIds: cited.filter((id) => !seen.has(id)).join(" "), steps: r.steps.length,
         calls: mine.length, input: mine.reduce((a, c) => a + c.input, 0), cached: mine.reduce((a, c) => a + c.cached, 0),
         output: mine.reduce((a, c) => a + c.output, 0), cost: Number.isNaN(cost) ? "?" : cost.toFixed(4), secs: Math.round((Date.now() - t0) / 1000),
       };
@@ -57,7 +60,8 @@ const one = async (q: Q) => {
       console.log(JSON.stringify(row));
       if (traceDir)
         writeFileSync(`${traceDir}/${q.n}.json`, JSON.stringify({ q, row, text: r.text, gateway: mine[0]?.gateway,
-          steps: r.steps.map((s) => ({ calls: s.toolCalls.map((c) => ({ tool: c.toolName, input: c.input })) })) }, null, 1));
+          steps: r.steps.map((s) => ({ calls: s.toolCalls.map((c) => ({ tool: c.toolName, input: c.input })),
+            results: s.toolResults.map((t) => ({ tool: t.toolName, output: t.output })) })) }, null, 1));
     } catch (e) {
       console.log(JSON.stringify({ q: q.n, error: String(e).slice(0, 300) }));
     }

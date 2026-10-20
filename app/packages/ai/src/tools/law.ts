@@ -41,7 +41,9 @@ export const lawTools = ({ ports }: Ctx) => ({
     },
   }),
   read: tool({
-    description: "Read chunks in full, by id (from search or links).",
+    description:
+      "Read chunks in full, by id (from search or links). Each comes with the whole section it is in, from its first " +
+      "chunk; a section that goes on further ends with 'more': the next chunk's id, to read if you need the rest.",
     inputSchema: z.object({ chunkIds: z.array(chunkId).min(1).max(20) }),
     execute: ({ chunkIds }) => ports.read(chunkIds),
   }),
@@ -79,7 +81,7 @@ export const lawTools = ({ ports }: Ctx) => ({
       "and section, the kind (amends, inserts, replaces, repeals) and that amending section's text, which holds the " +
       "new words. A long amending text is cut short and marked '…[truncated]': read that chunk before saying what " +
       "the rest of it changes. Changes after the date are only named. Use it before saying what a section says now; " +
-      "one call covers all its amendments.",
+      "one call on any chunk of the section covers all its amendments.",
     inputSchema: z.object({ chunkId }),
     execute: ({ chunkId }) => ports.asOf(chunkId),
   }),

@@ -1,4 +1,4 @@
-import { aliasedTable, and, asc, eq, ilike, inArray, sql } from "drizzle-orm";
+import { aliasedTable, and, asc, eq, ilike, inArray, like, sql } from "drizzle-orm";
 import { db } from "./client";
 import { chunks, docs, links } from "./schema";
 
@@ -58,12 +58,67 @@ export async function linksOf(
 
 export const CHANGE_KINDS = ["amends", "inserts", "replaces", "repeals"];
 
-/** The changes made to chunks: each change link with its amending chunk (label, text) and law title, oldest first.
- *  By dst_chunk alone, so every alias key of the law is covered. */
+const SECTION_MAX = 8; // chunks of one section returned by sectionsOf; ponytail: a longer one is cut, `more` says so
+
+/** The whole sections the chunks are in, in the order asked: each section's first chunk and its "(cont.)" chunks, up
+ *  to SECTION_MAX; when a section goes on, its last chunk returned carries `more`, the next chunk's id. */
+type Read = Awaited<ReturnType<typeof chunksById>>[number] & { more?: number };
+export async function sectionsOf(chunkIds: number[]): Promise<Read[]> {
+  if (!chunkIds.length) return [];
+  const head = await withHeads(chunkIds);
+  const heads = await chunksById([...new Set(head.values())]);
+  const parts = await Promise.all(
+    heads.map(async (h) => {
+      const run = await db
+        .select({ ...chunkCols, title: docs.title })
+        .from(chunks)
+        .innerJoin(docs, eq(docs.key, chunks.docKey))
+        .where(and(eq(chunks.docKey, h.docKey), sql`${chunks.seq} between ${h.seq + 1} and ${h.seq + SECTION_MAX - 1}`,
+          eq(chunks.path, `${h.path} (cont.)`)))
+        .orderBy(asc(chunks.seq));
+      const sec: Read[] = [h];
+      for (const c of run) if (c.seq === sec.at(-1)!.seq + 1) sec.push(c); else break;
+      if (sec.length === SECTION_MAX) {
+        const [next] = await db.select({ id: chunks.id }).from(chunks)
+          .where(and(eq(chunks.docKey, h.docKey), eq(chunks.seq, h.seq + SECTION_MAX), eq(chunks.path, `${h.path} (cont.)`)));
+        if (next) sec[sec.length - 1] = { ...sec.at(-1)!, more: next.id };
+      }
+      return [h.id, h.path ? sec : [h]] as [number, Read[]];
+    }),
+  );
+  const byHead = new Map(parts);
+  const asked = new Map((await chunksById(chunkIds)).map((c) => [c.id, c]));
+  const seen = new Set<number>();
+  return chunkIds.flatMap((id) => {
+    const sec = byHead.get(head.get(id)!) ?? [];
+    const own = asked.get(id); // a chunk past the cut still comes back itself
+    return (own && !sec.some((c) => c.id === id) ? [...sec, own] : sec).filter((c) => !seen.has(c.id) && seen.add(c.id));
+  });
+}
+
+/** Each chunk with the chunk its section starts in (itself unless it is a "(cont.)" chunk). Change links point at
+ *  the section's first chunk (the ETL resolves "section 22" to it), so the rest of the section shares its changes. */
+async function withHeads(chunkIds: number[]) {
+  const rows = await db
+    .select({
+      id: chunks.id,
+      head: sql<number | null>`(select h.id from chunks h where h.doc_key = "chunks".doc_key and h.seq < "chunks".seq
+        and h.path = left("chunks".path, -8) order by h.seq desc limit 1)`.mapWith(Number),
+    })
+    .from(chunks)
+    .where(and(inArray(chunks.id, chunkIds), like(chunks.path, "% (cont.)")));
+  const head = new Map(chunkIds.map((id) => [id, id]));
+  for (const r of rows) if (r.head) head.set(r.id, r.head);
+  return head;
+}
+
+/** The changes made to chunks' sections: each change link with its amending chunk (label, text) and law title,
+ *  oldest first; dstChunk is the chunk asked for. By dst_chunk alone, so every alias key of the law is covered. */
 export async function changesInto(chunkIds: number[]) {
   if (!chunkIds.length) return [];
+  const head = await withHeads(chunkIds);
   const src = aliasedTable(chunks, "src");
-  return db
+  const rows = await db
     .select({
       dstChunk: links.dstChunk, kind: links.kind, date: links.date, srcDoc: links.srcDoc, srcChunk: links.srcChunk,
       srcTitle: docs.title, srcLabel: src.label, srcText: src.text, context: links.context,
@@ -71,21 +126,18 @@ export async function changesInto(chunkIds: number[]) {
     .from(links)
     .leftJoin(src, eq(src.id, links.srcChunk))
     .leftJoin(docs, eq(docs.key, links.srcDoc))
-    .where(and(inArray(links.dstChunk, chunkIds), inArray(links.kind, CHANGE_KINDS)))
+    .where(and(inArray(links.dstChunk, [...new Set([...chunkIds, ...head.values()])]), inArray(links.kind, CHANGE_KINDS)))
     .orderBy(asc(links.date));
+  return chunkIds.flatMap((id) => rows.filter((r) => r.dstChunk === id || r.dstChunk === head.get(id)).map((r) => ({ ...r, dstChunk: id })));
 }
 
-/** Per chunk: how many amending sections changed it, the last change's date, and whether one repealed it. */
+/** Per chunk: how many amending sections changed its section, the last change's date, and whether one repealed it. */
 export async function changeStatus(chunkIds: number[]) {
-  if (!chunkIds.length) return [];
-  return db
-    .select({
-      chunkId: links.dstChunk,
-      changes: sql<number>`count(distinct ${links.srcChunk})::int`,
-      last: sql<string | null>`max(${links.date})::text`,
-      repealed: sql<string | null>`max(${links.date}) filter (where ${links.kind} = 'repeals')::text`,
-    })
-    .from(links)
-    .where(and(inArray(links.dstChunk, chunkIds), inArray(links.kind, CHANGE_KINDS)))
-    .groupBy(links.dstChunk);
+  const by = new Map<number, Awaited<ReturnType<typeof changesInto>>>();
+  for (const r of await changesInto(chunkIds)) by.set(r.dstChunk!, [...(by.get(r.dstChunk!) ?? []), r]);
+  return [...by].map(([chunkId, rs]) => {
+    const dates = rs.map((r) => r.date).filter((d): d is string => !!d).sort();
+    const rep = rs.filter((r) => r.kind === "repeals" && r.date).map((r) => r.date!).sort();
+    return { chunkId, changes: new Set(rs.map((r) => r.srcChunk)).size, last: dates.at(-1) ?? null, repealed: rep.at(-1) ?? null };
+  });
 }

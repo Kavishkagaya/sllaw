@@ -1,5 +1,5 @@
 import type { AsOf, Change, Chunk, Ctx, Status } from "@sllaw/ai";
-import { changeStatus, changesInto, chunksById, linksOf } from "@sllaw/etl_db";
+import { changeStatus, changesInto, chunksById, linksOf, sectionsOf } from "@sllaw/etl_db";
 import { searchLaw } from "@sllaw/search";
 
 
@@ -55,7 +55,7 @@ export function agentCtx({ workspaceId, userId, caseId = null, asOfDate = today(
     scopes: [`user:${userId}`, ...(caseId ? [`case:${caseId}`] : [])],
     ports: {
       search: (query, opts) => searchLaw(query, opts),
-      read: async (ids) => (await chunksById(ids)).map(asChunk),
+      read: async (ids) => (await sectionsOf(ids)).map((c) => ({ ...asChunk(c), ...(c.more && { more: c.more }) })),
       links: (target, direction, opts) => linksOf(target, direction, opts),
       asOf: (chunkId) => asOf(chunkId, asOfDate),
       status,

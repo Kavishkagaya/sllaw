@@ -5,6 +5,8 @@ export type Mode = "dense" | "weighted" | "keyword";
 export type Filters = { docKeys?: string[]; kinds?: string[]; yearFrom?: number; yearTo?: number };
 
 export type Chunk = { chunkId: number; docKey: string; title: string | null; label: string | null; path: string | null; text: string };
+/** A chunk as read: `more` is the next chunk's id when its section goes on past what read returned. */
+export type ReadChunk = Chunk & { more?: number };
 export type Hit = Chunk & { score: number };
 export type Link = {
   kind: string;
@@ -27,7 +29,7 @@ export type Status = { changes: number; last: string | null; repealed: string | 
 
 export interface Ports {
   search(query: string, opts: { mode?: Mode; filters?: Filters; limit?: number }): Promise<Hit[]>;
-  read(chunkIds: number[]): Promise<Chunk[]>;
+  read(chunkIds: number[]): Promise<ReadChunk[]>;
   links(target: { docKey: string; chunkId?: number | null }, direction: Direction, opts?: { kinds?: string[]; text?: string }): Promise<Link[]>;
   asOf(chunkId: number): Promise<AsOf | null>;
   status(chunkIds: number[]): Promise<Record<number, Status>>;

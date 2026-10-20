@@ -4,10 +4,15 @@
 import { gateway, wrapLanguageModel } from "ai";
 
 const tasks = {
-  main: process.env.MODEL_MAIN ?? "deepseek/deepseek-v4-flash",
-  files: process.env.MODEL_FILES ?? "deepseek/deepseek-v4-flash",
+  main: process.env.MODEL_MAIN || "deepseek/deepseek-v4.1-flash",
+  files: process.env.MODEL_FILES || "deepseek/deepseek-v4.1-flash",
 };
 export type Task = keyof typeof tasks;
+
+// Pinned providers, in order: each keeps its own prompt cache, and the gateway spread calls over ~20 hosts. The
+// endpoint list prices are not what is billed (deepseek billed 2x its list): picked on the 9-question eval
+// (PIPELINE.md, 2026-10-20). deepinfra $0.017, median 21 s; deepseek $0.094, 36 s, kept as the fallback.
+const PROVIDERS = process.env.MODEL_PROVIDERS?.split(",") ?? ["deepinfra", "deepseek"];
 
 export type Call = {
   workspaceId: string;
@@ -32,7 +37,12 @@ export function model(task: Task, workspaceId: string) {
         ...params,
         providerOptions: {
           ...params.providerOptions,
-          gateway: { ...params.providerOptions?.gateway, user: workspaceId, tags: [`task:${task}`] },
+          gateway: {
+            ...params.providerOptions?.gateway,
+            user: workspaceId,
+            tags: [`task:${task}`],
+            ...(tasks[task].startsWith("deepseek/") && { order: PROVIDERS, only: PROVIDERS }),
+          },
         },
       }),
       wrapGenerate: async ({ doGenerate }) => {
