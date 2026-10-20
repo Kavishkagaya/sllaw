@@ -181,3 +181,14 @@ for nxt in ("(b) any other person.", "5. This Act shall apply.", "THIRD SCHEDULE
     assert len(join_split([P(L), P(nxt)])) == 2, nxt
 assert len(join_split([P("Printed on the Order of Government"), P("Published as a Supplement to Part II")])) == 2
 print("ok join split sentences")
+
+# a gazette without its masthead, running heads and printer's code
+from etl.docs import gazette_body
+g = gazette_body([P(t) for t in ["The Gazette of the Democratic Socialist Republic of Sri Lanka", "EXTRAORDINARY",
+                                 "No. 2491/12 - MONDAY, JUNE 01, 2026", "(Published by Authority)", "PART I : SECTION (I) - GENERAL",
+                                 "Government Notifications", "CEYLON PETROLEUM CORPORATION ACT, No. 28 OF 1961", "Order under Section 66(1)(a)",
+                                 "IV ( ) - GAZETTE EXTRAORDINARY OF THE DEMOCRATIC SOCIALIST REPUBLIC OF SRI LANKA - 2026.06.01", "w",
+                                 "Anura Karunathilaka, Minister of Energy.", "At Colombo, 30th May, 2026. EOG 06 - 0063", "EOG 06 - 0063"]])
+assert [p["text"] for p in g] == ["CEYLON PETROLEUM CORPORATION ACT, No. 28 OF 1961", "Order under Section 66(1)(a)",
+                                  "Anura Karunathilaka, Minister of Energy.", "At Colombo, 30th May, 2026. EOG 06 - 0063"], g
+print("ok gazette body")

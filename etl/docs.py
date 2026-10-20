@@ -318,7 +318,7 @@ def text_of(raw, lo, le1980=False, spread=False):
 
 
 KIND = {"act": "act", "law": "law", "ordinance": "ordinance", "cap": "chapter1980", "cap1956": "chapter1956",
-        "amendment": "amendment", "constitution": "constitution", "other": "other"}
+        "amendment": "amendment", "constitution": "constitution", "gazette": "gazette", "other": "other"}
 _w = {}
 
 
@@ -337,9 +337,8 @@ def _get(k):
 
 
 def build_one(row):
-    """One law: its file's raw (and LightOn pages) from R2 -> text -> chunks -> docs + chunks rows. The key, title
-    and dates come from the law's `acts` row (etl.structure build: key rules, printed dates, commencement), which
-    already picked the file to read (official copy first). -> (status, message)"""
+    """One document: its file's raw (and LightOn pages) from R2 -> text -> chunks -> docs + chunks rows. The key,
+    title, dates and file come from its type's rows (TYPES: law_rows, gazette_rows). -> (status, message)"""
     key, title, certified, commenced, comm, doc_id, sha, raw_key, meta = row
     try:
         raw = _get(raw_key)
@@ -348,11 +347,14 @@ def build_one(row):
         except _w["s3"].exceptions.NoSuchKey:
             lo = None
         paras, src = text_of(raw, lo, le1980=bool(meta.get("cap")), spread=bool(meta.get("spread")))
+        if key.startswith("gazette:"):
+            paras = gazette_body(paras)
         amending = "AMENDMENT" in (title or "").upper() and not key.startswith("constitution")
-        ch = chunks(paras, "Article" if key.startswith("constitution") else "section", parts=not amending)
+        word = "Article" if key.startswith("constitution") else "regulation" if key.startswith("gazette:") else "section"
+        ch = chunks(paras, word, parts=not amending)
         if not ch:
             return "skip", f"skip {key}: no text"
-        year = int(m[1]) if (m := re.search(r"/(\d{4})$", key)) else None
+        year = int(m[1]) if (m := re.search(r"/(\d{4})$", key)) else certified.year if certified else None
         conn = _w["conn"]
         lt = long_title_of(paras)
         with conn, conn.cursor() as cur:
@@ -374,12 +376,49 @@ def build_one(row):
         return "fail", f"FAIL {key}: {e}"[:300]
 
 
-def build(keys=None, limit=None, workers=16):
-    conn = pg_connect()
-    cur = conn.cursor()
+# an extraordinary gazette's masthead (Sinhala and English, "(Published by Authority)", the gazette Part, "Government
+# Notifications") ends at its last marker in the first lines; running heads and the printer's code repeat on every page
+GAZ_MAST_END = re.compile(r"\(Published by Authority\)|^PART\s+[IVX]+\s*(?:\(\s*[A-Z]\s*\))?\s*[:\-–]|Notifications\s*$", re.I)
+GAZ_RUNNING = re.compile(r"GAZETTE\s+EXTRAORDINARY\s+OF\s+THE\s+DEMOCRATIC|^EOG\s*\d|^\W*\w?\W*$", re.I)
+
+
+def gazette_body(paras):
+    """A gazette's paragraphs without its masthead (up to the last marker in the first 12 paragraphs), running heads,
+    printer's codes ("EOG 06 - 0063") and stray one-letter lines (legacy-font Sinhala, issue #6)."""
+    head = [i for i, p in enumerate(paras[:12]) if GAZ_MAST_END.search(p["text"].strip())]
+    return [p for p in paras[head[-1] + 1 if head else 0:] if not GAZ_RUNNING.search(p["text"].strip())]
+
+
+def law_rows(cur, keys, limit):
+    """Acts, Laws, Ordinances, chapters, the Constitution: the `acts` list, where etl.structure build already chose
+    each law's file (official copy first), key and dates (printed date, commencement)."""
     cur.execute("""SELECT a.key, a.title, a.certified, a.commenced, a.commencement, a.document_id, d.sha256, d.raw_key, d.meta
                    FROM acts a JOIN documents d ON d.id = a.document_id
                    WHERE (%s::text[] IS NULL OR a.key = ANY(%s)) ORDER BY a.key LIMIT %s""", (keys, keys, limit))
+    return cur.fetchall()
+
+
+def gazette_rows(cur, keys, limit):
+    """Extraordinary gazettes (issue #6): straight from `documents`, no etl.structure step. The listing gives what an
+    Act's text has to be searched for: the number (key gazette:2235/22), the date (in force from publication unless
+    the text says otherwise) and the description ("Department - subject") as the title."""
+    cur.execute("""SELECT DISTINCT ON (1) 'gazette:' || (d.meta->>'gazette_no'), d.title, d.doc_date::date, d.doc_date::date,
+                          '{"kind": "published", "text": null}'::jsonb, d.id, d.sha256, d.raw_key, d.meta
+                   FROM documents d WHERE d.source = 'gazette' AND d.raw_key IS NOT NULL AND d.meta->>'lang' = 'ENGLISH'
+                     AND (%s::text[] IS NULL OR 'gazette:' || (d.meta->>'gazette_no') = ANY(%s))
+                   ORDER BY 1, d.id LIMIT %s""", (keys, keys, limit))
+    return cur.fetchall()
+
+
+# one build path per document type: where its rows come from (file, key, title, dates); the text, chunks and links
+# steps are shared, with the type's own label word (section, Article, regulation) and link patterns (etl.refs)
+TYPES = {"law": law_rows, "gazette": gazette_rows}
+
+
+def build(keys=None, limit=None, workers=16, types=tuple(TYPES)):
+    conn = pg_connect()
+    cur = conn.cursor()
+    rows = [r for t in types for r in TYPES[t](cur, keys, limit)]
     rows = cur.fetchall()
     conn.close()
     print(f"{len(rows)} documents to build", flush=True)
@@ -597,6 +636,7 @@ def main():
     b.add_argument("--keys", help="comma-separated keys (default: every law in `acts`)")
     b.add_argument("--limit", type=int)
     b.add_argument("--workers", type=int, default=16)
+    b.add_argument("--type", choices=list(TYPES), action="append", help="document types to build (default: all)")
     sub.add_parser("links", help="resolve link targets to chunks (inside the database)")
     r = sub.add_parser("relink", help="links again from the chunks in the database (etl/refs.py), then resolve")
     r.add_argument("--keys", help="comma-separated keys (default: every document)")
@@ -607,7 +647,7 @@ def main():
     s.add_argument("key")
     args = a.parse_args()
     if args.cmd == "build":
-        build(args.keys.split(",") if args.keys else None, args.limit, args.workers)
+        build(args.keys.split(",") if args.keys else None, args.limit, args.workers, args.type or tuple(TYPES))
     elif args.cmd == "links":
         links()
     elif args.cmd == "keys":

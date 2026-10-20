@@ -40,6 +40,21 @@ assert ("cites", "act:28/1979", "31") in r and ("cites", "act:28/1979", "9") not
 r = ls(P + "3. Section 10 of the principal enactment as amended by Act No. 39 of 1983, is hereby amended.", key="act:47/1984")
 assert ("cites", "act:39/1983", None) in r and ("cites", "act:39/1983", "10") not in r and ("amends", F, "10") in r, r
 
+# gazettes (issue #6): the Act section a regulation is made under; gazette numbers, with the clause's verb
+graph.TITLES.update({"foreign exchange": "act:12/2017", "special commodity levy": "act:48/2007"})
+G = "gazette:2400/01"
+assert ("made_under", "act:12/2017", "29") in ls("REGULATIONS made by the Minister under section 29 of the Foreign Exchange Act, No. 12 of 2017.", key=G)
+r = ls("By virtue of the powers vested in me by section 3 of the Special Commodity Levy Act, No. 48 of 2007, I hereby amend "
+       "the Order published in Gazette Extraordinary No. 1992/29 of 10.11.2016.", key=G)
+assert ("made_under", "act:48/2007", "3") in r and ("amends", "gazette:1992/29", None) in r, r
+assert ("rescinds", "gazette:471/06", None) in ls("The Order published in Gaz. Ex. Ord. No. 471/6 of 14.09.1987 is hereby rescinded.", key=G)
+assert ("cites", "gazette:2235/22", None) in ls("as notified in Extraordinary Gazette No. 2235/22 of 6th July 2021. The rates are amended.", key=G)
+assert not any(k == "made_under" for k, _, _ in ls("under section 29 of the Foreign Exchange Act, No. 12 of 2017"))   # only gazettes
+assert ("made_under", "act:28/1961", "66") in ls("AS per the powers vested upon me by the Section 66(1)(a) of Ceylon Petroleum "
+                                                   "Corporation Act, No. 28 of 1961, I, Minister of Energy", key=G)
+assert ("made_under", "ordinance:12/1946", "2") in ls("as per the powers vested in me in terms of the provisions of Section 2 (2) "
+                                                        "of the Entertainment Tax Ordinance No. 12 of 1946", key=G)
+
 assert {("repeals", F, "49"), ("repeals", F, "50")} <= set(ls(P + "Sections 49 and 50 of the principal enactment are hereby repealed."))
 assert ("repeals", F, "73A") in ls(P + "Sections 65 to 73A of the principal enactment are hereby repealed.")
 assert ("replaces", F, "8") in ls(P + "Section 8 of the principal enactment is hereby repealed and the following section substituted therefor:—")

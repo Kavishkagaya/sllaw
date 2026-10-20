@@ -55,6 +55,16 @@ CONST = re.compile(r"\bthe\s+Constitution\b")
 AMENDED_BY = re.compile(r"\bas\s+(?:last\s+|further\s+)?amended\s+by\b|\bamended\s+by\b", re.I)
 # what may follow "amended by" to the end of the phrase: only amending laws' numbers and joiners
 AMENDERS = re.compile(r"(?:[\s\W\d]|\b(?:Acts?|Laws?|Ordinances?|Nos?|of|and|the|hereinafter|hereafter|in|this|Part)\b)*", re.I)
+# a gazette's regulations or order and the Act section they are made under (issue #6): "Regulations made by the
+# Minister under section 29 of the Foreign Exchange Act", "by virtue of the powers vested in me by section 3 of ..."
+# "as per the powers vested upon me by the Section 66(1)(a) of Ceylon Petroleum Corporation Act", "in terms of the
+# provisions of Section 2 (2) of the Entertainment Tax Ordinance" (real gazettes, 2026-10-20)
+MADE_UNDER = re.compile(rf"\b(?:under|by|in\s+terms\s+of)\s+(?:the\s+)?(?:provisions?\s+of\s+)?(?P<parts>{PARTS})[^.;]{{0,60}}?"
+                        rf"\b(?:of|in)\s+(?P<law>{LAW})", re.I)
+# an extraordinary gazette by its number: "Gazette Extraordinary No. 1992/29", "Gaz. Ex. Ord. No. 471/6",
+# "Extraordinary Gazette No. 2235/22" -> gazette:1992/29 (the listing pads the sub-number to two digits)
+GAZ = re.compile(r"\b(?:Gazette\s*(?:\(?\s*Extra-?ordinary\s*\)?\s*)?|Gaz\.?\s*(?:Ext?r?a?\.?\s*(?:Ord(?:inary)?\.?\s*)?)?"
+                 r"|Extra-?ordinary\s+Gazette\s*)(?:Notification\s*)?(?:bearing\s+)?No[s.,:]?\s*(\d{3,4})\s*/\s*(\d{1,2})\b", re.I)
 PRINC = re.compile(r"\bprincipal\s+(?:enactment|Act|Law|Ordinance)\b", re.I)
 KIND = {"amendment": "amends", "amended": "amends", "replacement": "replaces", "substitution": "replaces",
         "substituted": "replaces", "repeal": "repeals", "repealed": "repeals", "insertion": "inserts",
@@ -299,6 +309,19 @@ class Doc:
         if self.principal:                             # "under the principal enactment", "amendment made to the principal enactment"
             out += [(i, "cites", self.principal, None, re.sub(r"\s+", " ", t[max(0, m.start() - 120):m.end() + 120]).strip(), {"via": "cite"})
                     for m in PRINC.finditer(t)]
+        if self.key.startswith("gazette:"):
+            for m in MADE_UNDER.finditer(t):
+                ctx = re.sub(r"\s+", " ", t[max(0, m.start() - 80):m.end() + 80]).strip()
+                out += [(i, "made_under", k, l, ctx, {"via": "made_under"}) for k in self.law(m["law"]) for l in labels(m["parts"])]
+        for m in GAZ.finditer(t):
+            k = f"gazette:{m[1]}/{int(m[2]):02d}"
+            if k == self.key:
+                continue
+            # the verb of the clause the number sits in: "the Order published in Gaz. Ex. No. 1992/29 ... is hereby rescinded"
+            end = r"(?<!No)(?<!Nos)(?<!Gaz)(?<!Ex)(?<!Ord)(?<!Sec)(?<!Cap)[.;]\s"      # not "No. ", "Gaz. Ex. "
+            w = re.split(end, t[max(0, m.start() - 160):m.start()])[-1] + m[0] + re.split(end, t[m.end():m.end() + 160])[0]
+            kind = "rescinds" if re.search(r"rescind|revok|cancel", w, re.I) else "amends" if re.search(r"\bamend", w, re.I) else "cites"
+            out.append((i, kind, k, None, re.sub(r"\s+", " ", t[max(0, m.start() - 120):m.end() + 80]).strip(), {"via": "gazette"}))
         out += [(i, "cites", "constitution", None, re.sub(r"\s+", " ", t[max(0, m.start() - 80):m.end() + 80]).strip(), {"via": "cite"})
                 for m in CONST.finditer(t)]
         nums = cites_in(t, bare=self.key.startswith("cap"))

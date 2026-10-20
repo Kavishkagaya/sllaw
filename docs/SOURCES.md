@@ -96,10 +96,20 @@ Files: `https://documents.gov.lk/api/content-file-proxy?file=/<uploadedFile>`.
 |---|---|---|---|---|
 | Acts | `/web/acts` | `…/website-data/act/get-all` | 1,736 | 1980– |
 | Bills | `/web/bills` | `…/website-data/bill/get-all` | 1,509 | 2003– (98% in all three languages) |
-| Extraordinary gazettes | `/web/extra_gazettes` | `…/website-data/extra-gazette/get-all` | 38,867 | 2010– |
+| Extraordinary gazettes | `/web/extra_gazettes` | `…/website-data/extra-gazette/get-all` | 39,107 (2026-10-20) | 2010– |
 | Weekly gazettes | `/web/gazettes` | `…/website-data/gazette/get-all-gazette-dates` | 1,059 issue dates | 2006– |
 
 `apiEndpoint` prefix is `http://gvp-api:4500` (internal host, passed through as-is).
+
+### Extraordinary gazettes (surveyed 2026-10-20, issue #6; listing only, no PDF opened)
+
+Same Server Action as Acts (`TableDataAction`, page `/web/extra_gazettes`). Record: `gazetteNoText` ("2511/09"), `date`, `descriptionEnglish` (the Sinhala/Tamil fields carry the same English text), `contents[]` per language (`extra-gazette-content/<file>.pdf`, file names like "PG 8089 (E).pdf"). Pages of 1,000 work; past a few thousand rows a page fails on RSC `T` rows (long strings split out), so a failed page is re-asked as 4 smaller ones. Unstable ordering: 38,500 unique of 39,107 listed in one pass (1.6% dropped), so a full fetch needs several passes or another ordering.
+
+- **Per year:** 2010 759, 2011 1,195, 2012 1,226, 2013 1,780, 2014 2,087, 2015 2,333, 2016 2,485, 2017 2,507, 2018 2,703, 2019 2,916, 2020 1,930, 2021 2,665, 2022 3,097, 2023 2,999, 2024 2,551, 2025 2,963, 2026 2,304 (to 2026-10-19). **English file:** 35,116 of 38,500.
+- **Descriptions are "Department - subject"** and informative: only 41 are just the gazette number. Buckets by regex (first match wins): land acquisition / title settlement 23,362 (61%); elections and members 2,853; appointments 1,507; exchange rates (Customs, weekly) 786; **orders 1,763, regulations 922, duty/levy/tax/fee notices 398, provincial statutes 229, emergency/public security 158, by-laws 144, rules 139**; notifications/directions/declarations 880; other 5,359 (labour awards, cost-of-living index notices, minutes, processions, and law the regexes missed).
+- **Law in it: roughly 4,000-5,000 gazettes** (orders, regulations, rules, by-laws, levy and duty orders, emergency regulations; some "orders" are land acquisitions and some notifications are law). Descriptions often name the parent Act and section ("Order under Section 10A of the Customs Ordinance (Chapter 235)", "Regulations under Sections 40 & 41 of the Sport Act. No.25 of 1973"): 943 say "made under"/"under section", 2,637 name an Act/Ordinance/Law. Most named: Public Security Ordinance 69+, Local Authorities Elections Ordinance, Forest Conservation Ordinance, Colombo Port City Economic Commission Act 11/2021, Customs Ordinance, Special Commodity Levy Act 48/2007, Essential Public Services Act 61/1979, Consumer Affairs Authority Act 9/2003, Foreign Exchange Act 12/2017. They also cite earlier gazettes they amend or rescind ("amend the Schedule II of the Order published in Gaz. Ex. Ord. No. 1992/29 of 10.11.2016").
+- **Files (measured 2026-10-20 on ampere, 150 English PDFs streamed into memory, 50 per group, nothing stored):** the proxy sends no Content-Length and ignores Range, so size needs a download. **All born-digital:** 1,491 of 1,491 sampled pages have a text layer (docling only, no OCR). Median 0.12-0.15 MB, mean 0.17-0.24 MB; pages median 2-3, mean 9-11 (some long schedules). By group (law regex / neither / land-election-appointment-exchange regex): law 3,374 files ~0.6 GB ~33,000 pages; other 5,878 ~1.1 GB ~55,000 pages; administrative 25,864 ~6.2 GB ~274,000 pages; **all English ~7.9 GB, ~360,000 pages.**
+- **Not checked:** gazettes before 2010 (not on the site); the weekly gazette (Part I/II), which also carries regulations.
 
 ### Acts coverage
 

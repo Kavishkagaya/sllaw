@@ -9,6 +9,7 @@
   python3 -m etl.fetch lankalaw             # lankalaw.net Acts by year, only those filling a gap
   python3 -m etl.fetch parliament           # parliament.lk official PDFs, 1956 on, not already from documents.gov.lk
   python3 -m etl.fetch constitution         # parliament.lk: the 1978 Constitution and its consolidations
+  python3 -m etl.fetch gazette              # documents.gov.lk extraordinary gazettes 2010-: the law in them only
 
 One documents row per file (an act in three languages = three rows). Files are
 keyed by content hash, source/<sha256>.pdf, so re-runs and duplicates never
@@ -23,7 +24,7 @@ import psycopg2
 from dotenv import load_dotenv
 from psycopg2.extras import Json, execute_values
 
-from etl.spiders import acts, lankalaw, le1956, le1980, parliament
+from etl.spiders import acts, gazettes, lankalaw, le1956, le1980, parliament
 
 load_dotenv()
 WORKERS = 8   # parallel downloads; documents.gov.lk is a small govt server, don't go much higher
@@ -164,6 +165,22 @@ def discover_constitution(db):
     return len(rows)
 
 
+def discover_gazettes(db):
+    """One row per law gazette's English PDF (etl/spiders/gazettes.py: regulations, orders, rules, by-laws, levies;
+    not land acquisition, elections, appointments). meta.gazette_no is the key: gazette:<no> ("2235/22")."""
+    rows = {acts.pdf_url(c["uploadedFile"]): (
+                "gazette", acts.pdf_url(c["uploadedFile"]), rec.get("descriptionEnglish"), rec.get("date"),
+                Json({"gazette_no": rec.get("gazetteNoText"), "lang": "ENGLISH", "listing": rec}))
+            for rec in gazettes.crawl() if gazettes.is_law(rec.get("descriptionEnglish"))
+            for c in rec.get("contents") or [] if c["language"] == "ENGLISH"}   # English only (scope, 2026-10-10)
+    cur = db()
+    execute_values(cur,
+        """INSERT INTO documents (source, source_url, title, doc_date, meta) VALUES %s
+           ON CONFLICT (source, source_url) DO UPDATE
+           SET meta = documents.meta || EXCLUDED.meta, updated_at = NOW()""", list(rows.values()), page_size=1000)
+    return len(rows)
+
+
 def r2():
     return boto3.client(
         "s3", region_name="auto",
@@ -237,7 +254,7 @@ def fetch(conn, source, limit=None):
 
 def main():
     a = argparse.ArgumentParser()
-    a.add_argument("source", choices=["acts", "le1956", "le1980", "lankalaw", "parliament", "constitution"])
+    a.add_argument("source", choices=["acts", "le1956", "le1980", "lankalaw", "parliament", "constitution", "gazette"])
     a.add_argument("--limit", type=int, help="fetch at most N files (pilot)")
     a.add_argument("--no-discover", action="store_true", help="skip listing, only drain the queue")
     args = a.parse_args()
@@ -259,7 +276,7 @@ def main():
     if not args.no_discover:
         discover = {"acts": discover_acts, "le1956": discover_le1956, "le1980": discover_le1980,
                     "lankalaw": discover_lankalaw, "parliament": discover_parliament,
-                    "constitution": discover_constitution}[args.source]
+                    "constitution": discover_constitution, "gazette": discover_gazettes}[args.source]
         print(f"discovered {discover(db)} files")
         conn.commit()
     db()
