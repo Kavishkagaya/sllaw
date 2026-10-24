@@ -79,9 +79,12 @@ export function Chat({ id, title, initial, fresh }: { id: string; title?: string
     return { loaded, cites };
   }, [messages]);
 
-  // keep the newest message in view while it streams
+  // keep the newest message in view while it streams. Braces matter: newer browsers (Chrome 153, recent mobile
+  // Safari) return a Promise from scrollIntoView, and an effect that returns one crashes React on cleanup
   const end = useRef<HTMLDivElement>(null);
-  useEffect(() => end.current?.scrollIntoView({ block: "end" }), [messages]);
+  useEffect(() => {
+    end.current?.scrollIntoView({ block: "end" });
+  }, [messages]);
 
   const busy = status === "submitted" || status === "streaming";
   const empty = messages.length === 0;
