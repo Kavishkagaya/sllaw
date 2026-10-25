@@ -9,7 +9,7 @@
 // retried Vercel Workflow step. Both go through runStep, the only writer of step state.
 import type { Card, Categorizer } from "@sllaw/ai";
 import type { FileRow, Step, StepEnd } from "@sllaw/db";
-import { NoText, type Extracted } from "@sllaw/extract";
+import { NoText, type ExtractCtx, type Extracted } from "@sllaw/extract";
 import { chunkPages, indexBy, type FileIndex } from "@sllaw/search";
 import { getJson, putJson, type BlobStore } from "@sllaw/storage";
 
@@ -32,7 +32,7 @@ export interface FileRows {
 export type Deps = {
   rows: FileRows;
   store: BlobStore;
-  extract: (bytes: Uint8Array, mime: string, filename: string, ctx: { workspaceId: string }) => Promise<Extracted>;
+  extract: (bytes: Uint8Array, mime: string, filename: string, ctx: ExtractCtx) => Promise<Extracted>;
   categorizer: Categorizer;
   index: FileIndex;
 };
@@ -89,7 +89,8 @@ const STEP: Record<Step, (f: FileRow, d: Deps) => Promise<StepEnd>> = {
     if (!blob) return { state: "failed", error: "the original is not in the store" };
     const sha256 = Buffer.from(await crypto.subtle.digest("SHA-256", blob.bytes as BufferSource)).toString("hex");
     try {
-      const x = await d.extract(blob.bytes, f.mime, f.name, { workspaceId: f.workspaceId });
+      // OCR fetches the file itself: a signed URL, good for the length of a step
+      const x = await d.extract(blob.bytes, f.mime, f.name, { url: () => d.store.downloadUrl(keys.original(f.id), 15 * 60) });
       await putJson(d.store, keys.extract(f.id), { by: x.by, pages: x.pages } satisfies Pages);
       return { state: "done", by: x.by, set: { sha256, pages: x.totalPages } };
     } catch (e) {

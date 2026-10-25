@@ -19,12 +19,15 @@ export class NoText extends Error {
   }
 }
 
+/** What an extractor may need beyond the bytes: a signed URL to the file, for a service that fetches it (OCR). */
+export type ExtractCtx = { url?: () => Promise<string | null> };
+
 export interface Extractor {
   readonly name: string;
   readonly version: number;
   accepts(mime: string, filename: string): boolean;
   /** Throws NoText when the file holds no text this extractor can read. */
-  extract(bytes: Uint8Array, mime: string, filename: string): Promise<Page[]>;
+  extract(bytes: Uint8Array, mime: string, filename: string, ctx?: ExtractCtx): Promise<Page[]>;
 }
 
 export const ext = (filename: string) => filename.toLowerCase().match(/\.([a-z0-9]+)$/)?.[1] ?? "";

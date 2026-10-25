@@ -39,8 +39,8 @@ apps/web → api → services → db
 - **`storage`**: the blob store (`BlobStore`: put, get, head, deletePrefix, signed upload/download URLs). R2 (the
   `R2_FILES_BUCKET`, apart from the ETL's bucket) or memory (`STORAGE=memory`, tests and local runs).
 - **`extract`**: a file's bytes -> its text, page by page. One `Extractor` per format (unpdf for text-layer PDFs,
-  mammoth for .docx, plain text and HTML); OCR for pages with no text layer and images through an `OcrProvider`
-  (ai's `visionOcr` now, any OCR API later); `NoText` when there is none.
+  mammoth for .docx, plain text and HTML); OCR through an `OcrProvider`: the endpoint gets a signed URL to the
+  whole file and returns its pages as JSON (`httpOcr`, on when `OCR_URL` is set); `NoText` when there is none.
 - **`services`**: the business logic. Calls the queries in `db`, `etl_db` and `search` and the agents in `ai`;
   never writes SQL or imports drizzle. Builds the `ctx` agents run with.
 - **`ai`**: LLMs, tools and agents. DeepSeek via Vercel AI Gateway, one model per task (`MODEL_<TASK>` env);
@@ -64,7 +64,7 @@ there is no build step per package. A new package goes in that list.
 
 Three pipelines on one `files` row (`services/src/files/pipeline.ts`), each behind its package's interface, joined
 only by the row's step states and the file's folder in the store (`files/<id>/`): **extract** (original ->
-`extract.json`; scans OCR'd page batches in parallel when `OCR=vision`), then side by side **categorize** (->
+`extract.json`; a scan goes to the OCR endpoint as a signed URL when `OCR_URL` is set), then side by side **categorize** (->
 `card.json`; `category` + `meta` on the row, the summary stays in the store) and **index** (-> `chunks.json` +
 vectors). Upload comes before: `file.startUpload` -> the browser PUTs to the signed URL -> `file.finishUpload`
 starts a Vercel Workflow run (`files/workflow.ts`: one durable, retried step per pipeline; `withWorkflow` in

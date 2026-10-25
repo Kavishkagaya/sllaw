@@ -111,9 +111,10 @@ in v1; an entity graph can be built later from the same per-file JSON.
 - **Fast, on demand, Vercel Workflows (user, 2026-10-25):** a file is ready in under 2 minutes most of the time. The
   steps run as a Vercel Workflow (same project and code, durable steps retried 2 times; no Trigger.dev, Inngest or
   Cloudflare Workflows: a second platform for the same job). extract, then categorize and index at the same time.
-  OCR with a cheap provider (user): only pages with no text layer, 8 pages per call, 6 calls at once, behind
-  `OcrProvider`; the first is a vision model via the AI Gateway (`MODEL_OCR`, `OCR=vision`). Not compared yet on
-  Sinhala/Tamil scans: test a few real ones before picking the provider (Mistral OCR is the other candidate).
+  OCR with a cheap provider (user): **the OCR endpoint gets a signed URL to the whole file, fetches it and returns
+  its pages as JSON; that is the whole contract** (`OcrProvider`, `httpOcr`: POST {url, mime, filename} ->
+  {pages: [{n, text}]}; on when `OCR_URL` is set). We send no bytes and split no pages. A PDF's pages with a text
+  layer keep it; OCR fills the ones without. Provider not picked yet; not compared on Sinhala/Tamil scans.
 - **LLM: DeepSeek** via Vercel AI Gateway (user, 2026-10-17; gateway changed 2026-10-18). The model per task (main agent, research agent, reading
   files) is one config value each, not code: picked later. Not checked yet: DeepSeek's API terms on training and data
   location (the privacy line below depends on it).

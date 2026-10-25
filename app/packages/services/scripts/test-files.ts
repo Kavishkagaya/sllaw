@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import type { Card, Categorizer } from "@sllaw/ai";
 import type { FileRow, Step, StepEnd } from "@sllaw/db";
-import { extract, extractors, NoText, type OcrProvider } from "@sllaw/extract";
+import { extract, extractors, httpOcr, NoText, type OcrProvider } from "@sllaw/extract";
 import { chunkPages, memoryFileIndex } from "@sllaw/search";
 import { getJson, memoryStore } from "@sllaw/storage";
 import { keys, runFile, runStep, type Deps, type FileRows } from "../src/files/pipeline";
@@ -48,7 +48,7 @@ const categorizer: Categorizer = { by: "fake@1", categorize: async () => (catego
 
 const setup = () => {
   const rows = memoryRows(), store = memoryStore(), index = memoryFileIndex();
-  const d: Deps = { rows, store, extract: (b, m, n) => extract(b, m, n), categorizer, index };
+  const d: Deps = { rows, store, extract: (b, m, n, ctx) => extract(b, m, n, undefined, ctx), categorizer, index };
   return { rows, store, index, d };
 };
 const pdf = (pages: string[]) => {
@@ -164,29 +164,51 @@ const enc = (s: string) => new TextEncoder().encode(s);
   assert.equal(cs.at(-1)!.text, "Short page.");
 }
 
-// 9. OCR: only pages without a text layer go to the provider, in batches; text pages are kept as read
+// 9. OCR: the provider gets a signed URL to the whole file and returns every page; pages with a text layer keep it
 {
-  const calls: number[] = [];
+  const calls: { url: string; mime: string }[] = [];
   const fake: OcrProvider = {
     by: "fake-ocr@1",
-    async ocr(file, n) {
-      assert.ok(["application/pdf", "image/png"].includes(file.mime));
-      calls.push(n);
-      return Array.from({ length: n }, (_, i) => `ocr text ${i}`);
+    async ocr(file) {
+      calls.push(file);
+      return Array.from({ length: file.mime === "application/pdf" ? 20 : 1 }, (_, i) => `ocr text ${i + 1}`);
     },
   };
+  const ctx = { url: async () => "https://store.example/signed" };
   const long = "The petitioner states that the respondent unlawfully entered the land in dispute.";
   const pages = Array.from({ length: 20 }, (_, i) => (i === 0 ? long : ""));
-  const x = await extract(pdf(pages), "application/pdf", "scan.pdf", extractors(fake));
+  const x = await extract(pdf(pages), "application/pdf", "scan.pdf", extractors(fake), ctx);
   assert.equal(x.by, "unpdf+ocr:fake-ocr@1@1");
   assert.equal(x.pages.length, 20);
-  assert.match(x.pages[0]!.text, /petitioner/);
-  assert.equal(x.pages[1]!.text, "ocr text 0");
-  assert.deepEqual([...calls].sort((a, b) => a - b), [3, 8, 8]); // 19 scanned pages in batches of 8
+  assert.match(x.pages[0]!.text, /petitioner/, "a text-layer page keeps its own text");
+  assert.equal(x.pages[1]!.text, "ocr text 2");
+  assert.deepEqual(calls, [{ url: "https://store.example/signed", mime: "application/pdf", filename: "scan.pdf" }], "one call, whole file");
+  // a PDF with a text layer on every page never calls OCR
+  await extract(pdf([long, long]), "application/pdf", "t.pdf", extractors(fake), ctx);
+  assert.equal(calls.length, 1);
   // images go to OCR too, and only when a provider is set
-  const img = await extract(new Uint8Array([1, 2, 3]), "image/png", "photo.png", extractors(fake));
-  assert.equal(img.pages[0]!.text, "ocr text 0");
+  const img = await extract(new Uint8Array([1, 2, 3]), "image/png", "photo.png", extractors(fake), ctx);
+  assert.equal(img.pages[0]!.text, "ocr text 1");
   await assert.rejects(extract(new Uint8Array([1]), "image/png", "photo.png"), (e) => e instanceof NoText && e.reason === "unsupported");
+  // no URL from the store (memory): a plain failure, retried or recorded like any other
+  await assert.rejects(extract(pdf(["", ""]), "application/pdf", "s.pdf", extractors(fake)), /no URL/);
+  // httpOcr: the endpoint contract
+  const srv = (await import("node:http")).createServer((req, res) => {
+    let b = "";
+    req.on("data", (c) => (b += c)).on("end", () => {
+      const j = JSON.parse(b);
+      assert.equal(req.headers.authorization, "Bearer t0k");
+      res.setHeader("content-type", "application/json");
+      res.end(JSON.stringify({ pages: [{ n: 2, text: "two" }, { n: 1, text: `one ${j.url}` }] }));
+    });
+  });
+  await new Promise<void>((r) => srv.listen(0, r));
+  const port = (srv.address() as { port: number }).port;
+  const http = httpOcr({ OCR_URL: `http://127.0.0.1:${port}/ocr`, OCR_TOKEN: "t0k", OCR_NAME: "test" })!;
+  assert.equal(http.by, "test@1");
+  assert.deepEqual(await http.ocr({ url: "u", mime: "application/pdf", filename: "f.pdf" }), ["one u", "two"]);
+  srv.close();
+  assert.equal(httpOcr({}), null, "no OCR_URL: OCR off");
 }
 
 // 10. categorize and index run side by side after extract

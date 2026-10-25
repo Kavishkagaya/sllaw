@@ -1,6 +1,6 @@
 import { docxExtractor } from "./docx";
-import { NoText, type Extracted, type Extractor } from "./extractor";
-import { ocrImageExtractor, ocrPdfExtractor, type OcrProvider } from "./ocr";
+import { NoText, type Extracted, type ExtractCtx, type Extractor } from "./extractor";
+import { httpOcr, ocrImageExtractor, ocrPdfExtractor, type OcrProvider } from "./ocr";
 import { pdfExtractor } from "./pdf";
 import { textExtractor } from "./text";
 
@@ -19,13 +19,13 @@ export function extractorFor(mime: string, filename: string, xs = defaultExtract
 }
 
 /** Read a file's text with the first extractor that accepts it. Throws NoText when there is none to read. */
-export async function extract(bytes: Uint8Array, mime: string, filename: string, xs = defaultExtractors): Promise<Extracted> {
+export async function extract(bytes: Uint8Array, mime: string, filename: string, xs = defaultExtractors, ctx?: ExtractCtx): Promise<Extracted> {
   const x = xs.find((e) => e.accepts(mime, filename));
   if (!x) throw new NoText("unsupported", `no extractor reads ${mime || "this format"} (${filename})`);
-  const pages = await x.extract(bytes, mime, filename);
+  const pages = await x.extract(bytes, mime, filename, ctx);
   return { by: `${x.name}@${x.version}`, pages, totalPages: pages.length };
 }
 
-export { docxExtractor, ocrImageExtractor, ocrPdfExtractor, pdfExtractor, textExtractor, type OcrProvider };
+export { docxExtractor, httpOcr, ocrImageExtractor, ocrPdfExtractor, pdfExtractor, textExtractor, type OcrProvider };
 export { pdfPagesText } from "./pdf";
-export { NoText, type Extracted, type Extractor, type Page } from "./extractor";
+export { NoText, type Extracted, type ExtractCtx, type Extractor, type Page } from "./extractor";

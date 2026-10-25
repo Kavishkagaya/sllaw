@@ -6,10 +6,7 @@ import { gateway, wrapLanguageModel } from "ai";
 const tasks = {
   main: process.env.MODEL_MAIN || "deepseek/deepseek-v4.1-flash",
   files: process.env.MODEL_FILES || "deepseek/deepseek-v4.1-flash",
-  // must read PDFs and images (DeepSeek does not); not compared yet on Sinhala/Tamil scans
-  ocr: process.env.MODEL_OCR || "google/gemini-2.5-flash",
 };
-export const ocrModelId = tasks.ocr;
 export type Task = keyof typeof tasks;
 
 // Pinned providers, in order: each keeps its own prompt cache, and the gateway spread calls over ~20 hosts. The
