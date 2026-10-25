@@ -11,7 +11,7 @@ export type Step = (typeof STEPS)[number];
 export type StepState = "pending" | "running" | "done" | "failed" | "no_text";
 /** What a step writes when it ends: its state, what produced it, and the columns it fills. */
 export type StepEnd = {
-  state: Exclude<StepState, "pending" | "running">;
+  state: Exclude<StepState, "running">; // pending: put back for a retry
   by?: string | null;
   error?: string | null;
   set?: Partial<Pick<FileRow, "sha256" | "pages" | "chunks" | "category" | "meta">>;
@@ -136,3 +136,12 @@ export const unfinishedFiles = (limit = 100) =>
     )
     .limit(limit);
 
+
+/** Ids of a case's files (or an owner's private files) in these categories: a search filter by doc_type. */
+export async function fileIdsByCategory(q: { workspaceId: string; caseId?: string; ownerId?: string; categories: string[] }) {
+  const where = and(eq(files.workspaceId, q.workspaceId), inArray(files.category, q.categories));
+  const rows = q.caseId
+    ? await db.select({ id: files.id }).from(caseFiles).innerJoin(files, eq(files.id, caseFiles.fileId)).where(and(where, eq(caseFiles.caseId, q.caseId)))
+    : await db.select({ id: files.id }).from(files).where(and(where, eq(files.ownerId, q.ownerId!)));
+  return rows.map((r) => r.id);
+}

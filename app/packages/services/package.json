@@ -24,6 +24,7 @@
     "@sllaw/etl_db": "workspace:*",
     "@sllaw/extract": "workspace:*",
     "@sllaw/search": "workspace:*",
-    "@sllaw/storage": "workspace:*"
+    "@sllaw/storage": "workspace:*",
+    "workflow": "5.2.1"
   }
 }

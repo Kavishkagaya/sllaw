@@ -35,13 +35,13 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => found(await startUpload(ctx.account, input))),
     finishUpload: workspaceUser
       .input(z.object({ fileId: z.uuid() }))
-      .mutation(async ({ ctx, input }) => found(await finishUpload(ctx.account, input.fileId, ctx.waitUntil))),
+      .mutation(async ({ ctx, input }) => found(await finishUpload(ctx.account, input.fileId))),
     ofCase: workspaceUser.input(z.object({ caseId: z.uuid() })).query(async ({ ctx, input }) => found(await listCaseFiles(ctx.account, input.caseId))),
     mine: workspaceUser.query(({ ctx }) => listMyFiles(ctx.account)),
     open: workspaceUser.input(z.object({ fileId: z.uuid() })).query(async ({ ctx, input }) => found(await openFile(ctx.account, input.fileId))),
     reprocess: workspaceUser
       .input(z.object({ fileId: z.uuid(), steps: z.array(z.enum(["extract", "categorize", "index"])).optional() }))
-      .mutation(async ({ ctx, input }) => found(await reprocessFile(ctx.account, input.fileId, ctx.waitUntil, input.steps))),
+      .mutation(async ({ ctx, input }) => found(await reprocessFile(ctx.account, input.fileId, input.steps))),
     delete: workspaceUser
       .input(z.object({ fileId: z.uuid() }))
       .mutation(async ({ ctx, input }) => found((await deleteFile(ctx.account, input.fileId)) || null)),

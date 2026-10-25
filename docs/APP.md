@@ -100,13 +100,20 @@ in v1; an entity graph can be built later from the same per-file JSON.
   (`extract.json`), its card's summary (`card.json`) and its chunks (`chunks.json`) are in R2 under `files/<id>/`, the
   vectors in Zilliz `files`. Categorization is metadata on the row (`category` = doc_type, `meta` = parties, dates,
   court, case numbers, laws cited, tags; how it is used, search filter, UI grouping or per-category handling, is
-  open), and doc_type is copied onto each vector so search can filter by it. Each step (extract, categorize, index)
+  open); the vectors carry no doc_type (categorize runs beside index), a search by type resolves to file ids in
+  Postgres. Each step (extract, categorize, index)
   has its own state on the row, null when the file does not need it (a logo needs none), and `<step>_by`
   (name@version) so a new extractor, categorizer, embedder or vector DB re-runs only what an older one did. Each
   step is an interface in its package (storage `BlobStore`, extract `Extractor`, ai `Categorizer`, search
   `FileIndex`/`Embedder`); swapping one changes nothing else. No chunk table: chunk ids are `<fileId>:<n>`, stable
-  while the chunker is. v1: scans are marked `no_text` (needs OCR); only the case author can add and see a case's
-  files until `case_shares` exists; the agent's case-file search tool waits for the case chat.
+  while the chunker is. v1: only the case author can add and see a case's files until `case_shares` exists; the
+  agent's case-file search tool waits for the case chat.
+- **Fast, on demand, Vercel Workflows (user, 2026-10-25):** a file is ready in under 2 minutes most of the time. The
+  steps run as a Vercel Workflow (same project and code, durable steps retried 2 times; no Trigger.dev, Inngest or
+  Cloudflare Workflows: a second platform for the same job). extract, then categorize and index at the same time.
+  OCR with a cheap provider (user): only pages with no text layer, 8 pages per call, 6 calls at once, behind
+  `OcrProvider`; the first is a vision model via the AI Gateway (`MODEL_OCR`, `OCR=vision`). Not compared yet on
+  Sinhala/Tamil scans: test a few real ones before picking the provider (Mistral OCR is the other candidate).
 - **LLM: DeepSeek** via Vercel AI Gateway (user, 2026-10-17; gateway changed 2026-10-18). The model per task (main agent, research agent, reading
   files) is one config value each, not code: picked later. Not checked yet: DeepSeek's API terms on training and data
   location (the privacy line below depends on it).

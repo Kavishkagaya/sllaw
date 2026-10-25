@@ -21,14 +21,13 @@ await zilliz("collections/create", {
       { fieldName: "page", dataType: "Int32" },
       vc("workspace_id", 36),
       { fieldName: "scopes", dataType: "Array", elementDataType: "VarChar", elementTypeParams: { max_capacity: 64, max_length: 48 } },
-      vc("doc_type", 32),
     ],
     functions: [{ name: "bm25", type: "BM25", inputFieldNames: ["text"], outputFieldNames: ["sparse"] }],
   },
   indexParams: [
     { fieldName: "vec", indexName: "vec", metricType: "COSINE", params: { index_type: "AUTOINDEX" } },
     { fieldName: "sparse", indexName: "sparse", metricType: "BM25", params: { index_type: "AUTOINDEX" } },
-    ...["workspace_id", "file_id", "doc_type", "scopes"].map((f) => ({ fieldName: f, indexName: f, params: { index_type: "AUTOINDEX" } })),
+    ...["workspace_id", "file_id", "scopes"].map((f) => ({ fieldName: f, indexName: f, params: { index_type: "AUTOINDEX" } })),
   ],
 });
 console.log(`created ${FILES}`);

@@ -4,7 +4,9 @@
 //   categorize extract.json  -> card.json + category/meta       Categorizer (@sllaw/ai)
 //   index      extract.json  -> chunks.json + vectors           FileIndex (@sllaw/search)
 // Upload is the step before: the file reaches the store and the row says `stored`. A step runs when the row says
-// pending and extract is done (categorize and index read its text); a step the file does not need is null.
+// pending and extract is done; categorize and index both read only its text, so they run at the same time. A step
+// the file does not need is null. runFile runs them in one process (tests, the sweep); ./workflow runs each as a
+// retried Vercel Workflow step. Both go through runStep, the only writer of step state.
 import type { Card, Categorizer } from "@sllaw/ai";
 import type { FileRow, Step, StepEnd } from "@sllaw/db";
 import { NoText, type Extracted } from "@sllaw/extract";
@@ -30,35 +32,52 @@ export interface FileRows {
 export type Deps = {
   rows: FileRows;
   store: BlobStore;
-  extract: (bytes: Uint8Array, mime: string, filename: string) => Promise<Extracted>;
+  extract: (bytes: Uint8Array, mime: string, filename: string, ctx: { workspaceId: string }) => Promise<Extracted>;
   categorizer: Categorizer;
   index: FileIndex;
 };
 
-const ORDER: Step[] = ["extract", "categorize", "index"];
 const stateOf = (f: FileRow, s: Step) => f[`${s}State`];
 
-/** Runs every step the file still needs, in order; a failed step is recorded and the others go on where they can.
- *  Safe to call twice at once or again later: a step is claimed before it runs. */
-export async function runFile(id: string, d: Deps, only: readonly Step[] = ORDER) {
-  const ran: Partial<Record<Step, string>> = {};
-  for (const step of ORDER) {
-    if (!only.includes(step)) continue;
-    const f = await d.rows.get(id);
-    if (!f || f.uploadState !== "stored") break;
-    if (!["pending", "running"].includes(stateOf(f, step) ?? "")) continue;
-    if (step !== "extract" && f.extractState !== "done") continue; // nothing to read yet, or never will be
-    const claimed = await d.rows.claim(id, step);
-    if (!claimed) continue;
-    let end: StepEnd;
-    try {
-      end = await STEP[step](claimed, d);
-    } catch (e) {
-      end = { state: "failed", error: String((e as Error)?.message ?? e).slice(0, 1000) };
+/** What runStep does when a step throws: record it as failed (default), or, while retries are left, put it back to
+ *  pending with the error and throw, so the caller (a workflow step) retries it. */
+export type OnError = { retriesLeft: boolean };
+
+/** Runs one step if it is due: claimed (pending -> running), run, ended. The end state, or null when the step was
+ *  not run (not needed, done, claimed by another run, or extract not done). */
+export async function runStep(id: string, step: Step, d: Deps, onError?: OnError): Promise<StepEnd["state"] | null> {
+  const f = await d.rows.get(id);
+  if (!f || f.uploadState !== "stored") return null;
+  if (!["pending", "running"].includes(stateOf(f, step) ?? "")) return null;
+  if (step !== "extract" && f.extractState !== "done") return null; // nothing to read yet, or never will be
+  const claimed = await d.rows.claim(id, step);
+  if (!claimed) return null;
+  let end: StepEnd;
+  try {
+    end = await STEP[step](claimed, d);
+  } catch (e) {
+    const error = String((e as Error)?.message ?? e).slice(0, 1000);
+    if (onError?.retriesLeft) {
+      await d.rows.end(id, step, { state: "pending", error });
+      throw e;
     }
-    await d.rows.end(id, step, end);
-    ran[step] = end.state;
+    end = { state: "failed", error };
   }
+  await d.rows.end(id, step, end);
+  return end.state;
+}
+
+/** Every step the file still needs: extract, then categorize and index side by side. A failed step is recorded and
+ *  the others go on where they can. Safe to call twice at once or again later: a step is claimed before it runs. */
+export async function runFile(id: string, d: Deps, only: readonly Step[] = ["extract", "categorize", "index"]) {
+  const ran: Partial<Record<Step, string>> = {};
+  const run = async (s: Step) => {
+    if (!only.includes(s)) return;
+    const r = await runStep(id, s, d);
+    if (r) ran[s] = r;
+  };
+  await run("extract");
+  await Promise.all([run("categorize"), run("index")]);
   return ran;
 }
 
@@ -70,7 +89,7 @@ const STEP: Record<Step, (f: FileRow, d: Deps) => Promise<StepEnd>> = {
     if (!blob) return { state: "failed", error: "the original is not in the store" };
     const sha256 = Buffer.from(await crypto.subtle.digest("SHA-256", blob.bytes as BufferSource)).toString("hex");
     try {
-      const x = await d.extract(blob.bytes, f.mime, f.name);
+      const x = await d.extract(blob.bytes, f.mime, f.name, { workspaceId: f.workspaceId });
       await putJson(d.store, keys.extract(f.id), { by: x.by, pages: x.pages } satisfies Pages);
       return { state: "done", by: x.by, set: { sha256, pages: x.totalPages } };
     } catch (e) {
@@ -93,7 +112,7 @@ const STEP: Record<Step, (f: FileRow, d: Deps) => Promise<StepEnd>> = {
     if (!x) return { state: "failed", error: "extract.json is missing" };
     const chunks = chunkPages(f.id, x.pages);
     await putJson(d.store, keys.chunks(f.id), chunks);
-    if (chunks.length) await d.index.upsert(chunks, { workspaceId: f.workspaceId, scopes: await d.rows.scopes(f), docType: f.category });
+    if (chunks.length) await d.index.upsert(chunks, { workspaceId: f.workspaceId, scopes: await d.rows.scopes(f) });
     else await d.index.remove(f.id);
     return { state: "done", by: indexBy(d.index), set: { chunks: chunks.length } };
   },

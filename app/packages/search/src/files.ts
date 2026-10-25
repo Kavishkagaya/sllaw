@@ -1,21 +1,21 @@
-// The index of users' files (docs/APP.md, User files): one row per chunk with its workspace, its scopes (case:<id>,
-// user:<id>) and the file's doc_type. Access is filtered inside the vector query, so top-k is never lost to filtering
+// The index of users' files (docs/APP.md, User files): one row per chunk with its workspace and its scopes
+// (case:<id>, user:<id>). No doc_type: categorize runs beside index, not before it, so a filter by type is resolved
+// to file ids in Postgres (files.category) and passed as fileIds. Access is filtered inside the vector query, so top-k is never lost to filtering
 // afterwards; services decides which scopes a request may see. A new vector DB is a new FileIndex; a new embedding
 // model a new Embedder (its `by` changes, so every file's index_by is stale and gets re-indexed).
 import { chunkPages, CHUNKER, type FileChunk } from "./chunk";
 import { embed } from "./embed";
 import { zilliz } from "./zilliz";
 
-export type Attrs = { workspaceId: string; scopes: string[]; docType: string | null };
+export type Attrs = { workspaceId: string; scopes: string[] };
 export type FileQuery = {
   workspaceId: string;
   scopes: string[]; // what this request may see: a hit has at least one of them
-  docTypes?: string[];
-  fileIds?: string[];
+  fileIds?: string[]; // only these files (a doc_type filter, resolved in Postgres)
   mode?: "dense" | "weighted";
   limit?: number;
 };
-export type FileHit = { id: string; fileId: string; n: number; page: number; docType: string | null; text: string; score: number };
+export type FileHit = { id: string; fileId: string; n: number; page: number; text: string; score: number };
 
 export interface Embedder {
   readonly by: string;
@@ -57,10 +57,9 @@ const list = (xs: string[]) => {
   return JSON.stringify(xs);
 };
 
-export function fileFilter(q: Pick<FileQuery, "workspaceId" | "scopes" | "docTypes" | "fileIds">) {
-  if (!q.scopes.length) return null; // sees nothing
+export function fileFilter(q: Pick<FileQuery, "workspaceId" | "scopes" | "fileIds">) {
+  if (!q.scopes.length || (q.fileIds && !q.fileIds.length)) return null; // sees nothing
   const parts = [`workspace_id == ${list([q.workspaceId]).slice(1, -1)}`, `array_contains_any(scopes, ${list(q.scopes)})`];
-  if (q.docTypes?.length) parts.push(`doc_type in ${list(q.docTypes)}`);
   if (q.fileIds?.length) parts.push(`file_id in ${list(q.fileIds)}`);
   return parts.join(" and ");
 }
@@ -80,7 +79,7 @@ export function zillizFileIndex(embedder: Embedder = bgeM3, collectionName = FIL
           collectionName,
           data: chunks.slice(i, i + BATCH).map((c, k) => ({
             id: c.id, vec: vecs[i + k], text: c.text, file_id: c.fileId, n: c.n, page: c.page,
-            workspace_id: a.workspaceId, scopes: a.scopes, doc_type: a.docType ?? "",
+            workspace_id: a.workspaceId, scopes: a.scopes,
           })),
         });
     },
@@ -91,7 +90,7 @@ export function zillizFileIndex(embedder: Embedder = bgeM3, collectionName = FIL
       const filter = fileFilter(q);
       if (!filter) return [];
       const limit = q.limit ?? 10;
-      const outputFields = ["file_id", "n", "page", "doc_type", "text"];
+      const outputFields = ["file_id", "n", "page", "text"];
       const vec = await embedder.embed([query]);
       const rows: any[] =
         q.mode === "weighted"
@@ -104,7 +103,7 @@ export function zillizFileIndex(embedder: Embedder = bgeM3, collectionName = FIL
               rerank: { strategy: "weighted", params: { weights: [0.7, 0.3] } },
             })
           : await zilliz("entities/search", { collectionName, limit, outputFields, data: vec, annsField: "vec", filter });
-      return rows.map((r) => ({ id: r.id, fileId: r.file_id, n: r.n, page: r.page, docType: r.doc_type || null, text: r.text, score: r.distance }));
+      return rows.map((r) => ({ id: r.id, fileId: r.file_id, n: r.n, page: r.page, text: r.text, score: r.distance }));
     },
   };
 }
@@ -126,13 +125,12 @@ export function memoryFileIndex(): FileIndex & { rows(): (FileChunk & Attrs)[] }
       const words = new Set(query.toLowerCase().split(/\W+/).filter(Boolean));
       return rows
         .filter((r) => r.workspaceId === q.workspaceId && r.scopes.some((s) => q.scopes.includes(s)))
-        .filter((r) => !q.docTypes?.length || q.docTypes.includes(r.docType ?? ""))
-        .filter((r) => !q.fileIds?.length || q.fileIds.includes(r.fileId))
+        .filter((r) => !q.fileIds || q.fileIds.includes(r.fileId))
         .map((r) => ({ r, score: r.text.toLowerCase().split(/\W+/).filter((w) => words.has(w)).length }))
         .filter((x) => x.score > 0)
         .sort((a, b) => b.score - a.score)
         .slice(0, q.limit ?? 10)
-        .map(({ r, score }) => ({ id: r.id, fileId: r.fileId, n: r.n, page: r.page, docType: r.docType, text: r.text, score }));
+        .map(({ r, score }) => ({ id: r.id, fileId: r.fileId, n: r.n, page: r.page, text: r.text, score }));
     },
   };
 }

@@ -1,16 +1,20 @@
 // Files for the api: upload, list, read, retry, delete, search. Access (docs/APP.md, Access) is checked here, before
 // any row or blob is touched. The pipelines themselves are in ./pipeline and know nothing of users.
 import {
-  caseById, casesOfFile, createFile, deleteFileRow, fileById, filesOfCase, filesOfOwner, resetSteps, setUploaded,
+  caseById, casesOfFile, createFile, deleteFileRow, fileById, fileIdsByCategory, filesOfCase, filesOfOwner, resetSteps, setUploaded,
   STEPS, type FileRow, type Step,
 } from "@sllaw/db";
 import { getJson } from "@sllaw/storage";
+import { start } from "workflow/api";
 import type { Account } from "../accounts";
 import { appDeps } from "./deps";
-import { keys, runFile, type Card, type Deps } from "./pipeline";
+import { keys, type Card, type Deps } from "./pipeline";
+import { fileWorkflow } from "./workflow";
 
 type Signed = Account & { workspace: NonNullable<Account["workspace"]> };
-type WaitUntil = (p: Promise<unknown>) => void;
+
+/** Starts a file's pipelines as a workflow run (durable, retried steps). Returns once the run is queued. */
+const startPipelines = (id: string) => start(fileWorkflow, [id]);
 
 /** What a file is for decides which steps it needs: a case file or a private one is read and searchable; an asset
  *  (a logo, an image in a document) is only stored. */
@@ -61,9 +65,9 @@ export async function putUpload(a: Signed, id: string, bytes: Uint8Array) {
   return true;
 }
 
-/** Step 2 of upload: the browser says the bytes are sent; checked in the store, then the pipelines start (after the
- *  response: waitUntil). null when the file is not this user's. */
-export async function finishUpload(a: Signed, id: string, waitUntil: WaitUntil) {
+/** Step 2 of upload: the browser says the bytes are sent; checked in the store, then the pipelines start as a
+ *  workflow run. null when the file is not this user's. */
+export async function finishUpload(a: Signed, id: string) {
   const f = await fileById(id);
   if (!f || f.workspaceId !== a.workspace.id || f.ownerId !== a.user.id) return null;
   if (f.uploadState === "stored") return f;
@@ -76,7 +80,7 @@ export async function finishUpload(a: Signed, id: string, waitUntil: WaitUntil) 
     throw new Error("file too large");
   }
   await setUploaded(id, "stored", head.size);
-  waitUntil(runFile(id, d));
+  await startPipelines(id);
   return fileById(id);
 }
 
@@ -107,13 +111,13 @@ export const progress = (f: FileRow) =>
   );
 
 /** Runs the failed (or all, with `steps`) steps of a file again. */
-export async function reprocessFile(a: Signed, id: string, waitUntil: WaitUntil, steps?: Step[]) {
+export async function reprocessFile(a: Signed, id: string, steps?: Step[]) {
   const f = await fileOf(a, id);
   if (!f || f.uploadState !== "stored") return null;
   const redo = steps ?? STEPS.filter((s) => f[`${s}State`] === "failed" || f[`${s}State`] === "no_text");
   // a new text means new categories and chunks: everything after extract runs again
   await resetSteps(id, redo.includes("extract") ? STEPS : redo);
-  waitUntil(runFile(id, appDeps()));
+  await startPipelines(id);
   return fileById(id);
 }
 
@@ -131,11 +135,17 @@ export async function removeFile(id: string, d: Deps = appDeps()) {
   await deleteFileRow(id);
 }
 
-/** Search the files this request may see: a case's (when the user can see the case) or the user's own. */
+/** Search the files this request may see: a case's (when the user can see the case) or the user's own. A doc_type
+ *  filter becomes the ids of the files in those categories (the vectors carry no type). */
 export async function searchFiles(a: Signed, query: string, opts: { caseId?: string; docTypes?: string[]; limit?: number } = {}) {
-  const scopes = opts.caseId ? ((await caseOf(a, opts.caseId)) ? [`case:${opts.caseId}`] : []) : [`user:${a.user.id}`];
-  return appDeps().index.search(query, { workspaceId: a.workspace.id, scopes, docTypes: opts.docTypes, limit: opts.limit });
+  if (opts.caseId && !(await caseOf(a, opts.caseId))) return [];
+  const scopes = opts.caseId ? [`case:${opts.caseId}`] : [`user:${a.user.id}`];
+  const fileIds = opts.docTypes?.length
+    ? await fileIdsByCategory({ workspaceId: a.workspace.id, caseId: opts.caseId, ownerId: a.user.id, categories: opts.docTypes })
+    : undefined;
+  return appDeps().index.search(query, { workspaceId: a.workspace.id, scopes, fileIds, limit: opts.limit });
 }
 
-export { runFile, keys, type Deps, type FileRows } from "./pipeline";
+export { runFile, runStep, keys, type Deps, type FileRows } from "./pipeline";
+export { fileWorkflow } from "./workflow";
 export { appDeps, dbRows } from "./deps";
