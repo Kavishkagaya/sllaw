@@ -7,7 +7,8 @@
   },
   "scripts": {
     "typecheck": "tsc",
-    "eval": "tsx --env-file=../../apps/web/.env.local scripts/eval.ts"
+    "eval": "tsx --env-file=../../apps/web/.env.local scripts/eval.ts",
+    "files-collection": "tsx --env-file=../../apps/web/.env.local scripts/files-collection.ts"
   },
   "devDependencies": {
     "@types/node": "^26.6.5",

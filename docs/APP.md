@@ -94,6 +94,19 @@ in v1; an entity graph can be built later from the same per-file JSON.
   extracted content (text, and the ingestion card: doc_type, summary, parties, dates, laws cited). Other tables
   say what a file is used for by referencing `files.id` (a case's files, a message's attachments). A case's
   documents (markdown the lawyer or the AI writes) are files too, no separate table.
+- **File pipelines (user, 2026-10-25):** `files` is the general asset table: every uploaded file's row, which
+  everything that uses a file references (`case_files` now; later attachments, logos). The row holds only what the
+  file is and how far it is processed, **no content** (unlike the law corpus): the original, its text
+  (`extract.json`), its card's summary (`card.json`) and its chunks (`chunks.json`) are in R2 under `files/<id>/`, the
+  vectors in Zilliz `files`. Categorization is metadata on the row (`category` = doc_type, `meta` = parties, dates,
+  court, case numbers, laws cited, tags; how it is used, search filter, UI grouping or per-category handling, is
+  open), and doc_type is copied onto each vector so search can filter by it. Each step (extract, categorize, index)
+  has its own state on the row, null when the file does not need it (a logo needs none), and `<step>_by`
+  (name@version) so a new extractor, categorizer, embedder or vector DB re-runs only what an older one did. Each
+  step is an interface in its package (storage `BlobStore`, extract `Extractor`, ai `Categorizer`, search
+  `FileIndex`/`Embedder`); swapping one changes nothing else. No chunk table: chunk ids are `<fileId>:<n>`, stable
+  while the chunker is. v1: scans are marked `no_text` (needs OCR); only the case author can add and see a case's
+  files until `case_shares` exists; the agent's case-file search tool waits for the case chat.
 - **LLM: DeepSeek** via Vercel AI Gateway (user, 2026-10-17; gateway changed 2026-10-18). The model per task (main agent, research agent, reading
   files) is one config value each, not code: picked later. Not checked yet: DeepSeek's API terms on training and data
   location (the privacy line below depends on it).

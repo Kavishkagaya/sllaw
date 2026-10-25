@@ -4,9 +4,13 @@ import { initTRPC, TRPCError } from "@trpc/server";
 import superjson from "superjson";
 
 // The Clerk session (Clerk ids); procedures turn it into our account (our ids).
-export const createContext = async (opts: { headers: Headers }) => {
+// waitUntil: work that outlives the response (a file's pipelines after its upload); Next's after() in a route.
+type WaitUntil = (p: Promise<unknown>) => void;
+const detached: WaitUntil = (p) => void p.catch((e) => console.error(e));
+
+export const createContext = async (opts: { headers: Headers; waitUntil?: WaitUntil }) => {
   const { userId, orgId } = await auth();
-  return { headers: opts.headers, clerk: { userId, orgId: orgId ?? null } };
+  return { headers: opts.headers, waitUntil: opts.waitUntil ?? detached, clerk: { userId, orgId: orgId ?? null } };
 };
 
 type Context = Awaited<ReturnType<typeof createContext>>;

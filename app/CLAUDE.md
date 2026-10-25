@@ -19,6 +19,8 @@ A plain dependency tree; imports only go down it:
 apps/web → api → services → db
                           → etl_db
                           → search
+                          → storage
+                          → extract
                           → ai  (ports: services fills them in ctx when it runs an agent)
 ```
 
@@ -30,9 +32,14 @@ apps/web → api → services → db
   rebuild renumbers chunk ids. The app database stores `doc_key` + `label` + quote, never a chunk id alone, and no
   foreign key crosses the two databases.
 - **`search`**: the vector DB (Zilliz now): law chunks (`chunks`, written by `etl/embed.py`) and user files
-  (indexing and search, filtered by scope inside the query). It owns the query embedding (bge-m3, the model the
+  (`FileIndex`: the Zilliz `files` collection, `pnpm --filter @sllaw/search files-collection` creates it; chunking;
+  filtered by workspace and scope inside the query). It owns the query embedding (bge-m3, the model the
   index was built with): it takes text, not vectors. Changing the vector DB or the embedding model is a change here
   alone.
+- **`storage`**: the blob store (`BlobStore`: put, get, head, deletePrefix, signed upload/download URLs). R2 (the
+  `R2_FILES_BUCKET`, apart from the ETL's bucket) or memory (`STORAGE=memory`, tests and local runs).
+- **`extract`**: a file's bytes -> its text, page by page. One `Extractor` per format (unpdf for text-layer PDFs,
+  mammoth for .docx, plain text and HTML); `NoText` when there is none (a scan: needs OCR, not wired yet).
 - **`services`**: the business logic. Calls the queries in `db`, `etl_db` and `search` and the agents in `ai`;
   never writes SQL or imports drizzle. Builds the `ctx` agents run with.
 - **`ai`**: LLMs, tools and agents. DeepSeek via Vercel AI Gateway, one model per task (`MODEL_<TASK>` env);
@@ -51,3 +58,14 @@ Switching a technology (vector DB, embedding model, LLM, database) is a change i
 
 Packages export TypeScript source (`exports: ./src/index.ts`); Next compiles them (`transpilePackages`), so
 there is no build step per package. A new package goes in that list.
+
+## Files
+
+Three pipelines on one `files` row (`services/src/files/pipeline.ts`), each behind its package's interface, joined
+only by the row's step states and the file's folder in the store (`files/<id>/`): **extract** (original ->
+`extract.json`), **categorize** (-> `card.json`; `category` + `meta` on the row, the summary stays in the store),
+**index** (-> `chunks.json` + vectors). Upload comes before: `file.startUpload` -> the browser PUTs to the signed
+URL -> `file.finishUpload` starts the steps in `after()`. A step's state is null when the file does not need it (an
+asset: stored and done). No file content in Postgres. `<step>_by` records what produced each output, so
+`pnpm --filter @sllaw/services files-sweep --stale <step>` redoes the files an older version did; without `--stale` it
+picks up files left unfinished. Tests: `pnpm --filter @sllaw/services test-files` (all in memory).
