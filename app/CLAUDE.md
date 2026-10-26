@@ -103,4 +103,4 @@ a retryable `StepTimeout`: 3 attempts, then failed with "Try again". Raise them 
 Vitest (`vitest.config.mts`): `*.test.ts` beside the code in `packages/*/src`, in memory only (no database, R2, model
 or Zilliz), run by `pnpm test`. The file pipelines: `services/src/files/{pipeline,errors}.test.ts`,
 `extract/src/extract.test.ts`, `search/src/chunk.test.ts`. Checks against real services stay scripts, run on
-purpose: `services check-accounts` (dev database), `services eval-chat` and `search eval` (model and Zilliz, cost).
+purpose: `services check-accounts` and `services check-cases` (dev database), `services eval-chat` and `search eval` (model and Zilliz, cost).

@@ -157,6 +157,22 @@ in v1; an entity graph can be built later from the same per-file JSON.
   stuck for a day is a user gone): a step whose function was cut off is retried by its own run, which claims it back
   at once (`files.run_id`); a step out of retries is `failed` and the UI offers a retry, which also restarts steps a
   stopped run left open.
+- **Case workspace UI (user, 2026-10-26):** a Cases link in the sidebar; `/cases` lists the user's cases as cards
+  (title, start of the facts, file count) with a New case button; creating (`/cases/new`), editing
+  (`/cases/<id>/edit`) and a file's details (`/cases/<id>/files/<fileId>`) are pages, not dialogs (user); only
+  "are you sure?" before a delete is a dialog. `/cases/<id>` is the workspace: facts, then the files grouped by
+  category (`services/src/cases.ts`, `GROUP_OF`: the categorizer's 40 doc types in 10 groups, "Processing" first
+  and "Not categorized" last), upload by button or drop, each file's state live, retry, download, delete.
+  Deleting a case deletes its files (vectors, blobs) and chats, and is refused while a run is busy with any of its
+  files. Checked against the dev database by `services check-cases` (2026-10-26: ok). Tested in the browser
+  2026-10-26 (agent-browser, a Clerk dev test user `+clerk_test`, code 424242; Clerk's bot check blocks headless
+  sign-up, so the user was created in the dashboard): 4 files (3 text PDFs, 1 Sinhala/English .txt) Ready in about
+  35 s, each in its group; details, download, edit, delete work. That test found R2 refusing every JSON write from
+  the pipeline (411 MissingContentLength: aws4fetch sends the body as a stream, which Next's fetch sends chunked);
+  `r2.ts` put now signs and sends the bytes with their length. Open: the 411 was recorded as not retryable (any
+  4xx), and after a failed extract the UI offered "Try again" (categorize/index left pending) that reruns nothing;
+  the Sinhala/English notes were categorized as a counter affidavit. Not built yet: the floating chat box that
+  starts a case chat (`/chats/<id>?case=<caseId>`).
 - **Retryable and non-retryable errors (user, 2026-10-26):** one rule decides (`services/src/files/errors.ts`).
   Retried: network errors, timeouts, 408, 425, 429, 5xx, unknown errors. Not retried: a file its parser cannot read
   (`Unreadable`: a corrupt PDF, a .docx that is not a zip), other 4xx. Packages only describe their errors (an HTTP
