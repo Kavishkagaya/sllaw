@@ -7,7 +7,10 @@ export function memoryStore(): BlobStore & { keys(): string[] } {
     name: "memory",
     keys: () => [...m.keys()].sort(),
     async put(key, bytes, contentType) {
-      m.set(key, { bytes: typeof bytes === "string" ? new TextEncoder().encode(bytes) : bytes, contentType: contentType ?? null });
+      m.set(key, {
+        bytes: typeof bytes === "string" ? new TextEncoder().encode(bytes) : bytes,
+        contentType: contentType ?? null,
+      });
     },
     async get(key) {
       return m.get(key) ?? null;
@@ -18,7 +21,7 @@ export function memoryStore(): BlobStore & { keys(): string[] } {
     },
     async deletePrefix(prefix) {
       const ks = [...m.keys()].filter((k) => k.startsWith(prefix));
-      ks.forEach((k) => m.delete(k));
+      for (const k of ks) m.delete(k);
       return ks.length;
     },
     uploadUrl: async () => null,

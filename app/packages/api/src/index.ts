@@ -1,12 +1,30 @@
 import {
-  addCaseFile, deleteFile, finishUpload, getChunk, getDoc, listCaseFiles, listChats, listMyFiles, MAX_SIZE, openCaseFile, openChat,
-  openFile, removeCaseFile, reprocessCaseFile, reprocessFile, startUpload,
+  addCaseFile,
+  deleteFile,
+  finishUpload,
+  getChunk,
+  getDoc,
+  listCaseFiles,
+  listChats,
+  listMyFiles,
+  MAX_SIZE,
+  openCaseFile,
+  openChat,
+  openFile,
+  removeCaseFile,
+  reprocessCaseFile,
+  reprocessFile,
+  startUpload,
 } from "@sllaw/services";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { createCallerFactory, publicProcedure, router, signedUser, workspaceUser } from "./trpc";
 
-const fileInput = { name: z.string().min(1).max(255), mime: z.string().max(255), size: z.number().int().positive().max(MAX_SIZE) };
+const fileInput = {
+  name: z.string().min(1).max(255),
+  mime: z.string().max(255),
+  size: z.number().int().positive().max(MAX_SIZE),
+};
 const steps = z.array(z.enum(["extract", "categorize", "index"])).optional();
 
 export const appRouter = router({
@@ -28,13 +46,17 @@ export const appRouter = router({
     addFile: workspaceUser
       .input(z.object({ caseId: z.uuid(), ...fileInput }))
       .mutation(async ({ ctx, input }) => found(await addCaseFile(ctx.account, input.caseId, input))),
-    files: workspaceUser.input(z.object({ caseId: z.uuid() })).query(async ({ ctx, input }) => found(await listCaseFiles(ctx.account, input.caseId))),
+    files: workspaceUser
+      .input(z.object({ caseId: z.uuid() }))
+      .query(async ({ ctx, input }) => found(await listCaseFiles(ctx.account, input.caseId))),
     openFile: workspaceUser
       .input(z.object({ caseId: z.uuid(), fileId: z.uuid() }))
       .query(async ({ ctx, input }) => found(await openCaseFile(ctx.account, input.caseId, input.fileId))),
     reprocessFile: workspaceUser
       .input(z.object({ caseId: z.uuid(), fileId: z.uuid(), steps }))
-      .mutation(async ({ ctx, input }) => found(await reprocessCaseFile(ctx.account, input.caseId, input.fileId, input.steps))),
+      .mutation(async ({ ctx, input }) =>
+        found(await reprocessCaseFile(ctx.account, input.caseId, input.fileId, input.steps)),
+      ),
     removeFile: workspaceUser
       .input(z.object({ caseId: z.uuid(), fileId: z.uuid() }))
       .mutation(async ({ ctx, input }) => removed(await removeCaseFile(ctx.account, input.caseId, input.fileId))),
@@ -46,7 +68,9 @@ export const appRouter = router({
       .input(z.object({ fileId: z.uuid() }))
       .mutation(async ({ ctx, input }) => found(await finishUpload(ctx.account, input.fileId))),
     mine: workspaceUser.query(({ ctx }) => listMyFiles(ctx.account)),
-    open: workspaceUser.input(z.object({ fileId: z.uuid() })).query(async ({ ctx, input }) => found(await openFile(ctx.account, input.fileId))),
+    open: workspaceUser
+      .input(z.object({ fileId: z.uuid() }))
+      .query(async ({ ctx, input }) => found(await openFile(ctx.account, input.fileId))),
     reprocess: workspaceUser
       .input(z.object({ fileId: z.uuid(), steps }))
       .mutation(async ({ ctx, input }) => found(await reprocessFile(ctx.account, input.fileId, input.steps))),
@@ -70,14 +94,18 @@ function found<T>(x: T | null): T {
 
 /** A delete: missing reads as NOT_FOUND; a file a run still works on as CONFLICT (delete it once its steps end). */
 function removed(r: "removed" | "busy" | null) {
-  if (r === "busy") throw new TRPCError({ code: "CONFLICT", message: "The file is still being processed. Delete it once it is done or has failed." });
+  if (r === "busy")
+    throw new TRPCError({
+      code: "CONFLICT",
+      message: "The file is still being processed. Delete it once it is done or has failed.",
+    });
   return found(r);
 }
 
 export type AppRouter = typeof appRouter;
 export const createCaller = createCallerFactory(appRouter);
+export type { ChatMessage, FileEvent, FileStatus, StepStatus } from "@sllaw/services";
 export { chatRoute } from "./chat";
 export { fileEventsRoute, fileUploadRoute } from "./files";
 export { createContext } from "./trpc";
 export { clerkWebhook } from "./webhooks";
-export type { ChatMessage, FileEvent, FileStatus, StepStatus } from "@sllaw/services";

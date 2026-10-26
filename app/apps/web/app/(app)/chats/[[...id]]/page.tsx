@@ -1,8 +1,8 @@
-import { TRPCError } from "@trpc/server";
 import { randomUUID } from "node:crypto";
+import { TRPCError } from "@trpc/server";
 import { notFound } from "next/navigation";
-import { Chat } from "./chat";
 import { serverApi } from "../../../../trpc/server";
+import { Chat } from "./chat";
 
 // /chats is a new chat and /chats/<id> a stored one: one page, so a new chat becomes /chats/<id> on its first message
 // (history.pushState) without leaving it. A new chat's id is minted here, a fresh one on every visit; the row exists

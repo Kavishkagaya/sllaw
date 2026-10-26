@@ -23,4 +23,5 @@ export async function getJson<T>(s: BlobStore, key: string): Promise<T | null> {
   return b ? (JSON.parse(new TextDecoder().decode(b.bytes)) as T) : null;
 }
 
-export const putJson = (s: BlobStore, key: string, value: unknown) => s.put(key, JSON.stringify(value), "application/json");
+export const putJson = (s: BlobStore, key: string, value: unknown) =>
+  s.put(key, JSON.stringify(value), "application/json");

@@ -2,7 +2,10 @@ import { describe, expect, it } from "vitest";
 import { chunkPages, cut } from "./chunk";
 
 describe("chunkPages", () => {
-  const cs = chunkPages("f", [{ n: 1, text: "a. ".repeat(1200) }, { n: 2, text: "Short page." }]);
+  const cs = chunkPages("f", [
+    { n: 1, text: "a. ".repeat(1200) },
+    { n: 2, text: "Short page." },
+  ]);
 
   it("keeps every chunk within 1500 chars", () => {
     expect(cs.every((c) => c.text.length <= 1500)).toBe(true);
@@ -31,10 +34,20 @@ describe("chunkPages", () => {
   });
 
   it("keeps every word of mixed text: long words, short sentences, Sinhala", () => {
-    const t = ["කොළඹ දිසා අධිකරණය. ".repeat(80), "x".repeat(1700), " short. ".repeat(50), "https://e.lk/" + "q".repeat(3200)].join(" ");
+    const t = [
+      "කොළඹ දිසා අධිකරණය. ".repeat(80),
+      "x".repeat(1700),
+      " short. ".repeat(50),
+      "https://e.lk/" + "q".repeat(3200),
+    ].join(" ");
     const cs = chunkPages("f", [{ n: 1, text: t }]);
     expect(cs.every((c) => c.text.length <= 1500)).toBe(true);
-    expect(cs.map((c) => c.text).join("").replace(/\s+/g, "")).toBe(t.replace(/\s+/g, ""));
+    expect(
+      cs
+        .map((c) => c.text)
+        .join("")
+        .replace(/\s+/g, ""),
+    ).toBe(t.replace(/\s+/g, ""));
   });
 
   it("cuts at a space when one fits, and never splits an emoji", () => {

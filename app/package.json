@@ -6,11 +6,14 @@
     "dev": "turbo dev",
     "build": "turbo build",
     "typecheck": "turbo typecheck",
+    "check": "biome check .",
+    "fix": "biome check --write .",
     "test": "vitest run",
     "test:watch": "vitest",
     "env:pull": "vercel env pull apps/web/.env.local --environment=development --yes"
   },
   "devDependencies": {
+    "@biomejs/biome": "^2.6.3",
     "tsx": "^4.23.15",
     "turbo": "^2.11.9",
     "vitest": "5.0.4"

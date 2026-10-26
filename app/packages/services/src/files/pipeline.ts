@@ -10,9 +10,9 @@
 // state it sets to a StateWriter: in a workflow, the run's stream, which the UI reads as server-sent events.
 import type { Card, Categorizer } from "@sllaw/ai";
 import type { FileRow, Step, StepEnd, StepError, StepState } from "@sllaw/db";
-import { NoText, type ExtractCtx, type Extracted } from "@sllaw/extract";
-import { chunkPages, indexBy, type FileIndex } from "@sllaw/search";
-import { getJson, putJson, type BlobStore } from "@sllaw/storage";
+import { type ExtractCtx, type Extracted, NoText } from "@sllaw/extract";
+import { chunkPages, type FileIndex, indexBy } from "@sllaw/search";
+import { type BlobStore, getJson, putJson } from "@sllaw/storage";
 import { isRetryable } from "./errors";
 
 export const keys = {
@@ -34,7 +34,13 @@ export interface FileRows {
 
 /** One state change of a file, as the UI gets it. `at` is the time the row was written (ms): an event older than the
  *  row the UI already has is skipped, so a stream replayed from its start never turns a state back. */
-export type FileEvent = { fileId: string; step: "upload" | Step; state: StepState | "stored" | "failed"; error: StepError | null; at: number };
+export type FileEvent = {
+  fileId: string;
+  step: "upload" | Step;
+  state: StepState | "stored" | "failed";
+  error: StepError | null;
+  at: number;
+};
 
 /** Where runStep reports each state it writes: the workflow run's stream, or nowhere (tests, scripts). */
 export interface StateWriter {
@@ -55,7 +61,12 @@ const stateOf = (f: FileRow, s: Step) => f[`${s}State`];
 /** What runStep does when a step throws: record it as failed (default), or, while retries are left and the error is
  *  worth another try (./errors), put it back to pending with the error and throw, so the caller (a workflow step)
  *  retries it. An error not worth another try is recorded failed at once. */
-export type RunOpts = { retriesLeft?: boolean; writer?: StateWriter; runId?: string; timeouts?: Partial<Record<Step, number>> };
+export type RunOpts = {
+  retriesLeft?: boolean;
+  writer?: StateWriter;
+  runId?: string;
+  timeouts?: Partial<Record<Step, number>>;
+};
 
 /** How long each step may take (ms). Under Vercel's function limit (300 s by default, the workflow's step route
  *  included), so a slow step ends itself, is recorded and retried, rather than its function being cut off with the
@@ -87,7 +98,12 @@ function untilAborted<T>(work: Promise<T>, signal: AbortSignal): Promise<T> {
 /** Runs one step if it is due: claimed (pending -> running), run, ended. The end state; "busy" when another run holds
  *  the step; null when it was not run (not needed, done, or extract not done). With `runId`, a step this run left
  *  running (a retry after a cut-off attempt) is taken back at once. */
-export async function runStep(id: string, step: Step, d: Deps, o: RunOpts = {}): Promise<StepEnd["state"] | "busy" | null> {
+export async function runStep(
+  id: string,
+  step: Step,
+  d: Deps,
+  o: RunOpts = {},
+): Promise<StepEnd["state"] | "busy" | null> {
   const w = o.writer ?? noWriter;
   const f = await d.rows.get(id);
   if (!f || f.uploadState !== "stored") return null;
@@ -138,24 +154,38 @@ type Pages = Pick<Extracted, "by" | "pages">;
 const STEP: Record<Step, (f: FileRow, d: Deps, signal: AbortSignal) => Promise<StepEnd>> = {
   async extract(f, d, signal) {
     const blob = await d.store.get(keys.original(f.id));
-    if (!blob) return { state: "failed", error: { message: "the original is not in the store: upload it again", retryable: false } };
+    if (!blob)
+      return {
+        state: "failed",
+        error: { message: "the original is not in the store: upload it again", retryable: false },
+      };
     const sha256 = Buffer.from(await crypto.subtle.digest("SHA-256", blob.bytes as BufferSource)).toString("hex");
     try {
       // OCR fetches the file itself: a signed URL, good for the length of a step
-      const x = await d.extract(blob.bytes, f.mime, f.name, { url: () => d.store.downloadUrl(keys.original(f.id), 15 * 60), signal });
+      const x = await d.extract(blob.bytes, f.mime, f.name, {
+        url: () => d.store.downloadUrl(keys.original(f.id), 15 * 60),
+        signal,
+      });
       await putJson(d.store, keys.extract(f.id), { by: x.by, pages: x.pages } satisfies Pages);
       return { state: "done", by: x.by, set: { sha256, pages: x.totalPages } };
     } catch (e) {
       // nothing to read: trying again reads the same bytes (until OCR is on or a new extractor reads the format)
-      if (e instanceof NoText) return { state: "no_text", error: { message: `${e.reason}: ${e.message}`, retryable: false }, set: { sha256 } };
+      if (e instanceof NoText)
+        return { state: "no_text", error: { message: `${e.reason}: ${e.message}`, retryable: false }, set: { sha256 } };
       throw e;
     }
   },
 
   async categorize(f, d, signal) {
     const x = await getJson<Pages>(d.store, keys.extract(f.id));
-    if (!x) return { state: "failed", error: { message: "the text is missing: read the file again", retryable: false } };
-    const card = await d.categorizer.categorize({ workspaceId: f.workspaceId, filename: f.name, text: x.pages.map((p) => p.text).join("\n\n"), signal });
+    if (!x)
+      return { state: "failed", error: { message: "the text is missing: read the file again", retryable: false } };
+    const card = await d.categorizer.categorize({
+      workspaceId: f.workspaceId,
+      filename: f.name,
+      text: x.pages.map((p) => p.text).join("\n\n"),
+      signal,
+    });
     await putJson(d.store, keys.card(f.id), card);
     const { summary: _, docType, ...meta } = card;
     return { state: "done", by: d.categorizer.by, set: { category: docType, meta } };
@@ -163,7 +193,8 @@ const STEP: Record<Step, (f: FileRow, d: Deps, signal: AbortSignal) => Promise<S
 
   async index(f, d, signal) {
     const x = await getJson<Pages>(d.store, keys.extract(f.id));
-    if (!x) return { state: "failed", error: { message: "the text is missing: read the file again", retryable: false } };
+    if (!x)
+      return { state: "failed", error: { message: "the text is missing: read the file again", retryable: false } };
     const chunks = chunkPages(f.id, x.pages);
     await putJson(d.store, keys.chunks(f.id), chunks);
     // no delete runs meanwhile: a file is deleted only once no run is busy with it (db markDeleting)

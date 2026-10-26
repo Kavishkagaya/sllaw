@@ -24,7 +24,12 @@ const STALE = "15 minutes"; // a step running longer was cut off (Vercel's limit
 
 const col = {
   extract: { state: files.extractState, by: "extractBy", error: "extractError", stateKey: "extractState" },
-  categorize: { state: files.categorizeState, by: "categorizeBy", error: "categorizeError", stateKey: "categorizeState" },
+  categorize: {
+    state: files.categorizeState,
+    by: "categorizeBy",
+    error: "categorizeError",
+    stateKey: "categorizeState",
+  },
   index: { state: files.indexState, by: "indexBy", error: "indexError", stateKey: "indexState" },
 } as const;
 
@@ -84,7 +89,10 @@ export async function claimStep(id: string, step: Step, runId?: string) {
         eq(files.uploadState, "stored"),
         or(
           eq(c, "pending"),
-          and(eq(c, "running"), or(sql`${files.updatedAt} < now() - ${STALE}::interval`, runId ? eq(files.runId, runId) : undefined)),
+          and(
+            eq(c, "running"),
+            or(sql`${files.updatedAt} < now() - ${STALE}::interval`, runId ? eq(files.runId, runId) : undefined),
+          ),
         ),
       ),
     )
@@ -110,7 +118,9 @@ export async function endStep(id: string, step: Step, e: StepEnd, runId?: string
  *  Not while a run is busy with the file (a second "Try again" while the first one's run works): false then. */
 export async function resetSteps(id: string, steps: readonly Step[]) {
   if (!steps.length) return true;
-  const set = Object.fromEntries(steps.map((s) => [col[s].stateKey, sql`case when ${col[s].state} is null then null else 'pending' end`]));
+  const set = Object.fromEntries(
+    steps.map((s) => [col[s].stateKey, sql`case when ${col[s].state} is null then null else 'pending' end`]),
+  );
   const rows = await db
     .update(files)
     .set({ ...set, updatedAt: new Date() })
@@ -140,7 +150,8 @@ export async function markDeleting(id: string) {
 }
 
 /** The last step of a delete, once its vectors and blobs are gone. */
-export const deleteFileRow = (id: string) => db.delete(files).where(and(eq(files.id, id), eq(files.uploadState, "deleting")));
+export const deleteFileRow = (id: string) =>
+  db.delete(files).where(and(eq(files.id, id), eq(files.uploadState, "deleting")));
 
 // Cases' files (case_files): the link only; the case service decides who may add or see them.
 
@@ -153,7 +164,10 @@ export const linkCaseFile = (caseId: string, fileId: string, addedBy: string | n
   db.insert(caseFiles).values({ caseId, fileId, addedBy });
 
 export async function caseHasFile(caseId: string, fileId: string) {
-  const [r] = await db.select({ id: caseFiles.fileId }).from(caseFiles).where(and(eq(caseFiles.caseId, caseId), eq(caseFiles.fileId, fileId)));
+  const [r] = await db
+    .select({ id: caseFiles.fileId })
+    .from(caseFiles)
+    .where(and(eq(caseFiles.caseId, caseId), eq(caseFiles.fileId, fileId)));
   return !!r;
 }
 

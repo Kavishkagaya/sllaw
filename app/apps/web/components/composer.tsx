@@ -6,7 +6,13 @@ import { useChatStore } from "@/stores/chat-store";
 
 // The question box. Its text is a draft in the chat store (draftKey: the chat id, "new" on the home page), so it
 // survives moving around the app. Enter sends, Shift+Enter is a new line. While an answer runs, send becomes stop.
-export function Composer({ draftKey, onSend, onStop, busy, autoFocus }: {
+export function Composer({
+  draftKey,
+  onSend,
+  onStop,
+  busy,
+  autoFocus,
+}: {
   draftKey: string;
   onSend: (text: string) => void;
   onStop?: () => void;
@@ -22,7 +28,10 @@ export function Composer({ draftKey, onSend, onStop, busy, autoFocus }: {
     setDraft(draftKey, "");
   };
   return (
-    <form onSubmit={send} className="relative rounded-xl border bg-card shadow-sm transition-shadow focus-within:border-ring/50 focus-within:ring-2 focus-within:ring-ring/15">
+    <form
+      onSubmit={send}
+      className="relative rounded-xl border bg-card shadow-sm transition-shadow focus-within:border-ring/50 focus-within:ring-2 focus-within:ring-ring/15"
+    >
       <Textarea
         value={input}
         onChange={(e) => setDraft(draftKey, e.target.value)}
@@ -33,11 +42,23 @@ export function Composer({ draftKey, onSend, onStop, busy, autoFocus }: {
         className="max-h-60 min-h-20 resize-none border-0 bg-transparent px-4 py-3 pr-14 shadow-none focus-visible:ring-0 dark:bg-transparent"
       />
       {busy && onStop ? (
-        <Button type="button" size="icon" onClick={onStop} aria-label="Stop" className="absolute right-3 bottom-3 rounded-full">
+        <Button
+          type="button"
+          size="icon"
+          onClick={onStop}
+          aria-label="Stop"
+          className="absolute right-3 bottom-3 rounded-full"
+        >
           <Square className="fill-current" />
         </Button>
       ) : (
-        <Button type="submit" size="icon" disabled={busy || !input.trim()} aria-label="Send" className="absolute right-3 bottom-3 rounded-full">
+        <Button
+          type="submit"
+          size="icon"
+          disabled={busy || !input.trim()}
+          aria-label="Send"
+          className="absolute right-3 bottom-3 rounded-full"
+        >
           <ArrowUp />
         </Button>
       )}

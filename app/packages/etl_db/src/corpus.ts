@@ -3,7 +3,14 @@ import { db } from "./client";
 import { chunks, docs, links } from "./schema";
 
 const docCols = { key: docs.key, kind: docs.kind, title: docs.title, year: docs.year, commenced: docs.commenced };
-const chunkCols = { id: chunks.id, docKey: chunks.docKey, seq: chunks.seq, label: chunks.label, path: chunks.path, text: chunks.text };
+const chunkCols = {
+  id: chunks.id,
+  docKey: chunks.docKey,
+  seq: chunks.seq,
+  label: chunks.label,
+  path: chunks.path,
+  text: chunks.text,
+};
 
 export async function docWithChunks(key: string) {
   const [doc] = await db.select(docCols).from(docs).where(eq(docs.key, key));
@@ -14,7 +21,10 @@ export async function docWithChunks(key: string) {
 
 /** A law's title, key and source link, for the viewer. */
 export async function docInfo(key: string) {
-  const [d] = await db.select({ key: docs.key, title: docs.title, sourceUrl: docs.sourceUrl }).from(docs).where(eq(docs.key, key));
+  const [d] = await db
+    .select({ key: docs.key, title: docs.title, sourceUrl: docs.sourceUrl })
+    .from(docs)
+    .where(eq(docs.key, key));
   return d ?? null;
 }
 
@@ -41,17 +51,26 @@ export async function linksOf(
   opts: { kinds?: string[]; text?: string; limit?: number } = {},
 ) {
   const { kinds, text, limit = 50 } = opts;
-  const words = (text ?? "").split(/\s+/).filter(Boolean).map((w) => `%${w.replace(/[\\%_]/g, "\\$&")}%`);
+  const words = (text ?? "")
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((w) => `%${w.replace(/[\\%_]/g, "\\$&")}%`);
   const { docKey, chunkId } = target;
   // a chunk id is unique across a law's alias keys (chapter:203, cap1956:203): match it alone, not with dst_doc
   const where =
     direction === "out"
-      ? chunkId != null ? eq(links.srcChunk, chunkId) : eq(links.srcDoc, docKey)
-      : chunkId != null ? eq(links.dstChunk, chunkId) : eq(links.dstDoc, docKey);
+      ? chunkId != null
+        ? eq(links.srcChunk, chunkId)
+        : eq(links.srcDoc, docKey)
+      : chunkId != null
+        ? eq(links.dstChunk, chunkId)
+        : eq(links.dstDoc, docKey);
   return db
     .select()
     .from(links)
-    .where(and(where, kinds?.length ? inArray(links.kind, kinds) : undefined, ...words.map((w) => ilike(links.context, w))))
+    .where(
+      and(where, kinds?.length ? inArray(links.kind, kinds) : undefined, ...words.map((w) => ilike(links.context, w))),
+    )
     .orderBy(asc(links.date))
     .limit(Math.min(limit, 50)); // a Code's whole-doc list runs to thousands: narrow by chunk, kinds or text
 }
@@ -73,14 +92,25 @@ export async function sectionsOf(chunkIds: number[]): Promise<Read[]> {
         .select({ ...chunkCols, title: docs.title })
         .from(chunks)
         .innerJoin(docs, eq(docs.key, chunks.docKey))
-        .where(and(eq(chunks.docKey, h.docKey), sql`${chunks.seq} between ${h.seq + 1} and ${h.seq + SECTION_MAX - 1}`,
-          eq(chunks.path, `${h.path} (cont.)`)))
+        .where(
+          and(
+            eq(chunks.docKey, h.docKey),
+            sql`${chunks.seq} between ${h.seq + 1} and ${h.seq + SECTION_MAX - 1}`,
+            eq(chunks.path, `${h.path} (cont.)`),
+          ),
+        )
         .orderBy(asc(chunks.seq));
       const sec: Read[] = [h];
-      for (const c of run) if (c.seq === sec.at(-1)!.seq + 1) sec.push(c); else break;
+      for (const c of run)
+        if (c.seq === sec.at(-1)!.seq + 1) sec.push(c);
+        else break;
       if (sec.length === SECTION_MAX) {
-        const [next] = await db.select({ id: chunks.id }).from(chunks)
-          .where(and(eq(chunks.docKey, h.docKey), eq(chunks.seq, h.seq + SECTION_MAX), eq(chunks.path, `${h.path} (cont.)`)));
+        const [next] = await db
+          .select({ id: chunks.id })
+          .from(chunks)
+          .where(
+            and(eq(chunks.docKey, h.docKey), eq(chunks.seq, h.seq + SECTION_MAX), eq(chunks.path, `${h.path} (cont.)`)),
+          );
         if (next) sec[sec.length - 1] = { ...sec.at(-1)!, more: next.id };
       }
       return [h.id, h.path ? sec : [h]] as [number, Read[]];
@@ -92,7 +122,9 @@ export async function sectionsOf(chunkIds: number[]): Promise<Read[]> {
   return chunkIds.flatMap((id) => {
     const sec = byHead.get(head.get(id)!) ?? [];
     const own = asked.get(id); // a chunk past the cut still comes back itself
-    return (own && !sec.some((c) => c.id === id) ? [...sec, own] : sec).filter((c) => !seen.has(c.id) && seen.add(c.id));
+    return (own && !sec.some((c) => c.id === id) ? [...sec, own] : sec).filter(
+      (c) => !seen.has(c.id) && seen.add(c.id),
+    );
   });
 }
 
@@ -120,15 +152,26 @@ export async function changesInto(chunkIds: number[]) {
   const src = aliasedTable(chunks, "src");
   const rows = await db
     .select({
-      dstChunk: links.dstChunk, kind: links.kind, date: links.date, srcDoc: links.srcDoc, srcChunk: links.srcChunk,
-      srcTitle: docs.title, srcLabel: src.label, srcText: src.text, context: links.context,
+      dstChunk: links.dstChunk,
+      kind: links.kind,
+      date: links.date,
+      srcDoc: links.srcDoc,
+      srcChunk: links.srcChunk,
+      srcTitle: docs.title,
+      srcLabel: src.label,
+      srcText: src.text,
+      context: links.context,
     })
     .from(links)
     .leftJoin(src, eq(src.id, links.srcChunk))
     .leftJoin(docs, eq(docs.key, links.srcDoc))
-    .where(and(inArray(links.dstChunk, [...new Set([...chunkIds, ...head.values()])]), inArray(links.kind, CHANGE_KINDS)))
+    .where(
+      and(inArray(links.dstChunk, [...new Set([...chunkIds, ...head.values()])]), inArray(links.kind, CHANGE_KINDS)),
+    )
     .orderBy(asc(links.date));
-  return chunkIds.flatMap((id) => rows.filter((r) => r.dstChunk === id || r.dstChunk === head.get(id)).map((r) => ({ ...r, dstChunk: id })));
+  return chunkIds.flatMap((id) =>
+    rows.filter((r) => r.dstChunk === id || r.dstChunk === head.get(id)).map((r) => ({ ...r, dstChunk: id })),
+  );
 }
 
 /** Per chunk: how many amending sections changed its section, the last change's date, and whether one repealed it. */
@@ -136,8 +179,19 @@ export async function changeStatus(chunkIds: number[]) {
   const by = new Map<number, Awaited<ReturnType<typeof changesInto>>>();
   for (const r of await changesInto(chunkIds)) by.set(r.dstChunk!, [...(by.get(r.dstChunk!) ?? []), r]);
   return [...by].map(([chunkId, rs]) => {
-    const dates = rs.map((r) => r.date).filter((d): d is string => !!d).sort();
-    const rep = rs.filter((r) => r.kind === "repeals" && r.date).map((r) => r.date!).sort();
-    return { chunkId, changes: new Set(rs.map((r) => r.srcChunk)).size, last: dates.at(-1) ?? null, repealed: rep.at(-1) ?? null };
+    const dates = rs
+      .map((r) => r.date)
+      .filter((d): d is string => !!d)
+      .sort();
+    const rep = rs
+      .filter((r) => r.kind === "repeals" && r.date)
+      .map((r) => r.date!)
+      .sort();
+    return {
+      chunkId,
+      changes: new Set(rs.map((r) => r.srcChunk)).size,
+      last: dates.at(-1) ?? null,
+      repealed: rep.at(-1) ?? null,
+    };
   });
 }

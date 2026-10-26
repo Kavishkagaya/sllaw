@@ -5,7 +5,7 @@ import { extract } from "@sllaw/extract";
 import { memoryFileIndex } from "@sllaw/search";
 import { getJson, memoryStore } from "@sllaw/storage";
 import { describe, expect, it } from "vitest";
-import { keys, runFile, runStep, StepTimeout, type Deps, type FileEvent, type FileRows } from "./pipeline";
+import { type Deps, type FileEvent, type FileRows, keys, runFile, runStep, StepTimeout } from "./pipeline";
 
 const WS = "00000000-0000-0000-0000-00000000000a";
 const CASE = "00000000-0000-0000-0000-0000000000c1";
@@ -20,10 +20,29 @@ const tick = () => new Date(++clock); // row writes in order, never two at the s
 function memoryRows(): FileRows & { put(f: Partial<FileRow> & { id: string }): void; rows: Map<string, FileRow> } {
   const rows = new Map<string, FileRow>();
   const base = {
-    workspaceId: WS, ownerId: "u1", mime: "text/plain", size: 0, sha256: null, uploadState: "stored",
-    extractState: null, extractBy: null, extractError: null, categorizeState: null, categorizeBy: null, categorizeError: null,
-    indexState: null, indexBy: null, indexError: null, pages: null, chunks: null, category: null, meta: null,
-    scopes: [`case:${CASE}`], runId: null, createdAt: new Date(), updatedAt: new Date(),
+    workspaceId: WS,
+    ownerId: "u1",
+    mime: "text/plain",
+    size: 0,
+    sha256: null,
+    uploadState: "stored",
+    extractState: null,
+    extractBy: null,
+    extractError: null,
+    categorizeState: null,
+    categorizeBy: null,
+    categorizeError: null,
+    indexState: null,
+    indexBy: null,
+    indexError: null,
+    pages: null,
+    chunks: null,
+    category: null,
+    meta: null,
+    scopes: [`case:${CASE}`],
+    runId: null,
+    createdAt: new Date(),
+    updatedAt: new Date(),
   };
   return {
     rows,
@@ -32,7 +51,12 @@ function memoryRows(): FileRows & { put(f: Partial<FileRow> & { id: string }): v
     async claim(id, step: Step, runId?: string) {
       const f = rows.get(id);
       const state = f?.[`${step}State`];
-      if (!f || f.uploadState !== "stored" || !(state === "pending" || (state === "running" && runId && f.runId === runId))) return null;
+      if (
+        !f ||
+        f.uploadState !== "stored" ||
+        !(state === "pending" || (state === "running" && runId && f.runId === runId))
+      )
+        return null;
       const g = { ...f, [`${step}State`]: "running", ...(runId && { runId }), updatedAt: tick() };
       rows.set(id, g);
       return g;
@@ -41,20 +65,36 @@ function memoryRows(): FileRows & { put(f: Partial<FileRow> & { id: string }): v
       const f = rows.get(id);
       if (!f || f[`${step}State`] !== "running" || (runId && f.runId !== runId)) return null;
       const at = tick();
-      rows.set(id, { ...f, ...e.set, [`${step}State`]: e.state, [`${step}By`]: e.by ?? null, [`${step}Error`]: e.error ?? null, updatedAt: at });
+      rows.set(id, {
+        ...f,
+        ...e.set,
+        [`${step}State`]: e.state,
+        [`${step}By`]: e.by ?? null,
+        [`${step}Error`]: e.error ?? null,
+        updatedAt: at,
+      });
       return at;
     },
   };
 }
 
 const card: Card = {
-  docType: "plaint", title: "Plaint", language: "en", summary: "The plaintiff sues for rent.",
-  parties: [{ name: "A. Perera", role: "plaintiff" }], dates: [{ date: "2024-03-01", what: "filed" }],
-  court: "District Court of Colombo", caseNumbers: ["DC Colombo 123/L"], lawsCited: ["s. 22 of the Rent Act"], tags: ["rent"],
+  docType: "plaint",
+  title: "Plaint",
+  language: "en",
+  summary: "The plaintiff sues for rent.",
+  parties: [{ name: "A. Perera", role: "plaintiff" }],
+  dates: [{ date: "2024-03-01", what: "filed" }],
+  court: "District Court of Colombo",
+  caseNumbers: ["DC Colombo 123/L"],
+  lawsCited: ["s. 22 of the Rent Act"],
+  tags: ["rent"],
 };
 
 function setup() {
-  const rows = memoryRows(), store = memoryStore(), index = memoryFileIndex();
+  const rows = memoryRows(),
+    store = memoryStore(),
+    index = memoryFileIndex();
   let calls = 0;
   const categorizer: Categorizer = { by: "fake@1", categorize: async () => (calls++, card) };
   const d: Deps = { rows, store, extract: (b, m, n, ctx) => extract(b, m, n, undefined, ctx), categorizer, index };
@@ -69,7 +109,11 @@ function setup() {
 describe("a file through its steps", () => {
   it("runs extract, categorize and index: content in the store, metadata on the row, chunks in the index", async () => {
     const { rows, store, index, d, file } = setup();
-    await file("f1", "PLAINT\n\nThe plaintiff A. Perera states that the defendant owes rent under the Rent Act.\n\n" + "More facts. ".repeat(300));
+    await file(
+      "f1",
+      "PLAINT\n\nThe plaintiff A. Perera states that the defendant owes rent under the Rent Act.\n\n" +
+        "More facts. ".repeat(300),
+    );
     expect(await runFile("f1", d)).toEqual({ extract: "done", categorize: "done", index: "done" });
 
     const f = rows.rows.get("f1")!;
@@ -81,7 +125,12 @@ describe("a file through its steps", () => {
     expect(f.chunks).toBeGreaterThanOrEqual(3);
     expect(index.rows()).toHaveLength(f.chunks!);
     expect(index.rows().every((r) => r.scopes[0] === `case:${CASE}`)).toBe(true);
-    expect(store.keys()).toEqual(["files/f1/card.json", "files/f1/chunks.json", "files/f1/extract.json", "files/f1/original"]);
+    expect(store.keys()).toEqual([
+      "files/f1/card.json",
+      "files/f1/chunks.json",
+      "files/f1/extract.json",
+      "files/f1/original",
+    ]);
   });
 
   it("enforces scope in the index query: another case sees nothing", async () => {
@@ -101,7 +150,13 @@ describe("a file through its steps", () => {
 
   it("runs nothing for a file that needs no step (an asset)", async () => {
     const { store, d, file } = setup();
-    await file("logo", new Uint8Array([137, 80, 78, 71]), { mime: "image/png", name: "logo.png", extractState: null, categorizeState: null, indexState: null });
+    await file("logo", new Uint8Array([137, 80, 78, 71]), {
+      mime: "image/png",
+      name: "logo.png",
+      extractState: null,
+      categorizeState: null,
+      indexState: null,
+    });
     expect(await runFile("logo", d)).toEqual({});
     expect(store.keys()).toEqual(["files/logo/original"]);
   });
@@ -114,16 +169,19 @@ describe("a file through its steps", () => {
 
   it("runs categorize and index side by side after extract", async () => {
     const { d, file } = setup();
-    let inFlight = 0, overlap = false;
-    const slow = <T>(f: () => Promise<T>) => async () => {
-      if (++inFlight > 1) overlap = true;
-      await new Promise((r) => setTimeout(r, 30));
-      try {
-        return await f();
-      } finally {
-        inFlight--;
-      }
-    };
+    let inFlight = 0,
+      overlap = false;
+    const slow =
+      <T>(f: () => Promise<T>) =>
+      async () => {
+        if (++inFlight > 1) overlap = true;
+        await new Promise((r) => setTimeout(r, 30));
+        try {
+          return await f();
+        } finally {
+          inFlight--;
+        }
+      };
     const upsert = d.index.upsert.bind(d.index);
     d.categorizer = { by: "slow@1", categorize: slow(async () => card) };
     d.index = { ...d.index, upsert: (c, a) => slow(() => upsert(c, a))() };
@@ -147,7 +205,12 @@ describe("when a step cannot finish", () => {
 
   it("one step failing does not stop the others", async () => {
     const { rows, index, d, file } = setup();
-    d.categorizer = { by: "broken@1", categorize: async () => { throw new Error("model down"); } };
+    d.categorizer = {
+      by: "broken@1",
+      categorize: async () => {
+        throw new Error("model down");
+      },
+    };
     await file("f2", "An affidavit sworn by the petitioner about the land.");
     expect(await runFile("f2", d)).toEqual({ extract: "done", categorize: "failed", index: "done" });
     expect(rows.rows.get("f2")!.categorizeError).toEqual({ message: "model down", retryable: true });
@@ -182,11 +245,20 @@ describe("retries", () => {
   it("a retryable error with retries left goes back to pending and is thrown; the last attempt records it", async () => {
     const { rows, d, file } = setup();
     let n = 0;
-    d.categorizer = { by: "flaky@1", categorize: async () => { if (++n < 3) throw new Error("timeout"); return card; } };
+    d.categorizer = {
+      by: "flaky@1",
+      categorize: async () => {
+        if (++n < 3) throw new Error("timeout");
+        return card;
+      },
+    };
     await file("r", "An appeal against the judgment.");
     await runStep("r", "extract", d, { retriesLeft: true });
     await expect(runStep("r", "categorize", d, { retriesLeft: true })).rejects.toThrow(/timeout/);
-    expect(rows.rows.get("r")).toMatchObject({ categorizeState: "pending", categorizeError: { message: "timeout", retryable: true } });
+    expect(rows.rows.get("r")).toMatchObject({
+      categorizeState: "pending",
+      categorizeError: { message: "timeout", retryable: true },
+    });
     await expect(runStep("r", "categorize", d, { retriesLeft: true })).rejects.toThrow(/timeout/);
     expect(await runStep("r", "categorize", d, { retriesLeft: false })).toBe("done");
     expect(rows.rows.get("r")!.categorizeError).toBeNull();
@@ -194,7 +266,12 @@ describe("retries", () => {
 
   it("out of retries: recorded failed, no throw", async () => {
     const { d, file } = setup();
-    d.categorizer = { by: "down@1", categorize: async () => { throw new Error("down"); } };
+    d.categorizer = {
+      by: "down@1",
+      categorize: async () => {
+        throw new Error("down");
+      },
+    };
     await file("r2", "A letter of demand.");
     await runStep("r2", "extract", d);
     expect(await runStep("r2", "categorize", d, { retriesLeft: false })).toBe("failed");
@@ -209,7 +286,12 @@ describe("retries", () => {
 
   it("a request refused for good (4xx) fails at once even with retries left", async () => {
     const { rows, d, file } = setup();
-    d.categorizer = { by: "refused@1", categorize: async () => { throw Object.assign(new Error("invalid request"), { status: 400 }); } };
+    d.categorizer = {
+      by: "refused@1",
+      categorize: async () => {
+        throw Object.assign(new Error("invalid request"), { status: 400 });
+      },
+    };
     await file("ref", "A plaint about a boundary dispute.");
     await runStep("ref", "extract", d);
     expect(await runStep("ref", "categorize", d, { retriesLeft: true })).toBe("failed");
@@ -231,13 +313,19 @@ describe("step timeouts", () => {
     d.categorizer = {
       by: "stuck@1",
       // waits for its signal like fetch and the AI SDK do
-      categorize: ({ signal }) => new Promise((_, reject) => ((seen = signal), signal!.addEventListener("abort", () => reject(signal!.reason)))),
+      categorize: ({ signal }) =>
+        new Promise((_, reject) => ((seen = signal), signal!.addEventListener("abort", () => reject(signal!.reason)))),
     };
     await file("slow", "A plaint about rent arrears.");
     await runStep("slow", "extract", d);
-    await expect(runStep("slow", "categorize", d, { retriesLeft: true, timeouts: { categorize: 30 } })).rejects.toBeInstanceOf(StepTimeout);
+    await expect(
+      runStep("slow", "categorize", d, { retriesLeft: true, timeouts: { categorize: 30 } }),
+    ).rejects.toBeInstanceOf(StepTimeout);
     expect(seen!.aborted).toBe(true);
-    expect(rows.rows.get("slow")).toMatchObject({ categorizeState: "pending", categorizeError: { message: "categorize took longer than 0 s", retryable: true } });
+    expect(rows.rows.get("slow")).toMatchObject({
+      categorizeState: "pending",
+      categorizeError: { message: "categorize took longer than 0 s", retryable: true },
+    });
   });
 
   it("ends at its time even when the work ignores the signal; out of retries it is failed, retryable from the UI", async () => {
@@ -266,7 +354,12 @@ describe("the state writer", () => {
     await file("w", "A notice to quit the premises.");
     await runStep("w", "extract", d, { writer });
     await runStep("w", "index", d, { writer });
-    expect(events.map((e) => `${e.step}:${e.state}`)).toEqual(["extract:running", "extract:done", "index:running", "index:done"]);
+    expect(events.map((e) => `${e.step}:${e.state}`)).toEqual([
+      "extract:running",
+      "extract:done",
+      "index:running",
+      "index:done",
+    ]);
     expect(events.every((e, i) => i === 0 || e.at > events[i - 1]!.at)).toBe(true);
     expect(events.at(-1)!.at).toBe(rows.rows.get("w")!.updatedAt.getTime()); // the last event is the row as it is now
   });
