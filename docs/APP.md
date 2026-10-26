@@ -94,6 +94,47 @@ in v1; an entity graph can be built later from the same per-file JSON.
   extracted content (text, and the ingestion card: doc_type, summary, parties, dates, laws cited). Other tables
   say what a file is used for by referencing `files.id` (a case's files, a message's attachments). A case's
   documents (markdown the lawyer or the AI writes) are files too, no separate table.
+- **File pipelines (user, 2026-10-25):** `files` is the general asset table: every uploaded file's row, which
+  everything that uses a file references (`case_files` now; later attachments, logos). The row holds only what the
+  file is and how far it is processed, **no content** (unlike the law corpus): the original, its text
+  (`extract.json`), its card's summary (`card.json`) and its chunks (`chunks.json`) are in R2 under `files/<id>/`, the
+  vectors in Zilliz `files`. Categorization is metadata on the row (`category` = doc_type, `meta` = parties, dates,
+  court, case numbers, laws cited, tags; how it is used, search filter, UI grouping or per-category handling, is
+  open); the vectors carry no doc_type (categorize runs beside index), a search by type resolves to file ids in
+  Postgres. Each step (extract, categorize, index)
+  has its own state on the row, null when the file does not need it (a logo needs none), and `<step>_by`
+  (name@version) so a new extractor, categorizer, embedder or vector DB re-runs only what an older one did. Each
+  step is an interface in its package (storage `BlobStore`, extract `Extractor`, ai `Categorizer`, search
+  `FileIndex`/`Embedder`); swapping one changes nothing else. No chunk table: chunk ids are `<fileId>:<n>`, stable
+  while the chunker is. v1: only the case author can add and see a case's files until `case_shares` exists; the
+  agent's case-file search tool waits for the case chat.
+- **Fast, on demand, Vercel Workflows (user, 2026-10-25):** a file is ready in under 2 minutes most of the time. The
+  steps run as a Vercel Workflow (same project and code, durable steps retried 2 times; no Trigger.dev, Inngest or
+  Cloudflare Workflows: a second platform for the same job). extract, then categorize and index at the same time.
+  OCR with a cheap provider (user): **the OCR endpoint gets a signed URL to the whole file, fetches it and returns
+  its pages as JSON; that is the whole contract** (`OcrProvider`, `httpOcr`: POST {url, mime, filename} ->
+  {pages: [{n, text}]}; on when `OCR_URL` is set). We send no bytes and split no pages. A PDF's pages with a text
+  layer keep it; OCR fills the ones without. Provider not picked yet; not compared on Sinhala/Tamil scans.
+- **File service, case service, live status (user, 2026-10-26):** file processing is one generic service
+  (`services/src/files`): a caller creates a file with the steps it needs (none for a logo; extract for an
+  attachment; extract + categorize + index for a case file) and the scopes it is found under, stored on the row
+  (`files.scopes`). It knows nothing of cases. A case file goes through the case service (`services/src/cases.ts`:
+  `case.addFile` checks the case, creates the file with every step under `case:<id>`, links `case_files`); a
+  private file through `file.startUpload` (`user:<id>`). Every upload ends with `file.finishUpload`, which starts a
+  workflow run (`files.run_id`). The UI follows the states live: each phase gets a `StateWriter` and writes every
+  state it sets to the run's stream (Workflow `getWritable`); `GET /api/files/<id>/events` sends a snapshot of the
+  row, then each state as a server-sent event, then `end`; a reconnect resumes after Last-Event-ID. The client keeps
+  uploads in one global zustand store (`apps/web/stores/upload-store.ts`: start, PUT with progress, finish, follow),
+  shown in a tray on every page and per file with `useFileStatus`. Vercel has no ready-made client hook for a run
+  (checked 2026-10-26, workflow 5.2.1: only `WorkflowChatTransport`, for chats). No sweep and no cron (user, 2026-10-26: a file
+  stuck for a day is a user gone): a step whose function was cut off is retried by its own run, which claims it back
+  at once (`files.run_id`); a step out of retries is `failed` and the UI offers a retry, which also restarts steps a
+  stopped run left open.
+- **Retryable and non-retryable errors (user, 2026-10-26):** one rule decides (`services/src/files/errors.ts`).
+  Retried: network errors, timeouts, 408, 425, 429, 5xx, unknown errors. Not retried: a file its parser cannot read
+  (`Unreadable`: a corrupt PDF, a .docx that is not a zip), other 4xx. Packages only describe their errors (an HTTP
+  `status`, the AI SDK's `isRetryable`). The row keeps `{ message, retryable }` per step, so "Try again" shows only
+  where it can help; `no_text` is not retryable until OCR is on (then reprocess extract).
 - **LLM: DeepSeek** via Vercel AI Gateway (user, 2026-10-17; gateway changed 2026-10-18). The model per task (main agent, research agent, reading
   files) is one config value each, not code: picked later. Not checked yet: DeepSeek's API terms on training and data
   location (the privacy line below depends on it).
