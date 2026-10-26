@@ -2,3 +2,4 @@
 export * from "./accounts";
 export * from "./chats";
 export { db } from "./client";
+export * from "./files";
