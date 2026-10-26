@@ -7,7 +7,7 @@ export async function embed(texts: string[]): Promise<number[][]> {
     headers: { Authorization: `Bearer ${process.env.CLOUDFLARE_API_TOKEN}`, "Content-Type": "application/json" },
     body: JSON.stringify({ text: texts }),
   });
-  if (!r.ok) throw new Error(`embed ${r.status}: ${(await r.text()).slice(0, 300)}`);
+  if (!r.ok) throw Object.assign(new Error(`embed ${r.status}: ${(await r.text()).slice(0, 300)}`), { status: r.status });
   const data: number[][] = (await r.json()).result.data;
   if (data.length !== texts.length) throw new Error(`embed: ${data.length} vectors for ${texts.length} texts`);
   return data;
