@@ -31,10 +31,17 @@ export function r2Store(env = process.env): BlobStore {
   return {
     name: "r2",
     async put(key, bytes, contentType = "application/octet-stream") {
-      await ok(
-        await aws.fetch(url(key), { method: "PUT", body: bytes as BodyInit, headers: { "Content-Type": contentType } }),
-        `put ${key}`,
-      );
+      const body = typeof bytes === "string" ? new TextEncoder().encode(bytes) : bytes;
+      // signed here, sent below with its bytes and their length: aws.fetch sends the body as a Request's stream, which
+      // Next's fetch sends chunked without Content-Length, and R2 refuses that (411 MissingContentLength, 2026-10-26)
+      const signed = await aws.sign(url(key), {
+        method: "PUT",
+        body: body as BodyInit,
+        headers: { "Content-Type": contentType },
+      });
+      const headers = new Headers(signed.headers);
+      headers.set("Content-Length", String(body.byteLength));
+      await ok(await fetch(signed.url, { method: "PUT", headers, body: body as BodyInit }), `put ${key}`);
     },
     async get(key) {
       const r = await aws.fetch(url(key));
