@@ -1,8 +1,18 @@
 // Cases. For now only a case's files: who may add and see them is decided here, the file itself is the file
 // service's (./files): a case file is a generic file asked for every step, found under the case's scope.
-import { caseById, caseHasFile, fileById, filesOfCase, linkCaseFile, STEPS } from "@sllaw/db";
-import { createUpload, fileStatus, fileView, removeFile, rerun, type FileInput, type Removed, type Signed } from "./files";
+
 import type { Step } from "@sllaw/db";
+import { caseById, caseHasFile, fileById, filesOfCase, linkCaseFile, STEPS } from "@sllaw/db";
+import {
+  createUpload,
+  type FileInput,
+  fileStatus,
+  fileView,
+  type Removed,
+  removeFile,
+  rerun,
+  type Signed,
+} from "./files";
 
 /** ponytail: only the case's author may see and change its files until case_shares exists (docs/APP.md, Access:
  *  viewer reads, editor adds/removes). Then this becomes the caseViewer / caseEditor check. */
@@ -23,7 +33,10 @@ const scope = (caseId: string) => `case:${caseId}`;
  *  browser sends the bytes; file.finishUpload then starts the processing, as for any file. */
 export async function addCaseFile(a: Signed, caseId: string, input: FileInput) {
   if (!(await caseOf(a, caseId))) return null;
-  const up = await createUpload({ workspaceId: a.workspace.id, userId: a.user.id }, input, { steps: STEPS, scopes: [scope(caseId)] });
+  const up = await createUpload({ workspaceId: a.workspace.id, userId: a.user.id }, input, {
+    steps: STEPS,
+    scopes: [scope(caseId)],
+  });
   try {
     await linkCaseFile(caseId, up.fileId, a.user.id);
   } catch (e) {

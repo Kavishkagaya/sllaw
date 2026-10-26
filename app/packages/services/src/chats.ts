@@ -29,11 +29,19 @@ export async function sendMessage(
   waitUntil: (p: Promise<unknown>) => void,
   abortSignal: AbortSignal,
 ) {
-  const title = message.parts.map((p) => p.text).join(" ").slice(0, 80);
+  const title = message.parts
+    .map((p) => p.text)
+    .join(" ")
+    .slice(0, 80);
   const chat = await createChat({ id: chatId, workspaceId: a.workspace.id, userId: a.user.id, title });
   if (chat.userId !== a.user.id || chat.workspaceId !== a.workspace.id) return null;
   const history = await messagesOf(chatId);
   await saveMessages(chatId, [message]);
   const ctx = agentCtx({ workspaceId: a.workspace.id, userId: a.user.id });
-  return streamChat(ctx, [...history, message], (m, usage) => waitUntil(saveMessages(chatId, [{ ...m, usage }])), abortSignal);
+  return streamChat(
+    ctx,
+    [...history, message],
+    (m, usage) => waitUntil(saveMessages(chatId, [{ ...m, usage }])),
+    abortSignal,
+  );
 }

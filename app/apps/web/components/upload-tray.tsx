@@ -4,11 +4,16 @@
 import { CheckCircle2, Loader2, RotateCw, X, XCircle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { useUploadStore, type Upload } from "@/stores/upload-store";
+import { type Upload, useUploadStore } from "@/stores/upload-store";
 
 const LABEL: Record<string, string> = { upload: "Upload", extract: "Read", categorize: "Categorize", index: "Index" };
 const STATE: Record<string, string> = {
-  pending: "waiting", running: "working", done: "done", stored: "done", failed: "failed", no_text: "no text",
+  pending: "waiting",
+  running: "working",
+  done: "done",
+  stored: "done",
+  failed: "failed",
+  no_text: "no text",
 };
 
 export function UploadTray() {
@@ -30,7 +35,9 @@ function UploadCard({ u }: { u: Upload }) {
     <div className="rounded-lg border bg-card p-3 text-card-foreground shadow-md">
       <div className="flex items-center gap-2">
         <PhaseIcon phase={u.phase} />
-        <span className="min-w-0 flex-1 truncate text-sm font-medium" title={u.name}>{u.name}</span>
+        <span className="min-w-0 flex-1 truncate text-sm font-medium" title={u.name}>
+          {u.name}
+        </span>
         {u.retryable && u.fileId && (u.phase === "failed" || u.phase === "finished") && (
           <Button size="icon" variant="ghost" className="size-6" title="Try again" onClick={() => void retry(u.key)}>
             <RotateCw />
@@ -44,13 +51,26 @@ function UploadCard({ u }: { u: Upload }) {
       </div>
       {u.phase === "uploading" && u.size > 0 && (
         <div className="mt-2 h-1 overflow-hidden rounded bg-muted">
-          <div className="h-full bg-primary transition-[width]" style={{ width: `${Math.round((u.sent / u.size) * 100)}%` }} />
+          <div
+            className="h-full bg-primary transition-[width]"
+            style={{ width: `${Math.round((u.sent / u.size) * 100)}%` }}
+          />
         </div>
       )}
       {u.status && (
         <div className="mt-2 flex flex-wrap gap-1">
           {u.status.steps.map((s) => (
-            <Badge key={s.step} variant={s.state === "failed" ? "destructive" : s.state === "done" || s.state === "stored" ? "secondary" : "outline"} title={s.error?.message}>
+            <Badge
+              key={s.step}
+              variant={
+                s.state === "failed"
+                  ? "destructive"
+                  : s.state === "done" || s.state === "stored"
+                    ? "secondary"
+                    : "outline"
+              }
+              title={s.error?.message}
+            >
               {LABEL[s.step] ?? s.step}: {STATE[s.state] ?? s.state}
             </Badge>
           ))}

@@ -8,8 +8,17 @@ import { Brand } from "@/components/brand";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 import {
-  Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupLabel, SidebarHeader, SidebarMenu,
-  SidebarMenuBadge, SidebarMenuButton, SidebarMenuItem, SidebarRail,
+  Sidebar,
+  SidebarContent,
+  SidebarFooter,
+  SidebarGroup,
+  SidebarGroupLabel,
+  SidebarHeader,
+  SidebarMenu,
+  SidebarMenuBadge,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarRail,
 } from "@/components/ui/sidebar";
 import { useChatStore } from "@/stores/chat-store";
 
@@ -35,9 +44,13 @@ export function AppSidebar({ chats, error }: { chats: Chat[]; error?: string }) 
   return (
     <Sidebar>
       <SidebarHeader className="gap-3 p-3">
-        <Link href="/chats" className="px-1 py-1"><Brand /></Link>
+        <Link href="/chats" className="px-1 py-1">
+          <Brand />
+        </Link>
         <Button asChild variant="outline" className="justify-start">
-          <Link href="/chats"><SquarePen /> New chat</Link>
+          <Link href="/chats">
+            <SquarePen /> New chat
+          </Link>
         </Button>
       </SidebarHeader>
       <SidebarContent>
@@ -57,7 +70,7 @@ export function AppSidebar({ chats, error }: { chats: Chat[]; error?: string }) 
                   </SidebarMenuButton>
                   {unread[c.id] && !busy[c.id] && (
                     <SidebarMenuBadge>
-                      <span className="size-2 rounded-full bg-brass" aria-label="New answer" />
+                      <span role="img" className="size-2 rounded-full bg-brass" aria-label="New answer" />
                     </SidebarMenuBadge>
                   )}
                 </SidebarMenuItem>
@@ -67,7 +80,10 @@ export function AppSidebar({ chats, error }: { chats: Chat[]; error?: string }) 
         ))}
       </SidebarContent>
       <SidebarFooter className="gap-2 border-t p-3">
-        <OrganizationSwitcher hidePersonal appearance={{ elements: { rootBox: "w-full", organizationSwitcherTrigger: "w-full justify-between" } }} />
+        <OrganizationSwitcher
+          hidePersonal
+          appearance={{ elements: { rootBox: "w-full", organizationSwitcherTrigger: "w-full justify-between" } }}
+        />
         <div className="flex items-center justify-between">
           <UserButton showName />
           <ThemeToggle />

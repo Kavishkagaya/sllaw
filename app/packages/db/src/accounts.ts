@@ -14,7 +14,11 @@ export async function upsertUser(u: UserFields) {
 
 export async function upsertWorkspace(w: WorkspaceFields) {
   const { clerkId, ...set } = w;
-  const [row] = await db.insert(workspaces).values(w).onConflictDoUpdate({ target: workspaces.clerkId, set }).returning();
+  const [row] = await db
+    .insert(workspaces)
+    .values(w)
+    .onConflictDoUpdate({ target: workspaces.clerkId, set })
+    .returning();
   return row!;
 }
 
@@ -32,7 +36,8 @@ export const deleteWorkspace = (clerkId: string) => db.delete(workspaces).where(
 export async function deleteWorkspaceUser(workspaceClerkId: string, userClerkId: string) {
   const [w] = await db.select({ id: workspaces.id }).from(workspaces).where(eq(workspaces.clerkId, workspaceClerkId));
   const [u] = await db.select({ id: users.id }).from(users).where(eq(users.clerkId, userClerkId));
-  if (w && u) await db.delete(workspaceUsers).where(and(eq(workspaceUsers.workspaceId, w.id), eq(workspaceUsers.userId, u.id)));
+  if (w && u)
+    await db.delete(workspaceUsers).where(and(eq(workspaceUsers.workspaceId, w.id), eq(workspaceUsers.userId, u.id)));
 }
 
 export async function userByClerkId(clerkId: string) {
@@ -43,7 +48,13 @@ export async function userByClerkId(clerkId: string) {
 /** The workspaces a user belongs to, with their role in each. */
 export const workspacesOf = (userId: string) =>
   db
-    .select({ id: workspaces.id, clerkId: workspaces.clerkId, name: workspaces.name, slug: workspaces.slug, role: workspaceUsers.role })
+    .select({
+      id: workspaces.id,
+      clerkId: workspaces.clerkId,
+      name: workspaces.name,
+      slug: workspaces.slug,
+      role: workspaceUsers.role,
+    })
     .from(workspaceUsers)
     .innerJoin(workspaces, eq(workspaces.id, workspaceUsers.workspaceId))
     .where(eq(workspaceUsers.userId, userId));

@@ -8,7 +8,8 @@ export async function embed(texts: string[], signal?: AbortSignal): Promise<numb
     body: JSON.stringify({ text: texts }),
     signal,
   });
-  if (!r.ok) throw Object.assign(new Error(`embed ${r.status}: ${(await r.text()).slice(0, 300)}`), { status: r.status });
+  if (!r.ok)
+    throw Object.assign(new Error(`embed ${r.status}: ${(await r.text()).slice(0, 300)}`), { status: r.status });
   const data: number[][] = (await r.json()).result.data;
   if (data.length !== texts.length) throw new Error(`embed: ${data.length} vectors for ${texts.length} texts`);
   return data;

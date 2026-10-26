@@ -2,16 +2,29 @@ import type { AsOf, Change, Chunk, Ctx, Status } from "@sllaw/ai";
 import { changeStatus, changesInto, chunksById, linksOf, sectionsOf } from "@sllaw/etl_db";
 import { searchLaw } from "@sllaw/search";
 
-
-const asChunk = (c: { id: number; docKey: string; title?: string | null; label: string | null; path: string | null; text: string }): Chunk => ({
-  chunkId: c.id, docKey: c.docKey, title: c.title ?? null, label: c.label, path: c.path, text: c.text,
+const asChunk = (c: {
+  id: number;
+  docKey: string;
+  title?: string | null;
+  label: string | null;
+  path: string | null;
+  text: string;
+}): Chunk => ({
+  chunkId: c.id,
+  docKey: c.docKey,
+  title: c.title ?? null,
+  label: c.label,
+  path: c.path,
+  text: c.text,
 });
 
 type Who = { workspaceId: string; userId: string; caseId?: string | null; asOfDate?: string };
 
 const CLAUSE = 900; // chars of an amending section kept: the operative words come first
 const clip = (t: string, chunk: number | null) =>
-  t.length <= CLAUSE ? t : t.slice(0, CLAUSE) + (chunk != null ? ` …[truncated: read chunk ${chunk} for the full clause]` : " …[truncated]");
+  t.length <= CLAUSE
+    ? t
+    : t.slice(0, CLAUSE) + (chunk != null ? ` …[truncated: read chunk ${chunk} for the full clause]` : " …[truncated]");
 const RANK: Record<string, number> = { replaces: 0, repeals: 1, inserts: 2, amends: 3 };
 
 /** A section as enacted and the changes made to it up to a date (YYYY-MM-DD), oldest first, each with its amending
@@ -29,7 +42,12 @@ export async function asOf(chunkId: number, date = today()): Promise<AsOf | null
   const changes: Change[] = rows
     .filter((r) => !r.date || r.date <= date)
     .map((r) => ({
-      date: r.date, kind: r.kind, by: r.srcDoc, byTitle: r.srcTitle, byLabel: r.srcLabel, byChunk: r.srcChunk,
+      date: r.date,
+      kind: r.kind,
+      by: r.srcDoc,
+      byTitle: r.srcTitle,
+      byLabel: r.srcLabel,
+      byChunk: r.srcChunk,
       clause: clip(r.srcText ?? r.context ?? "", r.srcChunk),
     }));
   const later = rows.filter((r) => r.date && r.date > date).map((r) => ({ date: r.date!, kind: r.kind, by: r.srcDoc }));

@@ -2,7 +2,7 @@
 // two must agree (PIPELINE.md, "Search recall": dense en 93% @5). Hits only; no Neon read.
 //   pnpm --filter @sllaw/search eval
 import { readFileSync } from "node:fs";
-import { searchLaw, type Hit, type Mode } from "../src";
+import { type Hit, type Mode, searchLaw } from "../src";
 
 type Q = { id: number; doc: string; label: string; en: string; si: string; ta: string };
 const qs: Q[] = JSON.parse(readFileSync(new URL("../../../../etl/eval_questions.json", import.meta.url), "utf8"));
@@ -10,7 +10,8 @@ const langs = ["en", "si", "ta"] as const;
 const modes: Mode[] = ["dense", "weighted"];
 
 // the gold chunk's law title, read from its own hit (search filtered to the gold law)
-const titleOf = async (q: Q) => (await searchLaw(q.en, { filters: { docKeys: [q.doc] }, limit: 1 }))[0]?.title.trim().toLowerCase();
+const titleOf = async (q: Q) =>
+  (await searchLaw(q.en, { filters: { docKeys: [q.doc] }, limit: 1 }))[0]?.title.trim().toLowerCase();
 const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 const ranks: Record<string, (number | null)[]> = {};

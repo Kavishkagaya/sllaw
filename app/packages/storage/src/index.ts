@@ -11,4 +11,4 @@ export function blobStore(): BlobStore {
 
 export { memoryStore } from "./memory";
 export { r2Store } from "./r2";
-export { getJson, putJson, type Blob, type BlobStore, type Head } from "./store";
+export { type Blob, type BlobStore, getJson, type Head, putJson } from "./store";

@@ -16,7 +16,9 @@ export const publicProcedure = t.procedure;
 export const createCallerFactory = t.createCallerFactory;
 
 /** A signed-in user: ctx.account = our user, their workspaces (with role) and the active workspace (or null). */
-export const signedUser = t.procedure.use(async ({ ctx, next }) => next({ ctx: { ...ctx, account: await signedAccount(ctx) } }));
+export const signedUser = t.procedure.use(async ({ ctx, next }) =>
+  next({ ctx: { ...ctx, account: await signedAccount(ctx) } }),
+);
 
 /** signedUser with an active workspace: ctx.account.workspace is set. */
 export const workspaceUser = signedUser.use(({ ctx, next }) => {

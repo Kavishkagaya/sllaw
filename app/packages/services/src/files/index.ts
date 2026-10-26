@@ -4,14 +4,24 @@
 // add or see a file through a case is the case service's (../cases.ts). Functions taking an Account are for a
 // user's own files (owner only); the rest take ids and trust their caller.
 import {
-  createFile, deleteFileRow, fileById, filesOfOwner, markDeleting, resetSteps, setRun, setUploaded, STEPS, type FileRow,
-  type Step, type StepError,
+  createFile,
+  deleteFileRow,
+  type FileRow,
+  fileById,
+  filesOfOwner,
+  markDeleting,
+  resetSteps,
+  STEPS,
+  type Step,
+  type StepError,
+  setRun,
+  setUploaded,
 } from "@sllaw/db";
 import { getJson } from "@sllaw/storage";
 import { getRun, start } from "workflow/api";
 import type { Account } from "../accounts";
 import { appDeps } from "./deps";
-import { keys, type Card, type Deps, type FileEvent } from "./pipeline";
+import { type Card, type Deps, type FileEvent, keys } from "./pipeline";
 import { fileWorkflow } from "./workflow";
 
 export type Signed = Account & { workspace: NonNullable<Account["workspace"]> };
@@ -35,8 +45,13 @@ export async function createUpload(owner: { workspaceId: string; userId: string 
   if (input.size > MAX_SIZE) throw new Error(`file too large: ${input.size} bytes (max ${MAX_SIZE})`);
   const pending = Object.fromEntries(withExtract(need.steps).map((s) => [`${s}State`, "pending"]));
   const f = await createFile({
-    workspaceId: owner.workspaceId, ownerId: owner.userId, name: input.name, mime: input.mime || "application/octet-stream",
-    size: input.size, scopes: need.scopes, ...pending,
+    workspaceId: owner.workspaceId,
+    ownerId: owner.userId,
+    name: input.name,
+    mime: input.mime || "application/octet-stream",
+    size: input.size,
+    scopes: need.scopes,
+    ...pending,
   });
   const uploadUrl = await appDeps().store.uploadUrl(keys.original(f.id), f.mime, URL_TTL);
   return { fileId: f.id, uploadUrl, headers: { "Content-Type": f.mime } };
@@ -162,7 +177,10 @@ async function own(a: Signed, id: string) {
 
 /** A private file: read and searchable by its owner only. */
 export const startUpload = (a: Signed, input: FileInput) =>
-  createUpload({ workspaceId: a.workspace.id, userId: a.user.id }, input, { steps: STEPS, scopes: [`user:${a.user.id}`] });
+  createUpload({ workspaceId: a.workspace.id, userId: a.user.id }, input, {
+    steps: STEPS,
+    scopes: [`user:${a.user.id}`],
+  });
 
 /** The bytes through the app, for a store without direct upload (and small files). Only while the upload is pending. */
 export async function putUpload(a: Signed, id: string, bytes: Uint8Array) {
@@ -188,7 +206,8 @@ export async function finishUpload(a: Signed, id: string) {
     throw new Error("file too large");
   }
   // only the call that moves it pending -> stored starts the run: two finishUpload calls at once start one
-  if ((await setUploaded(id, "stored", head.size)) && STEPS.some((s) => f[`${s}State`] === "pending")) await startProcessing(id);
+  if ((await setUploaded(id, "stored", head.size)) && STEPS.some((s) => f[`${s}State`] === "pending"))
+    await startProcessing(id);
   return fileStatus((await fileById(id))!);
 }
 
@@ -215,7 +234,18 @@ export async function deleteFile(a: Signed, id: string): Promise<Removed | null>
   return (await own(a, id)) ? removeFile(id) : null;
 }
 
-export { isRetryable } from "./errors";
-export { runFile, runStep, keys, noWriter, STEP_TIMEOUT, StepTimeout, type Deps, type FileEvent, type FileRows, type StateWriter } from "./pipeline";
-export { fileWorkflow } from "./workflow";
 export { appDeps, appExtractors, dbRows } from "./deps";
+export { isRetryable } from "./errors";
+export {
+  type Deps,
+  type FileEvent,
+  type FileRows,
+  keys,
+  noWriter,
+  runFile,
+  runStep,
+  STEP_TIMEOUT,
+  type StateWriter,
+  StepTimeout,
+} from "./pipeline";
+export { fileWorkflow } from "./workflow";

@@ -1,6 +1,6 @@
 import { myFileEvents, putUpload } from "@sllaw/services";
-import { getHTTPStatusCodeFromError } from "@trpc/server/http";
 import { TRPCError } from "@trpc/server";
+import { getHTTPStatusCodeFromError } from "@trpc/server/http";
 import { z } from "zod";
 import { createContext, signedAccount } from "./trpc";
 
@@ -39,7 +39,11 @@ export async function fileEventsRoute(req: Request, id: string) {
     const stream = await myFileEvents(account, id, Number.isInteger(last) ? last : undefined);
     if (!stream) return new Response("not found", { status: 404 });
     return new Response(stream, {
-      headers: { "Content-Type": "text/event-stream", "Cache-Control": "no-cache, no-transform", Connection: "keep-alive" },
+      headers: {
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache, no-transform",
+        Connection: "keep-alive",
+      },
     });
   } catch (e) {
     return asResponse(e);

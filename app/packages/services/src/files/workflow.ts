@@ -4,10 +4,11 @@
 // end. extract first, then categorize and index side by side.
 // Every state runStep writes also goes to the run's stream (getWritable): the events route reads it and sends each
 // one to the browser as a server-sent event. The last step closes the stream, which ends the browser's connection.
-import { getStepMetadata, getWorkflowMetadata, getWritable } from "workflow";
+
 import type { Step } from "@sllaw/db";
+import { getStepMetadata, getWorkflowMetadata, getWritable } from "workflow";
 import { appDeps } from "./deps";
-import { runStep, type FileEvent, type StateWriter } from "./pipeline";
+import { type FileEvent, runStep, type StateWriter } from "./pipeline";
 
 const MAX_RETRIES = 2; // 3 attempts; after the last the step is recorded failed (the user retries it from the UI)
 

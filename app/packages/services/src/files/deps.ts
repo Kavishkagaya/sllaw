@@ -3,7 +3,7 @@
 // change. OCR is off until OCR_URL is set (extract's httpOcr): a scan is then `no_text` and costs nothing.
 import { llmCategorizer } from "@sllaw/ai";
 import { claimStep, endStep, fileById } from "@sllaw/db";
-import { extract, extractors, ocrFromEnv, type Extractor } from "@sllaw/extract";
+import { type Extractor, extract, extractors, ocrFromEnv } from "@sllaw/extract";
 import { fileIndex } from "@sllaw/search";
 import { blobStore } from "@sllaw/storage";
 import type { Deps, FileRows } from "./pipeline";

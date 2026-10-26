@@ -13,10 +13,17 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
     <div className="grid min-h-svh lg:grid-cols-[1fr_1.1fr]">
       {/* the dark tokens in either theme: navy and brass */}
       <aside className="dark relative hidden overflow-hidden flex-col justify-between border-r bg-sidebar p-10 text-foreground lg:flex">
-        <span aria-hidden className="pointer-events-none absolute -right-10 -bottom-32 font-serif text-[32rem] leading-none text-primary/[0.07] select-none">§</span>
+        <span
+          aria-hidden
+          className="pointer-events-none absolute -right-10 -bottom-32 font-serif text-[32rem] leading-none text-primary/[0.07] select-none"
+        >
+          §
+        </span>
         <Brand />
         <div className="max-w-md space-y-8">
-          <h1 className="font-serif text-4xl leading-tight font-semibold">The law of Sri Lanka, answered with its sources.</h1>
+          <h1 className="font-serif text-4xl leading-tight font-semibold">
+            The law of Sri Lanka, answered with its sources.
+          </h1>
           <ul className="space-y-4 text-sm text-muted-foreground">
             {points.map(({ icon: Icon, text }) => (
               <li key={text} className="flex gap-3">
@@ -26,7 +33,9 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
             ))}
           </ul>
         </div>
-        <p className="text-xs text-muted-foreground/70">Research aid, not legal advice. Check the cited text before relying on it.</p>
+        <p className="text-xs text-muted-foreground/70">
+          Research aid, not legal advice. Check the cited text before relying on it.
+        </p>
       </aside>
       <main className="flex flex-col p-6">
         <div className="flex items-center justify-between">

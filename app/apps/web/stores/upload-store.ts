@@ -79,7 +79,8 @@ export const useUploadStore = create<State>()((set, get) => {
       const open = status?.steps.some((s) => s.state === "pending" || s.state === "running");
       if (open && reopens > 0) setTimeout(() => follow(key, reopens - 1), 2000);
       // the run is over and a step never finished: say so, and offer a retry, rather than spin forever
-      else if (open) patch(key, { phase: "failed", retryable: true, error: "Processing stopped before it finished. Try again." });
+      else if (open)
+        patch(key, { phase: "failed", retryable: true, error: "Processing stopped before it finished. Try again." });
       else if (status) settle(key, { ...status, finished: true });
     });
     // a dropped connection reconnects by itself (with Last-Event-ID); a refused one (404, 401) is closed
@@ -108,7 +109,20 @@ export const useUploadStore = create<State>()((set, get) => {
     upload: (file, target) => {
       const local = crypto.randomUUID();
       set((s) => ({
-        uploads: { ...s.uploads, [local]: { key: local, fileId: null, name: file.name, size: file.size, sent: 0, phase: "starting", error: null, retryable: false, status: null } },
+        uploads: {
+          ...s.uploads,
+          [local]: {
+            key: local,
+            fileId: null,
+            name: file.name,
+            size: file.size,
+            sent: 0,
+            phase: "starting",
+            error: null,
+            retryable: false,
+            status: null,
+          },
+        },
       }));
       void (async () => {
         try {
@@ -133,7 +147,20 @@ export const useUploadStore = create<State>()((set, get) => {
     track: (fileId, name = "", initial) => {
       if (get().uploads[fileId] || Object.values(get().uploads).some((u) => u.fileId === fileId)) return;
       set((s) => ({
-        uploads: { ...s.uploads, [fileId]: { key: fileId, fileId, name, size: 0, sent: 0, phase: "processing", error: null, retryable: false, status: initial ?? null } },
+        uploads: {
+          ...s.uploads,
+          [fileId]: {
+            key: fileId,
+            fileId,
+            name,
+            size: 0,
+            sent: 0,
+            phase: "processing",
+            error: null,
+            retryable: false,
+            status: initial ?? null,
+          },
+        },
       }));
       if (initial?.finished) settle(fileId, initial);
       else follow(fileId);
@@ -165,14 +192,26 @@ export const useUploadStore = create<State>()((set, get) => {
 /** A file's live status on a page. Pass the status the server rendered: it shows at once, and the file is followed
  *  from there if it is not finished. */
 export function useFileStatus(fileId: string, initial?: FileStatus, name?: string): Upload | null {
-  const u = useUploadStore((s) => s.uploads[fileId] ?? Object.values(s.uploads).find((x) => x.fileId === fileId) ?? null);
+  const u = useUploadStore(
+    (s) => s.uploads[fileId] ?? Object.values(s.uploads).find((x) => x.fileId === fileId) ?? null,
+  );
   const track = useUploadStore((s) => s.track);
   // in an effect, not during render: it opens a connection. Only when the file changes: a new `initial` for the
   // same file is the same status rendered again
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // biome-ignore lint/correctness/useExhaustiveDependencies: only when the file changes (see above)
   useEffect(() => track(fileId, name, initial), [fileId, track]);
   if (u) return u;
   if (!initial) return null;
   const retryable = initial.finished && initial.steps.some((s) => s.state === "failed" && !!s.error?.retryable);
-  return { key: fileId, fileId, name: name ?? "", size: 0, sent: 0, phase: initial.finished ? "finished" : "processing", error: null, retryable, status: initial };
+  return {
+    key: fileId,
+    fileId,
+    name: name ?? "",
+    size: 0,
+    sent: 0,
+    phase: initial.finished ? "finished" : "processing",
+    error: null,
+    retryable,
+    status: initial,
+  };
 }
