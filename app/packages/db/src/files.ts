@@ -179,3 +179,13 @@ export const filesOfCase = (caseId: string) =>
     .where(and(eq(caseFiles.caseId, caseId), ne(files.uploadState, "deleting")))
     .orderBy(desc(files.createdAt))
     .then((rs) => rs.map((r) => r.file));
+
+/** How many of the case's files a run is busy with: a case is deleted only when none is. */
+export async function busyFilesOfCase(caseId: string) {
+  const [r] = await db
+    .select({ n: sql<number>`count(*)::int` })
+    .from(caseFiles)
+    .innerJoin(files, eq(files.id, caseFiles.fileId))
+    .where(and(eq(caseFiles.caseId, caseId), busy()));
+  return r?.n ?? 0;
+}

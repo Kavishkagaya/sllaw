@@ -8,6 +8,7 @@
   "scripts": {
     "typecheck": "tsc",
     "check-accounts": "tsx --env-file=../../apps/web/.env.local scripts/check-accounts.ts",
+    "check-cases": "tsx --env-file=../../apps/web/.env.local scripts/check-cases.ts",
     "check-files": "tsx --env-file=../../apps/web/.env.local scripts/check-files.ts",
     "eval-chat": "tsx --env-file=../../apps/web/.env.local scripts/eval-chat.ts",
     "tool": "tsx --env-file=../../apps/web/.env.local scripts/tool.ts"
