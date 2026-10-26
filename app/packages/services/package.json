@@ -8,6 +8,7 @@
   "scripts": {
     "typecheck": "tsc",
     "check-accounts": "tsx --env-file=../../apps/web/.env.local scripts/check-accounts.ts",
+    "check-files": "tsx --env-file=../../apps/web/.env.local scripts/check-files.ts",
     "eval-chat": "tsx --env-file=../../apps/web/.env.local scripts/eval-chat.ts",
     "tool": "tsx --env-file=../../apps/web/.env.local scripts/tool.ts"
   },
@@ -20,6 +21,9 @@
     "@sllaw/ai": "workspace:*",
     "@sllaw/db": "workspace:*",
     "@sllaw/etl_db": "workspace:*",
-    "@sllaw/search": "workspace:*"
+    "@sllaw/extract": "workspace:*",
+    "@sllaw/search": "workspace:*",
+    "@sllaw/storage": "workspace:*",
+    "workflow": "5.2.1"
   }
 }

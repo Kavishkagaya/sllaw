@@ -5,10 +5,14 @@
   "scripts": {
     "dev": "turbo dev",
     "build": "turbo build",
-    "typecheck": "turbo typecheck"
+    "typecheck": "turbo typecheck",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "env:pull": "vercel env pull apps/web/.env.local --environment=development --yes"
   },
   "devDependencies": {
     "tsx": "^4.23.15",
-    "turbo": "^2.11.9"
+    "turbo": "^2.11.9",
+    "vitest": "5.0.4"
   }
 }

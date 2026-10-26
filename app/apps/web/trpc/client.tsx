@@ -9,11 +9,11 @@ import superjson from "superjson";
 
 export const { TRPCProvider, useTRPC } = createTRPCContext<AppRouter>();
 
+/** The same client outside React (stores: the upload store calls mutations from its actions). */
+export const trpcClient = createTRPCClient<AppRouter>({ links: [httpBatchLink({ url: "/api/trpc", transformer: superjson })] });
+
 export function TRPCReactProvider({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(() => new QueryClient({ defaultOptions: { queries: { staleTime: 60_000 } } }));
-  const [trpcClient] = useState(() =>
-    createTRPCClient<AppRouter>({ links: [httpBatchLink({ url: "/api/trpc", transformer: superjson })] }),
-  );
   return (
     <QueryClientProvider client={queryClient}>
       <TRPCProvider trpcClient={trpcClient} queryClient={queryClient}>

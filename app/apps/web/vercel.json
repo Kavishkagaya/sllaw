@@ -1,5 +1,6 @@
 {
   "functions": {
-    "app/api/chat/route.ts": { "supportsCancellation": true }
+    "app/api/chat/route.ts": { "supportsCancellation": true },
+    "app/api/files/[id]/events/route.ts": { "supportsCancellation": true }
   }
 }
