@@ -1,6 +1,6 @@
 "use client";
 import { OrganizationSwitcher, UserButton } from "@clerk/nextjs";
-import { Loader2, SquarePen } from "lucide-react";
+import { Briefcase, Loader2, SquarePen } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect } from "react";
@@ -54,6 +54,17 @@ export function AppSidebar({ chats, error }: { chats: Chat[]; error?: string }) 
         </Button>
       </SidebarHeader>
       <SidebarContent>
+        <SidebarGroup>
+          <SidebarMenu>
+            <SidebarMenuItem>
+              <SidebarMenuButton asChild isActive={path === "/cases" || path.startsWith("/cases/")}>
+                <Link href="/cases">
+                  <Briefcase /> <span>Cases</span>
+                </Link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          </SidebarMenu>
+        </SidebarGroup>
         {error && <p className="px-4 py-2 text-xs text-muted-foreground">{error}</p>}
         {!error && !chats.length && <p className="px-4 py-2 text-xs text-muted-foreground">Your chats show here.</p>}
         {[...groups].map(([label, items]) => (

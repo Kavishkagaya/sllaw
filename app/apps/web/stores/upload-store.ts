@@ -14,6 +14,7 @@ export type Phase = "starting" | "uploading" | "processing" | "finished" | "fail
 export type Upload = {
   key: string; // the file id once there is one; a local id before
   fileId: string | null;
+  caseId: string | null; // the case it was added to (a page lists the case's files again once it has an id)
   name: string;
   size: number;
   sent: number; // bytes sent so far
@@ -114,6 +115,7 @@ export const useUploadStore = create<State>()((set, get) => {
           [local]: {
             key: local,
             fileId: null,
+            caseId: target.kind === "case" ? target.caseId : null,
             name: file.name,
             size: file.size,
             sent: 0,
@@ -152,6 +154,7 @@ export const useUploadStore = create<State>()((set, get) => {
           [fileId]: {
             key: fileId,
             fileId,
+            caseId: null,
             name,
             size: 0,
             sent: 0,
@@ -206,6 +209,7 @@ export function useFileStatus(fileId: string, initial?: FileStatus, name?: strin
   return {
     key: fileId,
     fileId,
+    caseId: null,
     name: name ?? "",
     size: 0,
     sent: 0,

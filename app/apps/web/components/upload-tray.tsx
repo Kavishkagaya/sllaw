@@ -2,6 +2,7 @@
 // Every upload in the app, bottom right, wherever the user is: bytes sent, then each step's state as the server
 // reports it (stores/upload-store.ts). Nothing shows when there is nothing to show.
 import { CheckCircle2, Loader2, RotateCw, X, XCircle } from "lucide-react";
+import { usePathname } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { type Upload, useUploadStore } from "@/stores/upload-store";
@@ -17,7 +18,11 @@ const STATE: Record<string, string> = {
 };
 
 export function UploadTray() {
-  const uploads = Object.values(useUploadStore((s) => s.uploads)).filter((u) => u.name);
+  // a case's page lists its own files with their states: the tray leaves those out there
+  const onCase = usePathname().match(/^\/cases\/([0-9a-f-]{36})/)?.[1];
+  const uploads = Object.values(useUploadStore((s) => s.uploads)).filter(
+    (u) => u.name && (!onCase || u.caseId !== onCase),
+  );
   if (!uploads.length) return null;
   return (
     <div className="fixed right-4 bottom-4 z-50 flex w-80 max-w-[calc(100vw-2rem)] flex-col gap-2">
