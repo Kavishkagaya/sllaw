@@ -3,7 +3,7 @@
 // change. OCR is off until OCR_URL is set (extract's httpOcr): a scan is then `no_text` and costs nothing.
 import { llmCategorizer } from "@sllaw/ai";
 import { claimStep, endStep, fileById } from "@sllaw/db";
-import { extract, extractors, httpOcr, type Extractor } from "@sllaw/extract";
+import { extract, extractors, ocrFromEnv, type Extractor } from "@sllaw/extract";
 import { fileIndex } from "@sllaw/search";
 import { blobStore } from "@sllaw/storage";
 import type { Deps, FileRows } from "./pipeline";
@@ -11,8 +11,8 @@ import type { Deps, FileRows } from "./pipeline";
 export const dbRows: FileRows = { get: fileById, claim: claimStep, end: endStep };
 
 let xs: Extractor[] | null = null;
-/** The extractors the app reads files with (OCR ones when OCR_URL is set). */
-export const appExtractors = () => (xs ??= extractors(httpOcr()));
+/** The extractors the app reads files with (OCR ones when OCR_PROVIDER=mistral or OCR_URL is set). */
+export const appExtractors = () => (xs ??= extractors(ocrFromEnv()));
 
 let deps: Deps | null = null;
 export const appDeps = (): Deps =>

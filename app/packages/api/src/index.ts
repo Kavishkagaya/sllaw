@@ -37,7 +37,7 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => found(await reprocessCaseFile(ctx.account, input.caseId, input.fileId, input.steps))),
     removeFile: workspaceUser
       .input(z.object({ caseId: z.uuid(), fileId: z.uuid() }))
-      .mutation(async ({ ctx, input }) => found((await removeCaseFile(ctx.account, input.caseId, input.fileId)) || null)),
+      .mutation(async ({ ctx, input }) => removed(await removeCaseFile(ctx.account, input.caseId, input.fileId))),
   }),
   // A user's own files (file service, owner only), and finishing any upload the user started.
   file: router({
@@ -52,7 +52,7 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => found(await reprocessFile(ctx.account, input.fileId, input.steps))),
     delete: workspaceUser
       .input(z.object({ fileId: z.uuid() }))
-      .mutation(async ({ ctx, input }) => found((await deleteFile(ctx.account, input.fileId)) || null)),
+      .mutation(async ({ ctx, input }) => removed(await deleteFile(ctx.account, input.fileId))),
   }),
   corpus: router({
     doc: publicProcedure.input(z.object({ key: z.string() })).query(({ input }) => getDoc(input.key)),
@@ -66,6 +66,12 @@ export const appRouter = router({
 function found<T>(x: T | null): T {
   if (x == null) throw new TRPCError({ code: "NOT_FOUND" });
   return x;
+}
+
+/** A delete: missing reads as NOT_FOUND; a file a run still works on as CONFLICT (delete it once its steps end). */
+function removed(r: "removed" | "busy" | null) {
+  if (r === "busy") throw new TRPCError({ code: "CONFLICT", message: "The file is still being processed. Delete it once it is done or has failed." });
+  return found(r);
 }
 
 export type AppRouter = typeof appRouter;

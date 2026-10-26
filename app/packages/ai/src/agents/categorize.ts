@@ -31,7 +31,8 @@ export type Card = z.infer<typeof card>;
 /** Reads a file's text and returns its card. `by` is name@version, recorded on the file row (categorize_by). */
 export interface Categorizer {
   readonly by: string;
-  categorize(input: { workspaceId: string; filename: string; text: string }): Promise<Card>;
+  /** Stops when `signal` aborts (the step's time is up). */
+  categorize(input: { workspaceId: string; filename: string; text: string; signal?: AbortSignal }): Promise<Card>;
 }
 
 const HEAD = 24_000; // chars read from the start and the end: enough to tell what a document is, at a few cents per 1k files
@@ -44,13 +45,14 @@ in English, Sinhala or Tamil; write the summary in English and keep names, case 
 
 export const llmCategorizer: Categorizer = {
   by: `llm:${process.env.MODEL_FILES || "default"}@${VERSION}`,
-  async categorize({ workspaceId, filename, text }) {
+  async categorize({ workspaceId, filename, text, signal }) {
     const body = text.length <= HEAD + TAIL ? text : `${text.slice(0, HEAD)}\n\n[… ${text.length - HEAD - TAIL} characters left out …]\n\n${text.slice(-TAIL)}`;
     const { output } = await generateText({
       model: model("files", workspaceId),
       system: instructions,
       prompt: `File name: ${filename}\n\n<document>\n${body}\n</document>`,
       output: Output.object({ schema: card, name: "card" }),
+      abortSignal: signal,
     });
     return output;
   },

@@ -19,14 +19,14 @@ export type FileHit = { id: string; fileId: string; n: number; page: number; tex
 
 export interface Embedder {
   readonly by: string;
-  embed(texts: string[]): Promise<number[][]>;
+  embed(texts: string[], signal?: AbortSignal): Promise<number[][]>;
 }
 
 export interface FileIndex {
   readonly by: string;
-  /** Replaces every chunk of a file. */
-  upsert(chunks: FileChunk[], attrs: Attrs): Promise<void>;
-  remove(fileId: string): Promise<void>;
+  /** Replaces every chunk of a file. Stops between and inside calls when `signal` aborts (the step's time is up). */
+  upsert(chunks: FileChunk[], attrs: Attrs, signal?: AbortSignal): Promise<void>;
+  remove(fileId: string, signal?: AbortSignal): Promise<void>;
   search(query: string, q: FileQuery): Promise<FileHit[]>;
 }
 
@@ -39,12 +39,13 @@ const CHARS = 150_000;
 
 export const bgeM3: Embedder = {
   by: "bge-m3",
-  async embed(texts) {
+  async embed(texts, signal) {
     const out: number[][] = [];
     for (let i = 0; i < texts.length; ) {
       let j = i, n = 0;
       while (j < texts.length && j - i < BATCH && (j === i || n + texts[j]!.length <= CHARS)) n += texts[j++]!.length;
-      out.push(...(await embed(texts.slice(i, j))));
+      signal?.throwIfAborted();
+      out.push(...(await embed(texts.slice(i, j), signal)));
       i = j;
     }
     return out;
@@ -69,22 +70,24 @@ export const FILES = "files"; // the collection; created by scripts/files-collec
 export function zillizFileIndex(embedder: Embedder = bgeM3, collectionName = FILES): FileIndex {
   return {
     by: `${embedder.by}+zilliz:${collectionName}`,
-    async upsert(chunks, a) {
+    async upsert(chunks, a, signal) {
       const fileId = chunks[0]?.fileId;
       if (!fileId) return;
-      const vecs = await embedder.embed(chunks.map((c) => c.text));
-      await this.remove(fileId);
-      for (let i = 0; i < chunks.length; i += BATCH)
+      const vecs = await embedder.embed(chunks.map((c) => c.text), signal);
+      await this.remove(fileId, signal);
+      for (let i = 0; i < chunks.length; i += BATCH) {
+        signal?.throwIfAborted();
         await zilliz("entities/insert", {
           collectionName,
           data: chunks.slice(i, i + BATCH).map((c, k) => ({
             id: c.id, vec: vecs[i + k], text: c.text, file_id: c.fileId, n: c.n, page: c.page,
             workspace_id: a.workspaceId, scopes: a.scopes,
           })),
-        });
+        }, signal);
+      }
     },
-    async remove(fileId) {
-      await zilliz("entities/delete", { collectionName, filter: `file_id == ${list([fileId]).slice(1, -1)}` });
+    async remove(fileId, signal) {
+      await zilliz("entities/delete", { collectionName, filter: `file_id == ${list([fileId]).slice(1, -1)}` }, signal);
     },
     async search(query, q) {
       const filter = fileFilter(q);

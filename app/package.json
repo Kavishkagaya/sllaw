@@ -7,7 +7,8 @@
     "build": "turbo build",
     "typecheck": "turbo typecheck",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "env:pull": "vercel env pull apps/web/.env.local --environment=development --yes"
   },
   "devDependencies": {
     "tsx": "^4.23.15",

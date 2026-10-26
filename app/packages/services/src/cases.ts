@@ -1,7 +1,7 @@
 // Cases. For now only a case's files: who may add and see them is decided here, the file itself is the file
 // service's (./files): a case file is a generic file asked for every step, found under the case's scope.
 import { caseById, caseHasFile, fileById, filesOfCase, linkCaseFile, STEPS } from "@sllaw/db";
-import { createUpload, fileStatus, fileView, removeFile, rerun, type FileInput, type Signed } from "./files";
+import { createUpload, fileStatus, fileView, removeFile, rerun, type FileInput, type Removed, type Signed } from "./files";
 import type { Step } from "@sllaw/db";
 
 /** ponytail: only the case's author may see and change its files until case_shares exists (docs/APP.md, Access:
@@ -47,9 +47,8 @@ export async function reprocessCaseFile(a: Signed, caseId: string, fileId: strin
   return f ? rerun(f, steps) : null;
 }
 
-/** Removes a file from the case, and so everywhere: a case file has no use outside its case. */
-export async function removeCaseFile(a: Signed, caseId: string, fileId: string) {
-  if (!(await caseFile(a, caseId, fileId))) return false;
-  await removeFile(fileId);
-  return true;
+/** Removes a file from the case, and so everywhere: a case file has no use outside its case. null when the user
+ *  cannot see it; "busy" while a run still works on it. */
+export async function removeCaseFile(a: Signed, caseId: string, fileId: string): Promise<Removed | null> {
+  return (await caseFile(a, caseId, fileId)) ? removeFile(fileId) : null;
 }

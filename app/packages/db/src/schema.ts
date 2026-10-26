@@ -92,7 +92,7 @@ export const files = pgTable(
     mime: text().notNull(),
     size: bigint({ mode: "number" }).notNull(),
     sha256: text(), // set by the extract step (it reads the bytes); null for a file no step reads
-    uploadState: text("upload_state").notNull().default("pending"), // pending | stored | failed
+    uploadState: text("upload_state").notNull().default("pending"), // pending | stored | failed | deleting (files.ts, markDeleting)
     extractState: text("extract_state"),
     extractBy: text("extract_by"),
     extractError: jsonb("extract_error").$type<StepError>(),

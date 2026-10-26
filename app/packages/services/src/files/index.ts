@@ -4,7 +4,7 @@
 // add or see a file through a case is the case service's (../cases.ts). Functions taking an Account are for a
 // user's own files (owner only); the rest take ids and trust their caller.
 import {
-  createFile, deleteFileRow, fileById, filesOfOwner, resetSteps, setRun, setUploaded, STEPS, type FileRow,
+  createFile, deleteFileRow, fileById, filesOfOwner, markDeleting, resetSteps, setRun, setUploaded, STEPS, type FileRow,
   type Step, type StepError,
 } from "@sllaw/db";
 import { getJson } from "@sllaw/storage";
@@ -52,22 +52,29 @@ export async function startProcessing(id: string) {
 
 /** Runs the given steps again, or by default the ones trying again can fix: failed with a retryable error, and left
  *  pending or running by a run that stopped. A new text means new categories and chunks: redoing extract redoes
- *  everything after it (name extract to read a file again, e.g. once OCR is on for a no_text scan). */
+ *  everything after it (name extract to read a file again, e.g. once OCR is on for a no_text scan). While a run is
+ *  busy with the file nothing is reset and no run started (a second "Try again"): the row as it is comes back, and
+ *  the caller follows the run already working on it. */
 export async function rerun(f: FileRow, steps?: Step[]) {
   if (f.uploadState !== "stored") return null;
   const redo = steps ?? STEPS.filter((s) => canRetry(f[`${s}State`], f[`${s}Error`]));
   if (!redo.length) return f;
-  await resetSteps(f.id, redo.includes("extract") ? STEPS : redo);
-  await startProcessing(f.id);
+  if (await resetSteps(f.id, redo.includes("extract") ? STEPS : redo)) await startProcessing(f.id);
   return fileById(f.id);
 }
 
-/** Deletes a file everywhere: its vectors, its folder in the store, then its row (links to it cascade). An index
- *  step still embedding when this runs removes its own vectors when it finds the row gone (pipeline.ts). */
-export async function removeFile(id: string, d: Deps = appDeps()) {
+/** Why a delete did not happen: a run is still working on the file (wait for its steps to end, done or failed). */
+export type Removed = "removed" | "busy";
+
+/** Deletes a file everywhere, once no run is busy with it: the row is marked deleting (no run claims it again), then
+ *  its vectors and its folder in the store go, then the row (links to it cascade). A delete that fails half way
+ *  leaves the row deleting, hidden from lists; deleting it again finishes the job. */
+export async function removeFile(id: string, d: Deps = appDeps()): Promise<Removed> {
+  if (!(await markDeleting(id))) return "busy";
   await d.index.remove(id);
   await d.store.deletePrefix(keys.dir(id));
   await deleteFileRow(id);
+  return "removed";
 }
 
 /** A file's row, its card's summary, a download link and its status. */
@@ -171,7 +178,7 @@ export async function putUpload(a: Signed, id: string, bytes: Uint8Array) {
 export async function finishUpload(a: Signed, id: string) {
   const f = await own(a, id);
   if (!f) return null;
-  if (f.uploadState === "stored") return fileStatus(f);
+  if (f.uploadState !== "pending") return fileStatus(f); // stored already (a second call), failed, or deleting
   const d = appDeps();
   const head = await d.store.head(keys.original(id));
   if (!head) throw new Error("the file has not reached the store");
@@ -180,8 +187,8 @@ export async function finishUpload(a: Signed, id: string) {
     await setUploaded(id, "failed", head.size);
     throw new Error("file too large");
   }
-  await setUploaded(id, "stored", head.size);
-  if (STEPS.some((s) => f[`${s}State`] === "pending")) await startProcessing(id);
+  // only the call that moves it pending -> stored starts the run: two finishUpload calls at once start one
+  if ((await setUploaded(id, "stored", head.size)) && STEPS.some((s) => f[`${s}State`] === "pending")) await startProcessing(id);
   return fileStatus((await fileById(id))!);
 }
 
@@ -203,13 +210,12 @@ export async function reprocessFile(a: Signed, id: string, steps?: Step[]) {
   return f ? rerun(f, steps) : null;
 }
 
-export async function deleteFile(a: Signed, id: string) {
-  if (!(await own(a, id))) return false;
-  await removeFile(id);
-  return true;
+/** null when the file is not this user's; "busy" while a run still works on it. */
+export async function deleteFile(a: Signed, id: string): Promise<Removed | null> {
+  return (await own(a, id)) ? removeFile(id) : null;
 }
 
 export { isRetryable } from "./errors";
-export { runFile, runStep, keys, noWriter, type Deps, type FileEvent, type FileRows, type StateWriter } from "./pipeline";
+export { runFile, runStep, keys, noWriter, STEP_TIMEOUT, StepTimeout, type Deps, type FileEvent, type FileRows, type StateWriter } from "./pipeline";
 export { fileWorkflow } from "./workflow";
 export { appDeps, appExtractors, dbRows } from "./deps";

@@ -1,6 +1,6 @@
 import { createServer } from "node:http";
-import { describe, expect, it } from "vitest";
-import { extract, extractors, httpOcr, NoText, Unreadable, type OcrProvider } from ".";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { extract, extractors, httpOcr, mistralOcr, NoText, ocrFromEnv, Unreadable, type OcrProvider } from ".";
 
 const enc = (s: string) => new TextEncoder().encode(s);
 const LONG = "The petitioner states that the respondent unlawfully entered the land in dispute.";
@@ -142,5 +142,47 @@ describe("httpOcr", () => {
     } finally {
       srv.close();
     }
+  });
+});
+
+describe("mistralOcr", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("is off unless OCR_PROVIDER=mistral, and needs a key then", () => {
+    expect(ocrFromEnv({ MISTRAL_API_KEY: "k" })).toBeNull();
+    expect(() => ocrFromEnv({ OCR_PROVIDER: "mistral" })).toThrow(/MISTRAL_API_KEY/);
+    expect(ocrFromEnv({ OCR_PROVIDER: "mistral", MISTRAL_API_KEY: "k" })?.by).toBe("mistral:mistral-ocr-latest@1");
+  });
+
+  it("sends the signed URL as a document or an image, and returns the pages in order without image placeholders", async () => {
+    const sent: { url: string; auth: string; body: any }[] = [];
+    vi.stubGlobal("fetch", async (url: string, init: RequestInit) => {
+      sent.push({ url, auth: (init.headers as Record<string, string>).Authorization!, body: JSON.parse(init.body as string) });
+      return Response.json({ pages: [{ index: 1, markdown: "two" }, { index: 0, markdown: "one ![img-0.jpeg](img-0.jpeg)" }] });
+    });
+    const m = mistralOcr({ MISTRAL_API_KEY: "k", MISTRAL_OCR_MODEL: "mistral-ocr-2512" });
+    expect(m.by).toBe("mistral:mistral-ocr-2512@1");
+    expect(await m.ocr({ url: "https://s/f.pdf", mime: "application/pdf", filename: "f.pdf" })).toEqual(["one", "two"]);
+    await m.ocr({ url: "https://s/p.png", mime: "image/png", filename: "p.png" });
+    expect(sent[0]).toEqual({
+      url: "https://api.mistral.ai/v1/ocr", auth: "Bearer k",
+      body: { model: "mistral-ocr-2512", document: { type: "document_url", document_url: "https://s/f.pdf" } },
+    });
+    expect(sent[1]!.body.document).toEqual({ type: "image_url", image_url: "https://s/p.png" });
+  });
+
+  it("stops when the step's signal aborts, with the step's own reason", async () => {
+    vi.stubGlobal("fetch", (_: string, init: RequestInit) =>
+      new Promise((_, reject) => init.signal!.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")))));
+    const ac = new AbortController();
+    const why = Object.assign(new Error("extract took longer than 240 s"), { retryable: true });
+    const p = mistralOcr({ MISTRAL_API_KEY: "k" }).ocr({ url: "u", mime: "application/pdf", filename: "f.pdf" }, ac.signal);
+    ac.abort(why);
+    await expect(p).rejects.toBe(why);
+  });
+
+  it("an HTTP error carries its status (401: a bad key, not retried)", async () => {
+    vi.stubGlobal("fetch", async () => new Response("unauthorized", { status: 401 }));
+    await expect(mistralOcr({ MISTRAL_API_KEY: "bad" }).ocr({ url: "u", mime: "application/pdf", filename: "f.pdf" })).rejects.toMatchObject({ status: 401 });
   });
 });

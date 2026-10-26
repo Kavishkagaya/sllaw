@@ -115,6 +115,33 @@ in v1; an entity graph can be built later from the same per-file JSON.
   its pages as JSON; that is the whole contract** (`OcrProvider`, `httpOcr`: POST {url, mime, filename} ->
   {pages: [{n, text}]}; on when `OCR_URL` is set). We send no bytes and split no pages. A PDF's pages with a text
   layer keep it; OCR fills the ones without. Provider not picked yet; not compared on Sinhala/Tamil scans.
+- **Mistral OCR wired, off (user, 2026-10-26):** `mistralOcr` (POST api.mistral.ai/v1/ocr with the signed URL;
+  markdown per page, image placeholders dropped) is the first provider, on only with `OCR_PROVIDER=mistral` +
+  `MISTRAL_API_KEY` (no key yet). About $4 per 1,000 pages (Mistral pricing, surveyed 2026-10-26); not on Vercel AI
+  Gateway, so its own key. Other options surveyed 2026-10-26, none tested on our scans: Gemini Flash via the gateway
+  (per token, est. well under $1 per 1,000 pages), Google Cloud Vision (1,000 free/month, then $1.50 per 1,000),
+  Document AI (best on Tamil, CER 0.78%, arXiv 2507.18264; Surya best on Sinhala, WER 2.61%), Azure free tier (first
+  2 pages per request only: no use), Workers AI `toMarkdown` (text layer only; images are described, not read).
+- **Files bucket `sllaw-files` (user, 2026-10-26):** R2, private, location APAC, created 2026-10-26 apart from the
+  ETL's `sllaw`. No public access: r2.dev URL disabled, no custom domain; checked 2026-10-26: an unsigned GET is
+  refused (400), r2.dev 401, signed GET and PUT 200. Reached only by signed URLs for one file (15 min). CORS: PUT with
+  Content-Type from https://sllaw.vercel.app and http://localhost:3000 (preview deployments' domains are not in it:
+  uploads from a preview fail until added).
+- **Cloudflare tokens per resource (user, 2026-10-26):** the app holds no full-access token. Account tokens:
+  `sllaw-app: R2 sllaw-files (objects read/write)` (Bucket Item Read + Write on `sllaw-files` only; its S3 keys are
+  `R2_ACCESS_KEY_ID` = token id, `R2_SECRET_ACCESS_KEY` = sha256 of the value) and `sllaw-app: Workers AI (run models)`
+  (Workers AI Read: bge-m3 embedding; `CLOUDFLARE_API_TOKEN`). Checked 2026-10-26: the R2 token gets 403 on the ETL
+  bucket `sllaw`, the AI token 403 on R2. Set in apps/web/.env.local and Vercel Production. The full-access token stays
+  in the repo root .env for the ETL only.
+- **Step timeouts (user, 2026-10-26):** each step has a time limit (extract 240 s, categorize 90 s, index 180 s),
+  below Vercel's default 300 s function limit, so a slow step ends itself instead of being cut off and left running
+  for 15 minutes. The step's calls are cancelled, not abandoned. A timeout is retried (3 attempts in all), then failed
+  with "Try again": worst case about 12 minutes for extract before the user hears it failed.
+- **Delete and retry wait for the pipeline (user, 2026-10-26):** a file is deleted only once no run is busy with
+  it (every step done, failed or no_text; a run silent for 15 minutes counts as stopped). Before, a delete during the
+  index step could leave its vectors searchable under the case's scope. A second "Try again" while a run works
+  starts nothing, and a run that lost a step to another run cannot write its end (two runs writing one step's
+  result was possible on a double click or two tabs).
 - **File service, case service, live status (user, 2026-10-26):** file processing is one generic service
   (`services/src/files`): a caller creates a file with the steps it needs (none for a logo; extract for an
   attachment; extract + categorize + index for a case file) and the scopes it is found under, stored on the row

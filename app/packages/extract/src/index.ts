@@ -1,6 +1,6 @@
 import { docxExtractor } from "./docx";
 import { NoText, Unreadable, type Extracted, type ExtractCtx, type Extractor } from "./extractor";
-import { httpOcr, ocrImageExtractor, ocrPdfExtractor, type OcrProvider } from "./ocr";
+import { httpOcr, mistralOcr, ocrFromEnv, ocrImageExtractor, ocrPdfExtractor, type OcrProvider } from "./ocr";
 import { pdfExtractor } from "./pdf";
 import { textExtractor } from "./text";
 
@@ -27,13 +27,15 @@ export async function extract(bytes: Uint8Array, mime: string, filename: string,
     pages = await x.extract(bytes, mime, filename, ctx);
   } catch (e) {
     // a service's error (OCR) says itself whether to try again; anything else came from parsing these bytes
-    const told = e instanceof NoText || typeof (e as { status?: unknown }).status === "number" || typeof (e as { retryable?: unknown }).retryable === "boolean";
+    // (the step's timeout carries retryable: it passes through too)
+    const err = (e ?? {}) as { status?: unknown; retryable?: unknown };
+    const told = e instanceof NoText || typeof err.status === "number" || typeof err.retryable === "boolean";
     if (told) throw e;
     throw new Unreadable(`${x.name} could not read ${filename}: ${(e as Error)?.message ?? e}`);
   }
   return { by: `${x.name}@${x.version}`, pages, totalPages: pages.length };
 }
 
-export { docxExtractor, httpOcr, ocrImageExtractor, ocrPdfExtractor, pdfExtractor, textExtractor, type OcrProvider };
+export { docxExtractor, httpOcr, mistralOcr, ocrFromEnv, ocrImageExtractor, ocrPdfExtractor, pdfExtractor, textExtractor, type OcrProvider };
 export { pdfPagesText } from "./pdf";
 export { NoText, Unreadable, type Extracted, type ExtractCtx, type Extractor, type Page } from "./extractor";

@@ -27,8 +27,9 @@ export const keys = {
 export interface FileRows {
   get(id: string): Promise<FileRow | null>;
   claim(id: string, step: Step, runId?: string): Promise<FileRow | null>;
-  /** The time written, or null when the step was no longer running (reset or claimed again meanwhile). */
-  end(id: string, step: Step, e: StepEnd): Promise<Date | null>;
+  /** The time written, or null when the step was no longer running, or (with runId) no longer this run's: reset or
+   *  claimed by another run meanwhile. */
+  end(id: string, step: Step, e: StepEnd, runId?: string): Promise<Date | null>;
 }
 
 /** One state change of a file, as the UI gets it. `at` is the time the row was written (ms): an event older than the
@@ -54,7 +55,34 @@ const stateOf = (f: FileRow, s: Step) => f[`${s}State`];
 /** What runStep does when a step throws: record it as failed (default), or, while retries are left and the error is
  *  worth another try (./errors), put it back to pending with the error and throw, so the caller (a workflow step)
  *  retries it. An error not worth another try is recorded failed at once. */
-export type RunOpts = { retriesLeft?: boolean; writer?: StateWriter; runId?: string };
+export type RunOpts = { retriesLeft?: boolean; writer?: StateWriter; runId?: string; timeouts?: Partial<Record<Step, number>> };
+
+/** How long each step may take (ms). Under Vercel's function limit (300 s by default, the workflow's step route
+ *  included), so a slow step ends itself, is recorded and retried, rather than its function being cut off with the
+ *  step left running. Raise them only with the function's maxDuration. A file needing longer (a very long scan) fails
+ *  with the timeout after its 3 attempts. */
+export const STEP_TIMEOUT: Record<Step, number> = { extract: 240_000, categorize: 90_000, index: 180_000 };
+
+/** A step that ran out of time. Retryable: a slow model or OCR call is often quick the next time. */
+export class StepTimeout extends Error {
+  readonly retryable = true;
+  constructor(step: Step, ms: number) {
+    super(`${step} took longer than ${Math.round(ms / 1000)} s`);
+    this.name = "StepTimeout";
+  }
+}
+
+/** The step's work, given up when its signal aborts. The calls inside take the signal and stop too (fetch, the model,
+ *  the index); work that cannot be stopped (parsing a PDF) is left to finish and its result dropped. */
+function untilAborted<T>(work: Promise<T>, signal: AbortSignal): Promise<T> {
+  work.catch(() => {}); // once given up, its own later failure is nobody's
+  return new Promise<T>((resolve, reject) => {
+    const stop = () => reject(signal.reason);
+    if (signal.aborted) return stop();
+    signal.addEventListener("abort", stop, { once: true });
+    work.then(resolve, reject).finally(() => signal.removeEventListener("abort", stop));
+  });
+}
 
 /** Runs one step if it is due: claimed (pending -> running), run, ended. The end state; "busy" when another run holds
  *  the step; null when it was not run (not needed, done, or extract not done). With `runId`, a step this run left
@@ -68,20 +96,25 @@ export async function runStep(id: string, step: Step, d: Deps, o: RunOpts = {}):
   const claimed = await d.rows.claim(id, step, o.runId);
   if (!claimed) return "busy";
   await w.write({ fileId: id, step, state: "running", error: null, at: claimed.updatedAt.getTime() });
+  const ms = o.timeouts?.[step] ?? STEP_TIMEOUT[step];
+  const ac = new AbortController();
+  const timer = setTimeout(() => ac.abort(new StepTimeout(step, ms)), ms);
   let end: StepEnd;
   try {
-    end = await STEP[step](claimed, d);
+    end = await untilAborted(STEP[step](claimed, d, ac.signal), ac.signal);
   } catch (e) {
     const error: StepError = { message: String((e as Error)?.message ?? e).slice(0, 1000), retryable: isRetryable(e) };
     if (o.retriesLeft && error.retryable) {
-      const at = await d.rows.end(id, step, { state: "pending", error });
+      const at = await d.rows.end(id, step, { state: "pending", error }, o.runId);
       if (at) await w.write({ fileId: id, step, state: "pending", error, at: at.getTime() });
       throw e;
     }
     end = { state: "failed", error };
+  } finally {
+    clearTimeout(timer);
   }
-  const at = await d.rows.end(id, step, end);
-  if (!at) return null; // reset or reclaimed while it ran: that run's states are the ones that count
+  const at = await d.rows.end(id, step, end, o.runId);
+  if (!at) return null; // reset or claimed by another run while it ran: that run's states are the ones that count
   await w.write({ fileId: id, step, state: end.state, error: end.error ?? null, at: at.getTime() });
   return end.state;
 }
@@ -102,14 +135,14 @@ export async function runFile(id: string, d: Deps, only: readonly Step[] = ["ext
 
 type Pages = Pick<Extracted, "by" | "pages">;
 
-const STEP: Record<Step, (f: FileRow, d: Deps) => Promise<StepEnd>> = {
-  async extract(f, d) {
+const STEP: Record<Step, (f: FileRow, d: Deps, signal: AbortSignal) => Promise<StepEnd>> = {
+  async extract(f, d, signal) {
     const blob = await d.store.get(keys.original(f.id));
     if (!blob) return { state: "failed", error: { message: "the original is not in the store: upload it again", retryable: false } };
     const sha256 = Buffer.from(await crypto.subtle.digest("SHA-256", blob.bytes as BufferSource)).toString("hex");
     try {
       // OCR fetches the file itself: a signed URL, good for the length of a step
-      const x = await d.extract(blob.bytes, f.mime, f.name, { url: () => d.store.downloadUrl(keys.original(f.id), 15 * 60) });
+      const x = await d.extract(blob.bytes, f.mime, f.name, { url: () => d.store.downloadUrl(keys.original(f.id), 15 * 60), signal });
       await putJson(d.store, keys.extract(f.id), { by: x.by, pages: x.pages } satisfies Pages);
       return { state: "done", by: x.by, set: { sha256, pages: x.totalPages } };
     } catch (e) {
@@ -119,24 +152,23 @@ const STEP: Record<Step, (f: FileRow, d: Deps) => Promise<StepEnd>> = {
     }
   },
 
-  async categorize(f, d) {
+  async categorize(f, d, signal) {
     const x = await getJson<Pages>(d.store, keys.extract(f.id));
     if (!x) return { state: "failed", error: { message: "the text is missing: read the file again", retryable: false } };
-    const card = await d.categorizer.categorize({ workspaceId: f.workspaceId, filename: f.name, text: x.pages.map((p) => p.text).join("\n\n") });
+    const card = await d.categorizer.categorize({ workspaceId: f.workspaceId, filename: f.name, text: x.pages.map((p) => p.text).join("\n\n"), signal });
     await putJson(d.store, keys.card(f.id), card);
     const { summary: _, docType, ...meta } = card;
     return { state: "done", by: d.categorizer.by, set: { category: docType, meta } };
   },
 
-  async index(f, d) {
+  async index(f, d, signal) {
     const x = await getJson<Pages>(d.store, keys.extract(f.id));
     if (!x) return { state: "failed", error: { message: "the text is missing: read the file again", retryable: false } };
     const chunks = chunkPages(f.id, x.pages);
     await putJson(d.store, keys.chunks(f.id), chunks);
-    if (chunks.length) await d.index.upsert(chunks, { workspaceId: f.workspaceId, scopes: f.scopes });
-    else await d.index.remove(f.id);
-    // deleted while it was embedding: deleteFile removed the vectors before these were written, so remove them now
-    if (chunks.length && !(await d.rows.get(f.id))) await d.index.remove(f.id);
+    // no delete runs meanwhile: a file is deleted only once no run is busy with it (db markDeleting)
+    if (chunks.length) await d.index.upsert(chunks, { workspaceId: f.workspaceId, scopes: f.scopes }, signal);
+    else await d.index.remove(f.id, signal);
     return { state: "done", by: indexBy(d.index), set: { chunks: chunks.length } };
   },
 };

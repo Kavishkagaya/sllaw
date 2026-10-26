@@ -10,7 +10,10 @@ pnpm test         # unit tests (Vitest), every package; pnpm test:watch on chang
 pnpm build
 ```
 
-Env: `.env.example` (one copy as `apps/web/.env.local`).
+Env: `pnpm env:pull` writes `apps/web/.env.local` from Vercel's Development variables (the dev database, dev
+Clerk, R2 `sllaw-files`, the scoped Cloudflare tokens; `vercel link` in `app/` first). A new variable goes into Vercel
+(Development, and Production with its production value) and `.env.example`. Plain `vercel env pull` in `app/` writes
+`app/.env.local`, which nothing reads.
 
 ## Boundaries
 
@@ -41,7 +44,8 @@ apps/web → api → services → db
   `R2_FILES_BUCKET`, apart from the ETL's bucket) or memory (`STORAGE=memory`, tests and local runs).
 - **`extract`**: a file's bytes -> its text, page by page. One `Extractor` per format (unpdf for text-layer PDFs,
   mammoth for .docx, plain text and HTML); OCR through an `OcrProvider`: the endpoint gets a signed URL to the
-  whole file and returns its pages as JSON (`httpOcr`, on when `OCR_URL` is set); `NoText` when there is none.
+  whole file and returns its pages as JSON (`ocrFromEnv`: `mistralOcr` with `OCR_PROVIDER=mistral` + `MISTRAL_API_KEY`,
+  else `httpOcr` when `OCR_URL` is set, else off); `NoText` when there is none.
 - **`services`**: the business logic. Calls the queries in `db`, `etl_db` and `search` and the agents in `ai`;
   never writes SQL or imports drizzle. Builds the `ctx` agents run with.
 - **`ai`**: LLMs, tools and agents. DeepSeek via Vercel AI Gateway, one model per task (`MODEL_<TASK>` env);
@@ -72,7 +76,7 @@ its id in `files.run_id`).
 
 Three pipelines on one `files` row (`services/src/files/pipeline.ts`), each behind its package's interface, joined
 only by the row's step states and the file's folder in the store (`files/<id>/`): **extract** (original ->
-`extract.json`; a scan goes to the OCR endpoint as a signed URL when `OCR_URL` is set), then side by side **categorize** (->
+`extract.json`; a scan goes to the OCR provider as a signed URL when one is set), then side by side **categorize** (->
 `card.json`; `category` + `meta` on the row, the summary stays in the store) and **index** (-> `chunks.json` +
 vectors under the row's `scopes`). `runStep` is the only writer of step state, for the workflow and the tests alike, and writes every state it sets to a `StateWriter`: in a workflow, the run's stream. A step's state is
 null when the file does not need it (an asset: stored and done). No file content in Postgres.
@@ -85,7 +89,14 @@ Errors are retryable or not (`services/src/files/errors.ts`, the one rule): netw
 and unknown errors are retried by the workflow (3 attempts); a file its parser cannot read (extract's `Unreadable`)
 and other 4xx fail at once. A step's error is `{ message, retryable }` on the row, and the UI offers "Try again" only
 when it can help. No sweep or cron: a step whose function was cut off is retried by its run, which claims it back at
-once; `file.reprocess` reruns retryable failures and steps a stopped run left open. `<step>_by` records what produced each output, so files done by an older version can be found.
+once; `file.reprocess` reruns retryable failures and steps a stopped run left open.
+**Busy** (db `files.ts`, one SQL rule): a step running, extract pending, or categorize/index pending after extract
+is done, within 15 minutes of the row's last write. While busy, delete is refused (CONFLICT) and reprocess starts
+no second run. Delete marks the row `deleting` first (no run claims it), then removes vectors, blobs, row. A claim
+makes its run the file's owner (`run_id`); a step's end is written only by its owner.
+**Step timeouts** (`STEP_TIMEOUT`, pipeline.ts): extract 240 s, categorize 90 s, index 180 s, under Vercel's 300 s
+function limit. `runStep` aborts the step's signal (passed to OCR, the model, embedding and Zilliz calls) and records
+a retryable `StepTimeout`: 3 attempts, then failed with "Try again". Raise them only with the function's maxDuration. `<step>_by` records what produced each output, so files done by an older version can be found.
 
 ## Tests
 

@@ -26,23 +26,37 @@ export function chunkPages(fileId: string, pages: { n: number; text: string }[])
   return out;
 }
 
-/** Paragraphs, each at most MAX: a longer one is cut at sentence ends, then at spaces. */
+/** Paragraphs, each at most MAX: a longer one is cut at sentence ends, a longer sentence by cut(). */
 function pieces(text: string): string[] {
   return text.split(/\n\s*\n/).flatMap((para) => {
     para = para.trim();
     if (para.length <= MAX) return para ? [para] : [];
     const out: string[] = [];
     let cur = "";
-    for (const s of para.split(/(?<=[.;:?!])\s+/)) {
-      for (const w of s.length > MAX ? s.match(new RegExp(`.{1,${MAX}}(\\s|$)`, "gs")) ?? [s] : [s]) {
-        if (cur && cur.length + w.length + 1 > MAX) {
-          out.push(cur);
-          cur = "";
-        }
-        cur = cur ? `${cur} ${w.trim()}` : w.trim();
+    for (const s of para.split(/(?<=[.;:?!])\s+/).flatMap(cut)) {
+      if (cur && cur.length + s.length + 1 > MAX) {
+        out.push(cur);
+        cur = "";
       }
+      cur = cur ? `${cur} ${s}` : s;
     }
     if (cur) out.push(cur);
     return out;
   });
+}
+
+/** A sentence in pieces of at most MAX: at the last whitespace that fits, or at MAX when there is none (a run with no
+ *  spaces: a URL, base64, OCR noise). Only the whitespace cut at is dropped, never text. */
+export function cut(s: string): string[] {
+  const out: string[] = [];
+  s = s.trim();
+  while (s.length > MAX) {
+    const ws = s.slice(0, MAX + 1).search(/\s\S*$/); // the last whitespace within MAX + 1 chars
+    let at = ws > 0 ? ws : MAX;
+    if (ws <= 0 && /[\uD800-\uDBFF]/.test(s[at - 1]!)) at--; // never split a surrogate pair (emoji)
+    out.push(s.slice(0, at).trimEnd());
+    s = s.slice(at).trimStart();
+  }
+  if (s) out.push(s);
+  return out;
 }

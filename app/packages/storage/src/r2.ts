@@ -33,10 +33,14 @@ export function r2Store(env = process.env): BlobStore {
       return { bytes: new Uint8Array(await r.arrayBuffer()), contentType: r.headers.get("content-type") };
     },
     async head(key) {
-      const r = await aws.fetch(url(key), { method: "HEAD" });
+      // identity: R2 gzips text types (text/plain, json, html) for a client that accepts it, and a gzipped answer has
+      // no content-length: the size read 0 and the upload size check let any text file through (2026-10-26)
+      const r = await aws.fetch(url(key), { method: "HEAD", headers: { "Accept-Encoding": "identity" } });
       if (r.status === 404) return null;
       await ok(r, `head ${key}`);
-      return { size: Number(r.headers.get("content-length") ?? 0), contentType: r.headers.get("content-type") };
+      const len = r.headers.get("content-length");
+      if (len == null) throw new Error(`r2 head ${key}: no content-length`);
+      return { size: Number(len), contentType: r.headers.get("content-type") };
     },
     async deletePrefix(prefix) {
       let n = 0;

@@ -5,7 +5,7 @@ import { extract } from "@sllaw/extract";
 import { memoryFileIndex } from "@sllaw/search";
 import { getJson, memoryStore } from "@sllaw/storage";
 import { describe, expect, it } from "vitest";
-import { keys, runFile, runStep, type Deps, type FileEvent, type FileRows } from "./pipeline";
+import { keys, runFile, runStep, StepTimeout, type Deps, type FileEvent, type FileRows } from "./pipeline";
 
 const WS = "00000000-0000-0000-0000-00000000000a";
 const CASE = "00000000-0000-0000-0000-0000000000c1";
@@ -15,7 +15,8 @@ const steps = { extractState: "pending", categorizeState: "pending", indexState:
 let clock = Date.now();
 const tick = () => new Date(++clock); // row writes in order, never two at the same ms
 
-/** The rows as claimStep / endStep keep them: claim pending (or running and left by the same run), end only running. */
+/** The rows as claimStep / endStep keep them: claim pending (or running and left by the same run; the claim makes
+ *  the run the owner), end only running and, with a runId, only the owner. */
 function memoryRows(): FileRows & { put(f: Partial<FileRow> & { id: string }): void; rows: Map<string, FileRow> } {
   const rows = new Map<string, FileRow>();
   const base = {
@@ -32,13 +33,13 @@ function memoryRows(): FileRows & { put(f: Partial<FileRow> & { id: string }): v
       const f = rows.get(id);
       const state = f?.[`${step}State`];
       if (!f || f.uploadState !== "stored" || !(state === "pending" || (state === "running" && runId && f.runId === runId))) return null;
-      const g = { ...f, [`${step}State`]: "running", updatedAt: tick() };
+      const g = { ...f, [`${step}State`]: "running", ...(runId && { runId }), updatedAt: tick() };
       rows.set(id, g);
       return g;
     },
-    async end(id, step: Step, e: StepEnd) {
+    async end(id, step: Step, e: StepEnd, runId?: string) {
       const f = rows.get(id);
-      if (!f || f[`${step}State`] !== "running") return null;
+      if (!f || f[`${step}State`] !== "running" || (runId && f.runId !== runId)) return null;
       const at = tick();
       rows.set(id, { ...f, ...e.set, [`${step}State`]: e.state, [`${step}By`]: e.by ?? null, [`${step}Error`]: e.error ?? null, updatedAt: at });
       return at;
@@ -160,15 +161,20 @@ describe("when a step cannot finish", () => {
     expect(rows.rows.get("gone")!.extractError!.retryable).toBe(false);
   });
 
-  it("a file deleted while its index step embeds leaves no vectors behind", async () => {
-    const { rows, index, d, file } = setup();
-    await file("del", "A deed of transfer of the land.");
-    await runStep("del", "extract", d);
-    const upsert = d.index.upsert.bind(d.index);
-    // deleteFile runs between the embedding and the write: it removes nothing yet, and the row is gone
-    d.index = { ...d.index, upsert: async (c, a) => { await d.index.remove("del"); rows.rows.delete("del"); await upsert(c, a); } };
-    expect(await runStep("del", "index", d)).toBeNull();
-    expect(index.rows()).toHaveLength(0);
+  it("a run that lost the step meanwhile does not write its end over the new owner's", async () => {
+    const { rows, d, file } = setup();
+    await file("own", "A plaint about rent arrears.");
+    await runStep("own", "extract", d, { runId: "run-1" });
+    // while run-1 categorizes, a retry from the UI resets the step and run-2 claims it
+    d.categorizer = {
+      by: "slow@1",
+      categorize: async () => {
+        rows.put({ ...rows.rows.get("own")!, categorizeState: "running", runId: "run-2" });
+        return card;
+      },
+    };
+    expect(await runStep("own", "categorize", d, { runId: "run-1" })).toBeNull();
+    expect(rows.rows.get("own")).toMatchObject({ categorizeState: "running", runId: "run-2", category: null });
   });
 });
 
@@ -215,6 +221,40 @@ describe("retries", () => {
     await file("cut", "An order of the District Court.", { extractState: "running", runId: "run-1" });
     expect(await runStep("cut", "extract", d, { runId: "run-0" })).toBe("busy");
     expect(await runStep("cut", "extract", d, { runId: "run-1" })).toBe("done");
+  });
+});
+
+describe("step timeouts", () => {
+  it("a step out of time is cancelled: its calls get the abort, it goes back to pending for the retry", async () => {
+    const { rows, d, file } = setup();
+    let seen: AbortSignal | undefined;
+    d.categorizer = {
+      by: "stuck@1",
+      // waits for its signal like fetch and the AI SDK do
+      categorize: ({ signal }) => new Promise((_, reject) => ((seen = signal), signal!.addEventListener("abort", () => reject(signal!.reason)))),
+    };
+    await file("slow", "A plaint about rent arrears.");
+    await runStep("slow", "extract", d);
+    await expect(runStep("slow", "categorize", d, { retriesLeft: true, timeouts: { categorize: 30 } })).rejects.toBeInstanceOf(StepTimeout);
+    expect(seen!.aborted).toBe(true);
+    expect(rows.rows.get("slow")).toMatchObject({ categorizeState: "pending", categorizeError: { message: "categorize took longer than 0 s", retryable: true } });
+  });
+
+  it("ends at its time even when the work ignores the signal; out of retries it is failed, retryable from the UI", async () => {
+    const { rows, d, file } = setup();
+    d.categorizer = { by: "deaf@1", categorize: () => new Promise(() => {}) };
+    await file("deaf", "A deed of transfer.");
+    await runStep("deaf", "extract", d);
+    const t = Date.now();
+    expect(await runStep("deaf", "categorize", d, { retriesLeft: false, timeouts: { categorize: 30 } })).toBe("failed");
+    expect(Date.now() - t).toBeLessThan(1000);
+    expect(rows.rows.get("deaf")!.categorizeError).toMatchObject({ retryable: true });
+  });
+
+  it("a step within its time is not touched", async () => {
+    const { d, file } = setup();
+    await file("ok", "An order of the court.");
+    expect(await runStep("ok", "extract", d, { timeouts: { extract: 5_000 } })).toBe("done");
   });
 });
 
