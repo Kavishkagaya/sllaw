@@ -2,8 +2,9 @@
 // limit, retried on a throw (a model timeout, a Zilliz hiccup); the run resumes after a crash. The row stays the
 // source of truth: every step goes through runStep, which claims it and writes its end, so the sweep and a retry by
 // hand see the same states. extract first, then categorize and index side by side.
-import { getStepMetadata } from "workflow";
+
 import type { Step } from "@sllaw/db";
+import { getStepMetadata } from "workflow";
 import { appDeps } from "./deps";
 import { runStep } from "./pipeline";
 

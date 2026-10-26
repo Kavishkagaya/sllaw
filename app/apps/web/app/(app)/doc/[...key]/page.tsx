@@ -17,10 +17,17 @@ export default async function DocPage({ params }: { params: Promise<{ key: strin
       <main className="flex-1 overflow-y-auto">
         <article className="mx-auto max-w-3xl px-6 py-10">
           <h1 className="font-serif text-3xl leading-tight font-semibold">{doc.title ?? doc.key}</h1>
-          <p className="mt-2 text-sm text-muted-foreground">{doc.key}{doc.commenced ? ` · commenced ${doc.commenced}` : ""}</p>
+          <p className="mt-2 text-sm text-muted-foreground">
+            {doc.key}
+            {doc.commenced ? ` · commenced ${doc.commenced}` : ""}
+          </p>
           <Separator className="my-6" />
           {doc.chunks.map((c) => (
-            <section key={c.id} id={`c${c.id}`} className="scroll-mt-4 rounded-md px-3 py-3 target:bg-brass/10 target:ring-1 target:ring-brass/40">
+            <section
+              key={c.id}
+              id={`c${c.id}`}
+              className="scroll-mt-4 rounded-md px-3 py-3 target:bg-brass/10 target:ring-1 target:ring-brass/40"
+            >
               {c.path && <p className="mb-1 text-xs text-muted-foreground">{c.path}</p>}
               <div className="font-serif leading-relaxed whitespace-pre-wrap">{c.text}</div>
             </section>

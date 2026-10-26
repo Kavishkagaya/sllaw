@@ -3,7 +3,7 @@
 // to file ids in Postgres (files.category) and passed as fileIds. Access is filtered inside the vector query, so top-k is never lost to filtering
 // afterwards; services decides which scopes a request may see. A new vector DB is a new FileIndex; a new embedding
 // model a new Embedder (its `by` changes, so every file's index_by is stale and gets re-indexed).
-import { chunkPages, CHUNKER, type FileChunk } from "./chunk";
+import { CHUNKER, chunkPages, type FileChunk } from "./chunk";
 import { embed } from "./embed";
 import { zilliz } from "./zilliz";
 
@@ -32,7 +32,7 @@ export interface FileIndex {
 
 /** What the index step records on the file row (index_by): chunker + embedder + index. */
 export const indexBy = (index: FileIndex) => `${CHUNKER}+${index.by}`;
-export { chunkPages, CHUNKER, type FileChunk };
+export { CHUNKER, chunkPages, type FileChunk };
 
 const BATCH = 100; // Workers AI: 100 texts and 60,000 tokens per request (etl/embed.py)
 const CHARS = 150_000;
@@ -42,7 +42,8 @@ export const bgeM3: Embedder = {
   async embed(texts) {
     const out: number[][] = [];
     for (let i = 0; i < texts.length; ) {
-      let j = i, n = 0;
+      let j = i,
+        n = 0;
       while (j < texts.length && j - i < BATCH && (j === i || n + texts[j]!.length <= CHARS)) n += texts[j++]!.length;
       out.push(...(await embed(texts.slice(i, j))));
       i = j;
@@ -59,7 +60,10 @@ const list = (xs: string[]) => {
 
 export function fileFilter(q: Pick<FileQuery, "workspaceId" | "scopes" | "fileIds">) {
   if (!q.scopes.length || (q.fileIds && !q.fileIds.length)) return null; // sees nothing
-  const parts = [`workspace_id == ${list([q.workspaceId]).slice(1, -1)}`, `array_contains_any(scopes, ${list(q.scopes)})`];
+  const parts = [
+    `workspace_id == ${list([q.workspaceId]).slice(1, -1)}`,
+    `array_contains_any(scopes, ${list(q.scopes)})`,
+  ];
   if (q.fileIds?.length) parts.push(`file_id in ${list(q.fileIds)}`);
   return parts.join(" and ");
 }
@@ -78,8 +82,14 @@ export function zillizFileIndex(embedder: Embedder = bgeM3, collectionName = FIL
         await zilliz("entities/insert", {
           collectionName,
           data: chunks.slice(i, i + BATCH).map((c, k) => ({
-            id: c.id, vec: vecs[i + k], text: c.text, file_id: c.fileId, n: c.n, page: c.page,
-            workspace_id: a.workspaceId, scopes: a.scopes,
+            id: c.id,
+            vec: vecs[i + k],
+            text: c.text,
+            file_id: c.fileId,
+            n: c.n,
+            page: c.page,
+            workspace_id: a.workspaceId,
+            scopes: a.scopes,
           })),
         });
     },
@@ -95,14 +105,23 @@ export function zillizFileIndex(embedder: Embedder = bgeM3, collectionName = FIL
       const rows: any[] =
         q.mode === "weighted"
           ? await zilliz("entities/hybrid_search", {
-              collectionName, limit, outputFields,
+              collectionName,
+              limit,
+              outputFields,
               search: [
                 { data: vec, annsField: "vec", limit: 30, filter },
                 { data: [query], annsField: "sparse", limit: 30, filter },
               ],
               rerank: { strategy: "weighted", params: { weights: [0.7, 0.3] } },
             })
-          : await zilliz("entities/search", { collectionName, limit, outputFields, data: vec, annsField: "vec", filter });
+          : await zilliz("entities/search", {
+              collectionName,
+              limit,
+              outputFields,
+              data: vec,
+              annsField: "vec",
+              filter,
+            });
       return rows.map((r) => ({ id: r.id, fileId: r.file_id, n: r.n, page: r.page, text: r.text, score: r.distance }));
     },
   };
@@ -126,7 +145,13 @@ export function memoryFileIndex(): FileIndex & { rows(): (FileChunk & Attrs)[] }
       return rows
         .filter((r) => r.workspaceId === q.workspaceId && r.scopes.some((s) => q.scopes.includes(s)))
         .filter((r) => !q.fileIds || q.fileIds.includes(r.fileId))
-        .map((r) => ({ r, score: r.text.toLowerCase().split(/\W+/).filter((w) => words.has(w)).length }))
+        .map((r) => ({
+          r,
+          score: r.text
+            .toLowerCase()
+            .split(/\W+/)
+            .filter((w) => words.has(w)).length,
+        }))
         .filter((x) => x.score > 0)
         .sort((a, b) => b.score - a.score)
         .slice(0, q.limit ?? 10)
@@ -137,4 +162,5 @@ export function memoryFileIndex(): FileIndex & { rows(): (FileChunk & Attrs)[] }
 
 let current: FileIndex | null = null;
 /** The app's file index, picked by FILE_INDEX (zilliz | memory; default zilliz), made on first use. */
-export const fileIndex = () => (current ??= process.env.FILE_INDEX === "memory" ? memoryFileIndex() : zillizFileIndex());
+export const fileIndex = () =>
+  (current ??= process.env.FILE_INDEX === "memory" ? memoryFileIndex() : zillizFileIndex());

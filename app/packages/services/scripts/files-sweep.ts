@@ -3,7 +3,7 @@
 // categorizer, embedding model or vector DB).
 //   pnpm --filter @sllaw/services files-sweep
 //   pnpm --filter @sllaw/services files-sweep --stale index
-import { filesDone, resetSteps, STEPS, unfinishedFiles, type Step } from "@sllaw/db";
+import { filesDone, resetSteps, STEPS, type Step, unfinishedFiles } from "@sllaw/db";
 import { extractorFor } from "@sllaw/extract";
 import { indexBy } from "@sllaw/search";
 import { appDeps, runFile } from "../src/files";

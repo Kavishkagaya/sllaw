@@ -3,7 +3,7 @@ import { syncClerkEvent } from "@sllaw/services";
 
 /** POST /api/webhooks/clerk: verified with CLERK_WEBHOOK_SIGNING_SECRET (Svix). A 5xx makes Clerk retry. */
 export async function clerkWebhook(req: Request) {
-  let evt;
+  let evt: Awaited<ReturnType<typeof verifyWebhook>>;
   try {
     evt = await verifyWebhook(req);
   } catch {

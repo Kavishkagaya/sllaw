@@ -2,7 +2,13 @@
 // (search, read, links, asOf), then answers citing inline as [[chunkId|label]] only chunks it read or asOf'd, so the
 // UI can check every citation against the read/asOf outputs in the chat. One agent, not research sub-agents: on the
 // eval they repeated each other's work on the same law and ran out of steps (PIPELINE.md, eval-chat 2026-10-18).
-import { createAgentUIStreamResponse, type InferAgentUIMessage, stepCountIs, ToolLoopAgent, validateUIMessages } from "ai";
+import {
+  createAgentUIStreamResponse,
+  type InferAgentUIMessage,
+  stepCountIs,
+  ToolLoopAgent,
+  validateUIMessages,
+} from "ai";
 import { model } from "../models";
 import type { Ctx } from "../ports";
 import { lawTools } from "../tools/law";
@@ -84,7 +90,9 @@ export const mainAgent = (ctx: Ctx) =>
     // and spent the last step on more calls, leaving no answer (chat of 2026-10-18: 14 steps, no text)
     // and told so: without it the model wrote its next tool calls as text (<｜DSML｜ calls>…) as the answer (eval-chat 2026-10-20, #10)
     prepareStep: ({ stepNumber }) =>
-      stepNumber === MAX_STEPS - 1 ? { activeTools: [], toolChoice: "none", instructions: instructions(ctx.asOfDate) + LAST } : undefined,
+      stepNumber === MAX_STEPS - 1
+        ? { activeTools: [], toolChoice: "none", instructions: instructions(ctx.asOfDate) + LAST }
+        : undefined,
   });
 
 export type ChatMessage = InferAgentUIMessage<ReturnType<typeof mainAgent>>;
@@ -116,7 +124,19 @@ export async function streamChat(
   abortSignal?: AbortSignal,
 ) {
   const t0 = Date.now();
-  const usage: Usage = { model: "", providers: [], steps: 0, input: 0, cached: 0, output: 0, reasoning: 0, cost: 0, gatewayCost: 0, ms: 0, generations: [] };
+  const usage: Usage = {
+    model: "",
+    providers: [],
+    steps: 0,
+    input: 0,
+    cached: 0,
+    output: 0,
+    reasoning: 0,
+    cost: 0,
+    gatewayCost: 0,
+    ms: 0,
+    generations: [],
+  };
   const uiMessages = await validateUIMessages<ChatMessage>({ messages, tools: mainTools(ctx) });
   return createAgentUIStreamResponse({
     agent: mainAgent(ctx),
@@ -126,7 +146,12 @@ export async function streamChat(
     generateMessageId: () => crypto.randomUUID(),
     // ponytail: a step cut off by the stop button reports no usage, so a stopped turn undercounts by that step
     onStepEnd: (step) => {
-      const g = (step.providerMetadata?.gateway ?? {}) as { cost?: string; gatewayCost?: string; generationId?: string; routing?: { finalProvider?: string } };
+      const g = (step.providerMetadata?.gateway ?? {}) as {
+        cost?: string;
+        gatewayCost?: string;
+        generationId?: string;
+        routing?: { finalProvider?: string };
+      };
       usage.model = step.model.modelId;
       usage.steps++;
       usage.input += step.usage.inputTokens ?? 0;

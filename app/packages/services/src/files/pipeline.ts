@@ -9,9 +9,9 @@
 // retried Vercel Workflow step. Both go through runStep, the only writer of step state.
 import type { Card, Categorizer } from "@sllaw/ai";
 import type { FileRow, Step, StepEnd } from "@sllaw/db";
-import { NoText, type ExtractCtx, type Extracted } from "@sllaw/extract";
-import { chunkPages, indexBy, type FileIndex } from "@sllaw/search";
-import { getJson, putJson, type BlobStore } from "@sllaw/storage";
+import { type ExtractCtx, type Extracted, NoText } from "@sllaw/extract";
+import { chunkPages, type FileIndex, indexBy } from "@sllaw/search";
+import { type BlobStore, getJson, putJson } from "@sllaw/storage";
 
 export const keys = {
   dir: (id: string) => `files/${id}/`,
@@ -90,7 +90,9 @@ const STEP: Record<Step, (f: FileRow, d: Deps) => Promise<StepEnd>> = {
     const sha256 = Buffer.from(await crypto.subtle.digest("SHA-256", blob.bytes as BufferSource)).toString("hex");
     try {
       // OCR fetches the file itself: a signed URL, good for the length of a step
-      const x = await d.extract(blob.bytes, f.mime, f.name, { url: () => d.store.downloadUrl(keys.original(f.id), 15 * 60) });
+      const x = await d.extract(blob.bytes, f.mime, f.name, {
+        url: () => d.store.downloadUrl(keys.original(f.id), 15 * 60),
+      });
       await putJson(d.store, keys.extract(f.id), { by: x.by, pages: x.pages } satisfies Pages);
       return { state: "done", by: x.by, set: { sha256, pages: x.totalPages } };
     } catch (e) {
@@ -102,7 +104,11 @@ const STEP: Record<Step, (f: FileRow, d: Deps) => Promise<StepEnd>> = {
   async categorize(f, d) {
     const x = await getJson<Pages>(d.store, keys.extract(f.id));
     if (!x) return { state: "failed", error: "extract.json is missing" };
-    const card = await d.categorizer.categorize({ workspaceId: f.workspaceId, filename: f.name, text: x.pages.map((p) => p.text).join("\n\n") });
+    const card = await d.categorizer.categorize({
+      workspaceId: f.workspaceId,
+      filename: f.name,
+      text: x.pages.map((p) => p.text).join("\n\n"),
+    });
     await putJson(d.store, keys.card(f.id), card);
     const { summary: _, docType, ...meta } = card;
     return { state: "done", by: d.categorizer.by, set: { category: docType, meta } };

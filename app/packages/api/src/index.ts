@@ -1,6 +1,17 @@
 import {
-  deleteFile, finishUpload, getChunk, getDoc, listCaseFiles, listChats, listMyFiles, MAX_SIZE, openChat, openFile,
-  reprocessFile, searchFiles, startUpload,
+  deleteFile,
+  finishUpload,
+  getChunk,
+  getDoc,
+  listCaseFiles,
+  listChats,
+  listMyFiles,
+  MAX_SIZE,
+  openChat,
+  openFile,
+  reprocessFile,
+  searchFiles,
+  startUpload,
 } from "@sllaw/services";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
@@ -36,9 +47,13 @@ export const appRouter = router({
     finishUpload: workspaceUser
       .input(z.object({ fileId: z.uuid() }))
       .mutation(async ({ ctx, input }) => found(await finishUpload(ctx.account, input.fileId))),
-    ofCase: workspaceUser.input(z.object({ caseId: z.uuid() })).query(async ({ ctx, input }) => found(await listCaseFiles(ctx.account, input.caseId))),
+    ofCase: workspaceUser
+      .input(z.object({ caseId: z.uuid() }))
+      .query(async ({ ctx, input }) => found(await listCaseFiles(ctx.account, input.caseId))),
     mine: workspaceUser.query(({ ctx }) => listMyFiles(ctx.account)),
-    open: workspaceUser.input(z.object({ fileId: z.uuid() })).query(async ({ ctx, input }) => found(await openFile(ctx.account, input.fileId))),
+    open: workspaceUser
+      .input(z.object({ fileId: z.uuid() }))
+      .query(async ({ ctx, input }) => found(await openFile(ctx.account, input.fileId))),
     reprocess: workspaceUser
       .input(z.object({ fileId: z.uuid(), steps: z.array(z.enum(["extract", "categorize", "index"])).optional() }))
       .mutation(async ({ ctx, input }) => found(await reprocessFile(ctx.account, input.fileId, input.steps))),
@@ -46,7 +61,14 @@ export const appRouter = router({
       .input(z.object({ fileId: z.uuid() }))
       .mutation(async ({ ctx, input }) => found((await deleteFile(ctx.account, input.fileId)) || null)),
     search: workspaceUser
-      .input(z.object({ query: z.string().min(1).max(2000), caseId: z.uuid().optional(), docTypes: z.array(z.string().max(32)).max(10).optional(), limit: z.number().int().min(1).max(50).optional() }))
+      .input(
+        z.object({
+          query: z.string().min(1).max(2000),
+          caseId: z.uuid().optional(),
+          docTypes: z.array(z.string().max(32)).max(10).optional(),
+          limit: z.number().int().min(1).max(50).optional(),
+        }),
+      )
       .query(({ ctx, input }) => searchFiles(ctx.account, input.query, input)),
   }),
   corpus: router({
@@ -65,8 +87,8 @@ function found<T>(x: T | null): T {
 
 export type AppRouter = typeof appRouter;
 export const createCaller = createCallerFactory(appRouter);
+export type { ChatMessage } from "@sllaw/services";
 export { chatRoute } from "./chat";
 export { fileUploadRoute } from "./files";
 export { createContext } from "./trpc";
 export { clerkWebhook } from "./webhooks";
-export type { ChatMessage } from "@sllaw/services";

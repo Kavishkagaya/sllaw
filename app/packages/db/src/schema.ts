@@ -24,8 +24,12 @@ export const workspaces = pgTable("workspaces", {
 export const workspaceUsers = pgTable(
   "workspace_users",
   {
-    workspaceId: uuid("workspace_id").notNull().references(() => workspaces.id, { onDelete: "cascade" }),
-    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
     role: text().notNull(), // Clerk's org role without the prefix: admin | member
     createdAt,
   },
@@ -34,7 +38,9 @@ export const workspaceUsers = pgTable(
 
 export const cases = pgTable("cases", {
   id: uuid().primaryKey().defaultRandom(),
-  workspaceId: uuid("workspace_id").notNull().references(() => workspaces.id, { onDelete: "cascade" }),
+  workspaceId: uuid("workspace_id")
+    .notNull()
+    .references(() => workspaces.id, { onDelete: "cascade" }),
   title: text().notNull(),
   facts: text().notNull().default(""),
   createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }), // null once the user is deleted
@@ -46,8 +52,12 @@ export const chats = pgTable(
   "chats",
   {
     id: uuid().primaryKey(),
-    workspaceId: uuid("workspace_id").notNull().references(() => workspaces.id, { onDelete: "cascade" }),
-    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
     caseId: uuid("case_id").references(() => cases.id, { onDelete: "cascade" }), // null: plain chat
     title: text().notNull(),
     createdAt,
@@ -61,7 +71,9 @@ export const messages = pgTable(
   "messages",
   {
     id: text().primaryKey(),
-    chatId: uuid("chat_id").notNull().references(() => chats.id, { onDelete: "cascade" }),
+    chatId: uuid("chat_id")
+      .notNull()
+      .references(() => chats.id, { onDelete: "cascade" }),
     role: text().notNull(), // user | assistant
     // json, not jsonb: jsonb reorders keys, so replayed tool-call inputs no longer matched what the model sent and the
     // provider's prompt cache missed from the first tool call on (chat of 2026-10-20: 2,432 of 18,186 tokens cached)
@@ -82,7 +94,9 @@ export const files = pgTable(
   "files",
   {
     id: uuid().primaryKey().defaultRandom(),
-    workspaceId: uuid("workspace_id").notNull().references(() => workspaces.id, { onDelete: "cascade" }),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
     ownerId: uuid("owner_id").references(() => users.id, { onDelete: "set null" }),
     name: text().notNull(),
     mime: text().notNull(),
@@ -115,8 +129,12 @@ export const files = pgTable(
 export const caseFiles = pgTable(
   "case_files",
   {
-    caseId: uuid("case_id").notNull().references(() => cases.id, { onDelete: "cascade" }),
-    fileId: uuid("file_id").notNull().references(() => files.id, { onDelete: "cascade" }),
+    caseId: uuid("case_id")
+      .notNull()
+      .references(() => cases.id, { onDelete: "cascade" }),
+    fileId: uuid("file_id")
+      .notNull()
+      .references(() => files.id, { onDelete: "cascade" }),
     addedBy: uuid("added_by").references(() => users.id, { onDelete: "set null" }),
     createdAt,
   },

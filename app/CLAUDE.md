@@ -6,6 +6,7 @@ Turborepo + pnpm. Product and decisions: `../docs/APP.md`. The corpus it answers
 pnpm install
 pnpm dev          # apps/web on :3000
 pnpm typecheck    # every package
+pnpm check        # Biome: lint + format + import order (biome.json); `pnpm fix` applies safe fixes
 pnpm build
 ```
 

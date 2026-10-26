@@ -7,7 +7,15 @@ import { zilliz } from "./zilliz";
 
 export type Mode = "dense" | "weighted" | "keyword";
 export type Filters = { docKeys?: string[]; kinds?: string[]; yearFrom?: number; yearTo?: number };
-export type Hit = { chunkId: number; docKey: string; title: string; path: string; label: string | null; text: string; score: number };
+export type Hit = {
+  chunkId: number;
+  docKey: string;
+  title: string;
+  path: string;
+  label: string | null;
+  text: string;
+  score: number;
+};
 
 const K = 30; // candidates per leg of a weighted search, as in etl/eval_search.py
 const KEY = /^[a-z0-9:/._-]{1,64}$/; // act:9/2023, cap1956:331, constitution:21
@@ -52,6 +60,14 @@ export async function searchLaw(query: string, opts: { mode?: Mode; filters?: Fi
     // text = "law title › breadcrumb\n\nchunk" (etl/embed.py)
     const [head, ...body] = r.text.split("\n\n");
     const [title, ...path] = head.split(" › ");
-    return { chunkId: Number(r.id), docKey: r.doc_key, title, path: path.join(" › "), label: r.label ?? null, text: body.join("\n\n"), score: r.distance };
+    return {
+      chunkId: Number(r.id),
+      docKey: r.doc_key,
+      title,
+      path: path.join(" › "),
+      label: r.label ?? null,
+      text: body.join("\n\n"),
+      score: r.distance,
+    };
   });
 }

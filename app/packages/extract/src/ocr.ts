@@ -1,7 +1,7 @@
 // OCR for scans: an OCR endpoint gets a signed URL to the whole file, fetches it itself and returns its text page by
 // page as JSON. We send no bytes and split nothing. The provider is swapped by passing another one; its `by` goes
 // into extract_by, so files read by the old one can be found and read again.
-import { ext, NoText, type Extractor, type ExtractCtx } from "./extractor";
+import { type ExtractCtx, type Extractor, ext, NoText } from "./extractor";
 import { pdfPagesText } from "./pdf";
 
 export interface OcrProvider {
@@ -72,7 +72,10 @@ export function ocrImageExtractor(provider: OcrProvider): Extractor {
     version: 1,
     accepts: (mime, filename) => mime.startsWith("image/") || IMAGES.has(ext(filename)),
     async extract(_bytes, mime, filename, ctx) {
-      const pages = (await provider.ocr({ url: await url(ctx), mime, filename })).map((t, i) => ({ n: i + 1, text: t.trim() }));
+      const pages = (await provider.ocr({ url: await url(ctx), mime, filename })).map((t, i) => ({
+        n: i + 1,
+        text: t.trim(),
+      }));
       if (!pages.some((p) => p.text)) throw new NoText("needs_ocr", "OCR found no text");
       return pages;
     },

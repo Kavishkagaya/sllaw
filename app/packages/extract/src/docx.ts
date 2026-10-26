@@ -1,6 +1,6 @@
 // Word .docx via mammoth (raw text: paragraphs, no styles). .doc (binary Word) is not read.
 import mammoth from "mammoth";
-import { ext, NoText, type Extractor } from "./extractor";
+import { type Extractor, ext, NoText } from "./extractor";
 
 const DOCX = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 

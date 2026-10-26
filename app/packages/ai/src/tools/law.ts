@@ -35,7 +35,11 @@ export const lawTools = ({ ports }: Ctx) => ({
           ...h,
           snippet: text.length > SNIPPET ? `${text.slice(0, SNIPPET)}…` : text,
           // from the links, so the agent sees at a glance which hits are as enacted and which were changed
-          status: !x ? "no recorded change" : x.repealed ? `repealed ${x.repealed}` : `changed by ${x.changes} amending section(s), last ${x.last ?? "undated"}`,
+          status: !x
+            ? "no recorded change"
+            : x.repealed
+              ? `repealed ${x.repealed}`
+              : `changed by ${x.changes} amending section(s), last ${x.last ?? "undated"}`,
         };
       });
     },
@@ -62,14 +66,18 @@ export const lawTools = ({ ports }: Ctx) => ({
       text: z.string().optional(),
     }),
     execute: async ({ direction, kinds, text, ...target }) => {
-      const groups = new Map<string, { law: string; kind: string; links: number; chunkIds: number[]; parts: string[]; date: string | null }>();
+      const groups = new Map<
+        string,
+        { law: string; kind: string; links: number; chunkIds: number[]; parts: string[]; date: string | null }
+      >();
       for (const l of await ports.links(target, direction, { kinds, text })) {
         const law = direction === "in" ? l.srcDoc : l.dstDoc;
         const g = groups.get(law + l.kind) ?? { law, kind: l.kind, links: 0, chunkIds: [], parts: [], date: l.date };
         g.links++;
         const ch = direction === "in" ? l.srcChunk : l.dstChunk;
         if (ch != null && !g.chunkIds.includes(ch) && g.chunkIds.length < 10) g.chunkIds.push(ch);
-        if (direction === "out" && l.dstLabel && !g.parts.includes(l.dstLabel) && g.parts.length < 10) g.parts.push(l.dstLabel);
+        if (direction === "out" && l.dstLabel && !g.parts.includes(l.dstLabel) && g.parts.length < 10)
+          g.parts.push(l.dstLabel);
         groups.set(law + l.kind, g);
       }
       return [...groups.values()].map(({ parts, ...g }) => (parts.length ? { ...g, parts } : g));

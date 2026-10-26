@@ -1,5 +1,5 @@
 // Plain text formats, read as UTF-8; HTML with its tags stripped.
-import { ext, NoText, type Extractor } from "./extractor";
+import { type Extractor, ext, NoText } from "./extractor";
 
 const TEXT = new Set(["txt", "md", "markdown", "csv", "json", "eml", "html", "htm"]);
 
@@ -10,7 +10,10 @@ export const textExtractor: Extractor = {
   async extract(bytes, mime, filename) {
     let t = new TextDecoder("utf-8").decode(bytes);
     if (mime === "text/html" || ["html", "htm"].includes(ext(filename))) t = stripHtml(t);
-    t = t.replace(/\r\n?/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
+    t = t
+      .replace(/\r\n?/g, "\n")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim();
     if (!t) throw new NoText("needs_ocr", "empty file");
     return [{ n: 1, text: t }];
   },

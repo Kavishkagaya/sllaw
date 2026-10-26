@@ -21,7 +21,12 @@ const STALE = "15 minutes"; // a step running longer was cut off (Vercel's limit
 
 const col = {
   extract: { state: files.extractState, by: "extractBy", error: "extractError", stateKey: "extractState" },
-  categorize: { state: files.categorizeState, by: "categorizeBy", error: "categorizeError", stateKey: "categorizeState" },
+  categorize: {
+    state: files.categorizeState,
+    by: "categorizeBy",
+    error: "categorizeError",
+    stateKey: "categorizeState",
+  },
   index: { state: files.indexState, by: "indexBy", error: "indexError", stateKey: "indexState" },
 } as const;
 
@@ -70,8 +75,13 @@ export async function endStep(id: string, step: Step, e: StepEnd) {
 
 /** Sets steps back to pending to run again (a retry, or a newer extractor); a step the file does not need stays null. */
 export async function resetSteps(id: string, steps: readonly Step[]) {
-  const set = Object.fromEntries(steps.map((s) => [col[s].stateKey, sql`case when ${col[s].state} is null then null else 'pending' end`]));
-  await db.update(files).set({ ...set, updatedAt: new Date() }).where(eq(files.id, id));
+  const set = Object.fromEntries(
+    steps.map((s) => [col[s].stateKey, sql`case when ${col[s].state} is null then null else 'pending' end`]),
+  );
+  await db
+    .update(files)
+    .set({ ...set, updatedAt: new Date() })
+    .where(eq(files.id, id));
 }
 
 /** Files a step is done for, with what did it; with `notBy`, only those done by something else: what a new
@@ -96,7 +106,9 @@ export async function scopesOfFile(f: Pick<FileRow, "id" | "ownerId">) {
 }
 
 export const casesOfFile = async (fileId: string) =>
-  (await db.select({ caseId: caseFiles.caseId }).from(caseFiles).where(eq(caseFiles.fileId, fileId))).map((c) => c.caseId);
+  (await db.select({ caseId: caseFiles.caseId }).from(caseFiles).where(eq(caseFiles.fileId, fileId))).map(
+    (c) => c.caseId,
+  );
 
 export const filesOfCase = (caseId: string) =>
   db
@@ -136,12 +148,23 @@ export const unfinishedFiles = (limit = 100) =>
     )
     .limit(limit);
 
-
 /** Ids of a case's files (or an owner's private files) in these categories: a search filter by doc_type. */
-export async function fileIdsByCategory(q: { workspaceId: string; caseId?: string; ownerId?: string; categories: string[] }) {
+export async function fileIdsByCategory(q: {
+  workspaceId: string;
+  caseId?: string;
+  ownerId?: string;
+  categories: string[];
+}) {
   const where = and(eq(files.workspaceId, q.workspaceId), inArray(files.category, q.categories));
   const rows = q.caseId
-    ? await db.select({ id: files.id }).from(caseFiles).innerJoin(files, eq(files.id, caseFiles.fileId)).where(and(where, eq(caseFiles.caseId, q.caseId)))
-    : await db.select({ id: files.id }).from(files).where(and(where, eq(files.ownerId, q.ownerId!)));
+    ? await db
+        .select({ id: files.id })
+        .from(caseFiles)
+        .innerJoin(files, eq(files.id, caseFiles.fileId))
+        .where(and(where, eq(caseFiles.caseId, q.caseId)))
+    : await db
+        .select({ id: files.id })
+        .from(files)
+        .where(and(where, eq(files.ownerId, q.ownerId!)));
   return rows.map((r) => r.id);
 }

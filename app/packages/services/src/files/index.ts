@@ -1,14 +1,25 @@
 // Files for the api: upload, list, read, retry, delete, search. Access (docs/APP.md, Access) is checked here, before
 // any row or blob is touched. The pipelines themselves are in ./pipeline and know nothing of users.
 import {
-  caseById, casesOfFile, createFile, deleteFileRow, fileById, fileIdsByCategory, filesOfCase, filesOfOwner, resetSteps, setUploaded,
-  STEPS, type FileRow, type Step,
+  caseById,
+  casesOfFile,
+  createFile,
+  deleteFileRow,
+  type FileRow,
+  fileById,
+  fileIdsByCategory,
+  filesOfCase,
+  filesOfOwner,
+  resetSteps,
+  STEPS,
+  type Step,
+  setUploaded,
 } from "@sllaw/db";
 import { getJson } from "@sllaw/storage";
 import { start } from "workflow/api";
 import type { Account } from "../accounts";
 import { appDeps } from "./deps";
-import { keys, type Card, type Deps } from "./pipeline";
+import { type Card, type Deps, keys } from "./pipeline";
 import { fileWorkflow } from "./workflow";
 
 type Signed = Account & { workspace: NonNullable<Account["workspace"]> };
@@ -42,12 +53,22 @@ async function fileOf(a: Signed, id: string) {
 
 /** Step 1 of upload: the row (upload pending) and where the browser sends the bytes. uploadUrl null means the store
  *  has no direct upload (memory): PUT the bytes to /api/files/<id> instead. */
-export async function startUpload(a: Signed, input: { name: string; mime: string; size: number; use: Use; caseId?: string }) {
+export async function startUpload(
+  a: Signed,
+  input: { name: string; mime: string; size: number; use: Use; caseId?: string },
+) {
   if (input.size > MAX_SIZE) throw new Error(`file too large: ${input.size} bytes (max ${MAX_SIZE})`);
   if (input.use === "case" && !(input.caseId && (await caseOf(a, input.caseId)))) return null;
   const pending = Object.fromEntries(STEPS_OF[input.use].map((s) => [`${s}State`, "pending"]));
   const f = await createFile(
-    { workspaceId: a.workspace.id, ownerId: a.user.id, name: input.name, mime: input.mime || "application/octet-stream", size: input.size, ...pending },
+    {
+      workspaceId: a.workspace.id,
+      ownerId: a.user.id,
+      name: input.name,
+      mime: input.mime || "application/octet-stream",
+      size: input.size,
+      ...pending,
+    },
     input.use === "case" ? input.caseId : null,
     a.user.id,
   );
@@ -107,7 +128,11 @@ export async function openFile(a: Signed, id: string) {
 /** How far a file is, for the UI: every step it needs with its state. */
 export const progress = (f: FileRow) =>
   [{ step: "upload", state: f.uploadState, error: null as string | null }].concat(
-    STEPS.filter((s) => f[`${s}State`] != null).map((s) => ({ step: s, state: f[`${s}State`]!, error: f[`${s}Error`] })),
+    STEPS.filter((s) => f[`${s}State`] != null).map((s) => ({
+      step: s,
+      state: f[`${s}State`]!,
+      error: f[`${s}Error`],
+    })),
   );
 
 /** Runs the failed (or all, with `steps`) steps of a file again. */
@@ -137,15 +162,24 @@ export async function removeFile(id: string, d: Deps = appDeps()) {
 
 /** Search the files this request may see: a case's (when the user can see the case) or the user's own. A doc_type
  *  filter becomes the ids of the files in those categories (the vectors carry no type). */
-export async function searchFiles(a: Signed, query: string, opts: { caseId?: string; docTypes?: string[]; limit?: number } = {}) {
+export async function searchFiles(
+  a: Signed,
+  query: string,
+  opts: { caseId?: string; docTypes?: string[]; limit?: number } = {},
+) {
   if (opts.caseId && !(await caseOf(a, opts.caseId))) return [];
   const scopes = opts.caseId ? [`case:${opts.caseId}`] : [`user:${a.user.id}`];
   const fileIds = opts.docTypes?.length
-    ? await fileIdsByCategory({ workspaceId: a.workspace.id, caseId: opts.caseId, ownerId: a.user.id, categories: opts.docTypes })
+    ? await fileIdsByCategory({
+        workspaceId: a.workspace.id,
+        caseId: opts.caseId,
+        ownerId: a.user.id,
+        categories: opts.docTypes,
+      })
     : undefined;
   return appDeps().index.search(query, { workspaceId: a.workspace.id, scopes, fileIds, limit: opts.limit });
 }
 
-export { runFile, runStep, keys, type Deps, type FileRows } from "./pipeline";
-export { fileWorkflow } from "./workflow";
 export { appDeps, dbRows } from "./deps";
+export { type Deps, type FileRows, keys, runFile, runStep } from "./pipeline";
+export { fileWorkflow } from "./workflow";

@@ -1,6 +1,6 @@
 import { sendMessage } from "@sllaw/services";
-import { getHTTPStatusCodeFromError } from "@trpc/server/http";
 import { TRPCError } from "@trpc/server";
+import { getHTTPStatusCodeFromError } from "@trpc/server/http";
 import { z } from "zod";
 import { createContext, signedAccount } from "./trpc";
 
@@ -10,7 +10,10 @@ const body = z.object({
   message: z.object({
     id: z.string().min(1).max(100),
     role: z.literal("user"),
-    parts: z.array(z.object({ type: z.literal("text"), text: z.string().min(1).max(20_000) })).min(1).max(10),
+    parts: z
+      .array(z.object({ type: z.literal("text"), text: z.string().min(1).max(20_000) }))
+      .min(1)
+      .max(10),
   }),
 });
 
@@ -23,7 +26,13 @@ export async function chatRoute(req: Request, waitUntil: (p: Promise<unknown>) =
     if (!account.workspace) return new Response("no active workspace", { status: 403 });
     const input = body.safeParse(await req.json().catch(() => null));
     if (!input.success) return new Response("bad request", { status: 400 });
-    const res = await sendMessage({ ...account, workspace: account.workspace }, input.data.id, input.data.message, waitUntil, req.signal);
+    const res = await sendMessage(
+      { ...account, workspace: account.workspace },
+      input.data.id,
+      input.data.message,
+      waitUntil,
+      req.signal,
+    );
     return res ?? new Response("not found", { status: 404 });
   } catch (e) {
     if (e instanceof TRPCError) return new Response(e.message, { status: getHTTPStatusCodeFromError(e) });

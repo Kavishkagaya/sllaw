@@ -34,7 +34,7 @@ function pieces(text: string): string[] {
     const out: string[] = [];
     let cur = "";
     for (const s of para.split(/(?<=[.;:?!])\s+/)) {
-      for (const w of s.length > MAX ? s.match(new RegExp(`.{1,${MAX}}(\\s|$)`, "gs")) ?? [s] : [s]) {
+      for (const w of s.length > MAX ? (s.match(new RegExp(`.{1,${MAX}}(\\s|$)`, "gs")) ?? [s]) : [s]) {
         if (cur && cur.length + w.length + 1 > MAX) {
           out.push(cur);
           cur = "";

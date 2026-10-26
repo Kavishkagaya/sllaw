@@ -1,7 +1,7 @@
 // PDFs with a text layer, via unpdf (pdf.js built for serverless). A page with almost no text is a scan; a file that
 // is mostly scans needs OCR: ocrPdfExtractor (./ocr) reads those pages when an OCR provider is set.
 import { extractText } from "unpdf";
-import { ext, NoText, type Extractor, type Page } from "./extractor";
+import { type Extractor, ext, NoText, type Page } from "./extractor";
 
 const MIN_CHARS = 40; // a page with fewer letters than this has no text layer worth keeping (stamps, page numbers)
 
@@ -27,6 +27,7 @@ export const pdfExtractor: Extractor = {
 
 const clean = (t: string) =>
   t
+    // biome-ignore lint/suspicious/noControlCharactersInRegex: strips NUL bytes some PDFs carry
     .replace(/\u0000/g, "")
     .replace(/[ \t]+\n/g, "\n")
     .replace(/\n{3,}/g, "\n\n")
