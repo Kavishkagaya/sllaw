@@ -40,7 +40,7 @@ export default async function Home() {
                 <Link
                   key={c.id}
                   href={`/cases/${c.id}`}
-                  className="flex min-h-28 flex-col gap-1 rounded-xl border bg-card p-4 transition-colors hover:bg-accent/40"
+                  className="flex min-h-28 flex-col gap-1 rounded-xl border bg-card shadow-xs p-4 transition-colors hover:bg-accent/40"
                 >
                   <span className="flex items-start gap-2">
                     <Briefcase className="mt-1 size-4 shrink-0 text-muted-foreground" />

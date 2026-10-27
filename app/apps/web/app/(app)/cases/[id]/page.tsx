@@ -48,7 +48,7 @@ export default async function CaseOverview({ params }: { params: Promise<{ id: s
           </div>
 
           <div className="mt-10 grid gap-6 md:grid-cols-2">
-            <section className="rounded-xl border bg-card">
+            <section className="rounded-xl border bg-card shadow-xs">
               <div className="flex items-center justify-between border-b px-4 py-3">
                 <h2 className="text-sm font-medium">Chats</h2>
                 <Button asChild size="sm" variant="ghost">
@@ -79,7 +79,7 @@ export default async function CaseOverview({ params }: { params: Promise<{ id: s
               )}
             </section>
 
-            <section className="rounded-xl border bg-card">
+            <section className="rounded-xl border bg-card shadow-xs">
               <div className="flex items-center justify-between border-b px-4 py-3">
                 <h2 className="text-sm font-medium">
                   Files{files.length > 0 && <span className="ml-1.5 text-muted-foreground">{files.length}</span>}

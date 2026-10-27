@@ -127,7 +127,7 @@ export function CaseFiles({ caseId, initial }: { caseId: string; initial: CaseFi
                 {group}
                 <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-normal">{items.length}</span>
               </h3>
-              <ul className="divide-y rounded-xl border bg-card">
+              <ul className="divide-y rounded-xl border bg-card shadow-xs">
                 {items.map((f) => (
                   <FileItem key={f.id} caseId={caseId} f={f} onChange={refresh} />
                 ))}
