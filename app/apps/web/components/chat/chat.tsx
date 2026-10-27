@@ -1,14 +1,12 @@
 "use client";
 import { useChat } from "@ai-sdk/react";
-import type { AppRouter, ChatMessage } from "@sllaw/api";
+import type { ChatMessage } from "@sllaw/api";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import type { inferRouterOutputs } from "@trpc/server";
 import {
   ArrowLeft,
   BookMarked,
   Briefcase,
   ChevronRight,
-  ExternalLink,
   FolderInput,
   Loader2,
   Plus,
@@ -33,20 +31,41 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { SidebarTrigger } from "@/components/ui/sidebar";
-import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { useChatStore } from "@/stores/chat-store";
 import { useTRPC } from "@/trpc/client";
+import { FileSource, LawSource } from "./source-view";
 import { splitAnswer, Trail } from "./trail";
 
-type View = NonNullable<inferRouterOutputs<AppRouter>["corpus"]["chunk"]>;
-type Cite = { id: number; label: string };
+/** A citation as the client gets it (real ids; the server maps the model's handles): a law chunk, a case file's
+ *  chunk, a whole case file, or an old chat's file page ([[ref:pN|label]], before chunk citations). key is the same
+ *  for every citation of one source, which keeps one number in the chat. */
+type Cite =
+  | { kind: "law"; key: string; label: string; chunkId: number }
+  | { kind: "file"; key: string; label: string; fileId: string; n: number | null }
+  | { kind: "page"; key: string; label: string };
 
-// The main agent cites inline as [[chunkId|label]]. Each becomes a link Streamdown renders through `a` below, as a
-// button with the agent's label; clicking it loads that chunk into the sidebar by id.
-const CITE = /\[\[(\d+)(?:\|([^\]|]*))?\]\]/g;
-const toLinks = (s: string) => s.replace(CITE, (_, id, label) => `[${(label || "source").trim()}](#cite-${id})`);
+// [[81234|label]], [[f:<fileId>:<n>|label]], [[file:<fileId>|label]], old [[3fa2b1c0:p4|label]]. Each becomes a link
+// Streamdown renders through `a` below, as a numbered chip; clicking it opens the source in the sidebar.
+const UUID = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
+const CITE = new RegExp(
+  `\\[\\[(?:(\\d+)|f:(${UUID}):(\\d+)|file:(${UUID})|([0-9a-f]{8,}):p(\\d+))(?:\\|([^\\]|]*))?\\]\\]`,
+  "g",
+);
+const citeOf = (m: RegExpMatchArray): Cite => {
+  const [, law, cFile, cN, file, ref, page, label] = m;
+  const l = label?.trim();
+  if (law) return { kind: "law", key: `s:${law}`, label: l || "source", chunkId: +law };
+  if (cFile) return { kind: "file", key: `c:${cFile}:${cN}`, label: l || "case file", fileId: cFile, n: +cN! };
+  if (file) return { kind: "file", key: `f:${file}`, label: l || "case file", fileId: file, n: null };
+  return { kind: "page", key: `p:${ref}:${page}|${l}`, label: l || `p. ${page}` };
+};
+const toLinks = (s: string) =>
+  s.replace(CITE, (...m) => {
+    const c = citeOf(m as unknown as RegExpMatchArray);
+    return `[${c.label}](#cite:${encodeURIComponent(JSON.stringify(c))})`;
+  });
 
 const EXAMPLES = [
   "What notice must a landlord give to evict a tenant under the Rent Act?",
@@ -101,28 +120,33 @@ export function Chat({
     setOpen(c);
     setSheet(!matchMedia("(min-width: 80rem)").matches);
   }, []);
-  // the open citation, fetched by chunk id (corpus.chunk); cached, so reopening one is instant
-  const trpc = useTRPC();
-  const view = useQuery(trpc.corpus.chunk.queryOptions({ chunkId: open?.id ?? 0 }, { enabled: !!open }));
-
-  // ids the agent loaded (a citation of any other id is unverified) and every citation in its answers, in order
+  // what the agent read in full (a citation of anything else is unverified), and every source the answers cite, in
+  // order of first citation: its place is its number
   const { loaded, cites } = useMemo(() => {
-    const loaded = new Set<number>();
+    const loaded = new Set<string>();
     const cites: Cite[] = [];
     for (const m of messages)
       for (const p of m.parts) {
-        // what the agent read in full: a citation of anything else is unverified
-        if (p.type === "tool-read" && p.state === "output-available") for (const c of p.output) loaded.add(c.chunkId);
+        if (p.type === "tool-read" && p.state === "output-available")
+          for (const c of p.output) loaded.add(`s:${c.chunkId}`);
         if (p.type === "tool-asOf" && p.state === "output-available" && p.output) {
-          loaded.add(p.output.chunk.chunkId);
-          for (const ch of p.output.changes) if (ch.byChunk != null) loaded.add(ch.byChunk); // its clause was shown
+          loaded.add(`s:${p.output.chunk.chunkId}`);
+          for (const ch of p.output.changes) if (ch.byChunk != null) loaded.add(`s:${ch.byChunk}`); // its clause was shown
         }
+        if (p.type === "tool-fileRead" && p.state === "output-available")
+          for (const f of readFiles(p.output)) {
+            loaded.add(`f:${f.file}`);
+            for (const c of f.chunks) loaded.add(`c:${c.chunk}`);
+          }
         if (p.type === "text" && m.role === "assistant")
-          for (const [, n, label] of p.text.matchAll(CITE))
-            if (!cites.some((c) => c.id === +n!)) cites.push({ id: +n!, label: label || "source" });
+          for (const x of p.text.matchAll(CITE)) {
+            const c = citeOf(x);
+            if (!cites.some((y) => y.key === c.key)) cites.push(c);
+          }
       }
     return { loaded, cites };
   }, [messages]);
+  const numbers = useMemo(() => new Map(cites.map((c, i) => [c.key, i + 1])), [cites]);
 
   // keep the newest message in view while it streams. Braces matter: newer browsers (Chrome 153, recent mobile
   // Safari) return a Promise from scrollIntoView, and an effect that returns one crashes React on cleanup
@@ -143,29 +167,34 @@ export function Chat({
   const components = useMemo(
     () => ({
       a: ({ href, children }: { href?: string; children?: React.ReactNode }) => {
-        const m = href?.match(/^#cite-(\d+)$/);
-        if (!m)
+        if (!href?.startsWith("#cite:"))
           return (
             <a href={href} target="_blank" rel="noreferrer" className="text-primary underline underline-offset-2">
               {children}
             </a>
           );
-        const n = +m[1]!;
-        const ok = loaded.has(n);
+        let c: Cite;
+        try {
+          c = JSON.parse(decodeURIComponent(href.slice(6)));
+        } catch {
+          return <>{children}</>;
+        }
+        const ok = c.kind === "page" || loaded.has(c.key);
         const chip = (
           <button
             type="button"
-            onClick={() => show({ id: n, label: String(children) })}
+            onClick={() => show(c)}
             className={cn(
-              "mx-0.5 inline-flex items-center gap-1 rounded-md border px-1.5 py-px align-baseline font-sans text-xs font-medium whitespace-nowrap transition-colors",
+              "mx-0.5 inline-flex max-w-64 items-center gap-1 rounded-md border px-1.5 py-px align-baseline font-sans text-xs font-medium transition-colors",
               ok
                 ? "border-primary/30 bg-primary/5 text-primary hover:bg-primary/10"
                 : "border-dashed border-destructive/50 text-destructive",
-              open?.id === n && "bg-primary text-primary-foreground hover:bg-primary/90",
+              open?.key === c.key && "bg-primary text-primary-foreground hover:bg-primary/90",
             )}
           >
-            {!ok && <TriangleAlert className="size-3" />}
-            {children}
+            {!ok && <TriangleAlert className="size-3 shrink-0" />}
+            <span className="tabular-nums">{numbers.get(c.key)}</span>
+            <span className="truncate font-normal opacity-80">{c.label}</span>
           </button>
         );
         return ok ? (
@@ -178,10 +207,10 @@ export function Chat({
         );
       },
     }),
-    [loaded, open, show],
+    [loaded, numbers, open, show],
   );
 
-  const panel = <CitationPanel open={open} cites={cites} view={view} onPick={show} onBack={() => setOpen(null)} />;
+  const panel = <CitationPanel open={open} cites={cites} caseId={caseId} onPick={show} onBack={() => setOpen(null)} />;
 
   return (
     <div className="flex h-full">
@@ -218,7 +247,7 @@ export function Chat({
                   <BookMarked /> Citations {cites.length > 0 && <Badge variant="secondary">{cites.length}</Badge>}
                 </Button>
               </SheetTrigger>
-              <SheetContent className="w-full gap-0 p-0 sm:max-w-md xl:hidden">
+              <SheetContent className="w-full gap-0 p-0 sm:max-w-xl xl:hidden">
                 <SheetTitle className="sr-only">Citations</SheetTitle>
                 {panel}
               </SheetContent>
@@ -332,7 +361,13 @@ export function Chat({
           </motion.div>
         </div>
       </div>
-      {!empty && <aside className="hidden w-96 shrink-0 border-l bg-sidebar xl:block">{panel}</aside>}
+      {!empty && (
+        <aside
+          className={cn("hidden shrink-0 border-l bg-sidebar transition-[width] xl:block", open ? "w-[34rem]" : "w-96")}
+        >
+          {panel}
+        </aside>
+      )}
     </div>
   );
 }
@@ -429,19 +464,13 @@ function Step({
 function CitationPanel({
   open,
   cites,
-  view,
+  caseId,
   onPick,
   onBack,
 }: {
   open: Cite | null;
   cites: Cite[];
-  view: {
-    isPending: boolean;
-    isError: boolean;
-    isSuccess: boolean;
-    error: { message: string } | null;
-    data: View | null | undefined;
-  };
+  caseId?: string;
   onPick: (c: Cite) => void;
   onBack: () => void;
 }) {
@@ -455,12 +484,12 @@ function CitationPanel({
           {!cites.length ? (
             <div className="flex flex-col items-center gap-2 px-6 py-16 text-center text-sm text-muted-foreground">
               <BookMarked className="size-5" />
-              The provisions an answer cites appear here.
+              The provisions and case documents an answer cites appear here.
             </div>
           ) : (
             <ol className="flex flex-col gap-1">
               {cites.map((c, i) => (
-                <li key={c.id}>
+                <li key={c.key}>
                   <button
                     type="button"
                     onClick={() => onPick(c)}
@@ -478,96 +507,36 @@ function CitationPanel({
         </div>
       </div>
     );
+  const number = cites.findIndex((c) => c.key === open.key) + 1;
   return (
     <div className="flex h-full flex-col">
       <div className="flex h-12 shrink-0 items-center gap-2 border-b px-2">
         <Button variant="ghost" size="icon-sm" onClick={onBack} aria-label="All citations">
           <ArrowLeft />
         </Button>
-        <h2 className="truncate text-sm font-medium">{open.label}</h2>
+        <h2 className="truncate text-sm font-medium">
+          {number > 0 && <span className="mr-1.5 text-muted-foreground tabular-nums">{number}</span>}
+          {open.label}
+        </h2>
       </div>
-      <div className="flex-1 overflow-y-auto p-4">
-        {view.isPending && (
-          <div className="space-y-3">
-            <Skeleton className="h-5 w-3/4" />
-            <Skeleton className="h-4 w-1/2" />
-            <Skeleton className="h-32 w-full" />
-          </div>
+      <div className="flex-1 overflow-y-auto">
+        {open.kind === "law" ? (
+          <LawSource key={open.key} chunkId={open.chunkId} />
+        ) : open.kind === "file" ? (
+          <FileSource key={open.key} caseId={caseId} fileId={open.fileId} n={open.n} />
+        ) : (
+          <p className="p-4 text-sm text-muted-foreground">
+            An older citation of a file page. Open the case's files to see it.
+          </p>
         )}
-        {view.isError && <p className="text-sm text-destructive">Could not load it: {view.error?.message}</p>}
-        {view.isSuccess &&
-          (view.data ? (
-            <Provision v={view.data} />
-          ) : (
-            <p className="text-sm text-destructive">This provision is no longer in the corpus.</p>
-          ))}
       </div>
     </div>
   );
 }
 
-function Provision({ v }: { v: View }) {
-  const { chunk: c, doc } = v;
-  return (
-    <div className="space-y-4">
-      <div className="space-y-1">
-        <h3 className="font-serif text-lg leading-snug font-semibold">{doc?.title ?? c.docKey}</h3>
-        <p className="text-xs text-muted-foreground">{c.path ?? c.label}</p>
-      </div>
-      <div className="border-l-2 border-brass pl-3 font-serif text-[15px] leading-relaxed whitespace-pre-wrap">
-        {c.text}
-      </div>
-      {v.changes.length > 0 && (
-        <section className="space-y-2">
-          <h4 className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-            Changed by, up to {v.date}
-          </h4>
-          <ul className="space-y-3">
-            {v.changes.map((ch, i) => (
-              <li key={i} className="rounded-md border bg-card p-3 text-sm">
-                <div className="flex flex-wrap items-center gap-1.5">
-                  <a
-                    href={`/doc/${ch.by}${ch.byChunk ? `#c${ch.byChunk}` : ""}`}
-                    target="_blank"
-                    className="font-medium hover:underline"
-                    rel="noopener"
-                  >
-                    {ch.byTitle ?? ch.by}
-                  </a>
-                  {ch.byLabel && <span className="text-muted-foreground">s. {ch.byLabel}</span>}
-                  <Badge variant="outline" className="ml-auto">
-                    {ch.kind}
-                  </Badge>
-                </div>
-                {ch.date && <p className="text-xs text-muted-foreground">{ch.date}</p>}
-                <p className="mt-1.5 text-xs text-muted-foreground">
-                  {ch.clause.slice(0, 240)}
-                  {ch.clause.length > 240 ? "…" : ""}
-                </p>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-      {v.later.length > 0 && (
-        <p className="text-xs text-muted-foreground">
-          Later: {v.later.map((l) => `${l.by} ${l.kind} (${l.date})`).join("; ")}
-        </p>
-      )}
-      <div className="flex flex-wrap gap-2">
-        <Button asChild variant="outline" size="sm">
-          <a href={`/doc/${c.docKey}#c${c.chunkId}`} target="_blank" rel="noopener">
-            Open full document <ExternalLink />
-          </a>
-        </Button>
-        {doc?.sourceUrl && (
-          <Button asChild variant="ghost" size="sm">
-            <a href={doc.sourceUrl} target="_blank" rel="noreferrer">
-              Source file <ExternalLink />
-            </a>
-          </Button>
-        )}
-      </div>
-    </div>
-  );
+/** A fileRead output's files and passages; [] for an error, and for an old chat's read (pages, before passages). */
+function readFiles(o: unknown) {
+  return o && typeof o === "object" && "files" in o && Array.isArray(o.files)
+    ? (o.files as { file: string; chunks: { chunk: string }[] }[])
+    : [];
 }

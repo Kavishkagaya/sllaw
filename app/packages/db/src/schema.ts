@@ -61,6 +61,9 @@ export const chats = pgTable(
       .references(() => users.id, { onDelete: "cascade" }),
     caseId: uuid("case_id").references(() => cases.id, { onDelete: "cascade" }), // null: plain chat
     title: text().notNull(),
+    // the model's source handles: { s3: [81234, "s. 22, Rent Act"], c7: ["<fileId>:12", "Lease, p. 4"] } (ai's
+    // SourceMap). Messages keep real ids; only the model sees handles, rebuilt from this each turn. No text.
+    sources: json().$type<Record<string, [number | string, string | null]>>(),
     createdAt,
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },

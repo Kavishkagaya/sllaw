@@ -1,8 +1,20 @@
 "use client";
 // How an answer was researched, in a lawyer's terms: thinking (expandable), what was searched and found, which
-// provisions were read, how they were amended, which related laws were looked at. No ids, modes or directions.
+// provisions were read, how they were amended, which related laws were looked at, which case files were searched
+// and read. No ids, modes or directions.
 import type { ChatMessage } from "@sllaw/api";
-import { Brain, ChevronRight, FileText, GitCompareArrows, Link2, Loader2, Search } from "lucide-react";
+import {
+  Brain,
+  ChevronRight,
+  FileSearch,
+  Files,
+  FileText,
+  FolderOpen,
+  GitCompareArrows,
+  Link2,
+  Loader2,
+  Search,
+} from "lucide-react";
 import { useState } from "react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { cn } from "@/lib/utils";
@@ -78,10 +90,15 @@ export function Trail({ parts, live }: { parts: Part[]; live: boolean }) {
   if (!parts.length) return null;
   const count = (t: string) => steps.filter((p) => p.type === t).length;
   const reads = parts.flatMap((p) => (p.type === "tool-read" && p.state === "output-available" ? p.output : [])).length;
+  const passagesRead = parts
+    .flatMap((p) => (p.type === "tool-fileRead" && p.state === "output-available" ? readFiles(p.output) : []))
+    .flatMap((f) => f.chunks).length;
   const summary = [
     count("tool-search") && plural(count("tool-search"), "search", "searches"),
     reads && `${plural(reads, "provision", "provisions")} read`,
     count("tool-asOf") && plural(count("tool-asOf"), "amendment check", "amendment checks"),
+    count("tool-fileSearch") && plural(count("tool-fileSearch"), "file search", "file searches"),
+    passagesRead && `${plural(passagesRead, "file passage", "file passages")} read`,
   ]
     .filter(Boolean)
     .join(", ");
@@ -227,6 +244,72 @@ function Step({ p, name, active }: { p: Part; name: (key: string) => string; act
       </Row>
     );
   }
+  if (p.type === "tool-fileSearch") {
+    const o = p.state === "output-available" ? p.output : null;
+    const found = o && typeof o === "object" ? uniq(o.hits.map((h) => h.title)) : [];
+    return (
+      <Row icon={running ? Loader2 : FileSearch} spin={running}>
+        <p>
+          Searched the case files for <span className="text-foreground">“{p.input?.query}”</span>
+          {typeof o === "string" && <> — {o}</>}
+          {o && typeof o === "object" && !o.hits.length && <> — nothing found</>}
+          {failed && <> — failed</>}
+        </p>
+        <Laws names={found} />
+      </Row>
+    );
+  }
+  if (p.type === "tool-fileCard") {
+    const o = p.state === "output-available" ? p.output : null;
+    const titles = o && typeof o === "object" && "cards" in o ? (o.cards ?? []).map((c) => c.title) : [];
+    const listed = o && typeof o === "object" && "files" in o;
+    return (
+      <Row icon={running ? Loader2 : Files} spin={running}>
+        <p>
+          {running
+            ? "Looking at the case files…"
+            : failed
+              ? "Looking at the case files failed"
+              : listed
+                ? "Listed the case files"
+                : typeof o === "string"
+                  ? `Looked for a case file — ${o}`
+                  : `Looked at what ${titles.length === 1 ? "a file is" : "the files are"}`}
+        </p>
+        <Laws names={titles} />
+      </Row>
+    );
+  }
+  if (p.type === "tool-fileRead") {
+    const o = p.state === "output-available" ? p.output : null;
+    const read = readFiles(o);
+    const span = (f: (typeof read)[number]) => {
+      const ns = uniq(f.chunks.map((c) => c.page));
+      return ns.length > 1 ? `pp. ${ns[0]}–${ns.at(-1)}` : ns.length ? `p. ${ns[0]}` : "";
+    };
+    return (
+      <Row icon={running ? Loader2 : FolderOpen} spin={running}>
+        <p>
+          {running ? (
+            "Reading a case file…"
+          ) : failed ? (
+            "Reading a case file failed"
+          ) : typeof o === "string" ? (
+            <>Could not read a case file — {o}</>
+          ) : read.length ? (
+            read.map((f, i) => (
+              <span key={f.file}>
+                {i ? "; " : "Read "}
+                {span(f)} of <span className="text-foreground">{f.title}</span>
+              </span>
+            ))
+          ) : o ? (
+            "Read a case file"
+          ) : null}
+        </p>
+      </Row>
+    );
+  }
   if (p.type === "tool-links") {
     const groups = p.state === "output-available" ? p.output : [];
     const subject = p.input?.docKey ? name(p.input.docKey) : "the provision";
@@ -248,4 +331,11 @@ function Step({ p, name, active }: { p: Part; name: (key: string) => string; act
     );
   }
   return null;
+}
+
+/** A fileRead output's files and passages; [] for an error, and for an old chat's read (pages, before passages). */
+function readFiles(o: unknown) {
+  return o && typeof o === "object" && "files" in o && Array.isArray(o.files)
+    ? (o.files as { file: string; title: string; chunks: { chunk: string; page: number }[] }[])
+    : [];
 }

@@ -1,5 +1,6 @@
 import {
   addCaseFile,
+  caseFileChunks,
   createCase,
   deleteCase,
   deleteFile,
@@ -79,6 +80,10 @@ export const appRouter = router({
     openFile: workspaceUser
       .input(z.object({ caseId: z.uuid(), fileId: z.uuid() }))
       .query(async ({ ctx, input }) => found(await openCaseFile(ctx.account, input.caseId, input.fileId))),
+    // the file's text as its chunks, for the citation viewer
+    fileChunks: workspaceUser
+      .input(z.object({ caseId: z.uuid(), fileId: z.uuid() }))
+      .query(async ({ ctx, input }) => found(await caseFileChunks(ctx.account, input.caseId, input.fileId))),
     reprocessFile: workspaceUser
       .input(z.object({ caseId: z.uuid(), fileId: z.uuid(), steps }))
       .mutation(async ({ ctx, input }) =>

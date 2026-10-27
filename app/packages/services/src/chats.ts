@@ -1,7 +1,7 @@
 import { streamChat } from "@sllaw/ai";
-import { chatById, chatsOf, createChat, messagesOf, saveMessages, setChatCase } from "@sllaw/db";
+import { chatById, chatsOf, createChat, messagesOf, saveMessages, setChatCase, setChatSources } from "@sllaw/db";
 import type { Account } from "./accounts";
-import { agentCtx } from "./agent";
+import { agentCtx, caseFilesOf } from "./agent";
 import { caseOf } from "./cases";
 
 type Signed = Account & { workspace: NonNullable<Account["workspace"]> };
@@ -42,11 +42,12 @@ export async function moveChat(a: Signed, chatId: string, caseId: string) {
 
 /** One turn: the user message is stored first, then the main agent streams its answer, stored when it ends.
  *  caseId makes a new chat a case chat (checked: the user must be able to see the case); a stored chat keeps the
- *  case it has. A case chat's agent gets the case's title and facts. abortSignal is the request's: the stop button
+ *  case it has. A case chat's agent gets the case's title, facts and files. abortSignal is the request's: the stop button
  *  (useChat's stop) aborts the request and with it the agent, and so does a closed tab; either way the answer so far
  *  is stored. waitUntil matters only then: on a normal end the SDK holds the response open until onFinish resolves,
  *  but a stopped request has no response left to keep the function alive for the write (on Vercel). History comes
- *  from the database, never from the client. null when the chat or the case is not this user's. */
+ *  from the database, never from the client. Messages are stored in real ids; the chat's source handles (what the
+ *  model sees instead) are stored with the answer. null when the chat or the case is not this user's. */
 export async function sendMessage(
   a: Signed,
   chatId: string,
@@ -73,11 +74,14 @@ export async function sendMessage(
     userId: a.user.id,
     caseId: effective,
     caseBrief: theCase && { title: theCase.title, facts: theCase.facts },
+    caseFiles: theCase ? await caseFilesOf(theCase.id) : [],
   });
   return streamChat(
     ctx,
     [...history, message],
-    (m, usage) => waitUntil(saveMessages(chatId, [{ ...m, usage }])),
+    chat.sources ?? null,
+    (m, usage, sources) =>
+      waitUntil(Promise.all([saveMessages(chatId, [{ ...m, usage }]), setChatSources(chatId, sources)])),
     abortSignal,
   );
 }
