@@ -91,7 +91,7 @@ export function FileActions({
           await remove.mutateAsync({ caseId, fileId });
           if (u) dismiss(u.key);
           await qc.invalidateQueries({ queryKey: trpc.case.files.queryKey({ caseId }) });
-          router.push(`/cases/${caseId}`);
+          router.push(`/cases/${caseId}/files`);
           router.refresh();
         }}
       />

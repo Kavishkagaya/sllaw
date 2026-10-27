@@ -18,8 +18,8 @@ const STATE: Record<string, string> = {
 };
 
 export function UploadTray() {
-  // a case's page lists its own files with their states: the tray leaves those out there
-  const onCase = usePathname().match(/^\/cases\/([0-9a-f-]{36})/)?.[1];
+  // a case's files pages list its own files with their states: the tray leaves those out there
+  const onCase = usePathname().match(/^\/cases\/([0-9a-f-]{36})\/files/)?.[1];
   const uploads = Object.values(useUploadStore((s) => s.uploads)).filter(
     (u) => u.name && (!onCase || u.caseId !== onCase),
   );

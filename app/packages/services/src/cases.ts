@@ -28,9 +28,10 @@ import {
   type Signed,
 } from "./files";
 
-/** ponytail: only the case's author may see and change it until case_shares exists (docs/APP.md, Access: viewer
- *  reads, editor adds/removes). Then this becomes the caseViewer / caseEditor check. */
-async function caseOf(a: Signed, caseId: string) {
+/** The case if this user may see and change it, else null. ponytail: only the case's author may until case_shares
+ *  exists (docs/APP.md, Access: viewer reads, editor adds/removes). Then this becomes the caseViewer / caseEditor
+ *  check. */
+export async function caseOf(a: Signed, caseId: string) {
   const c = await caseById(caseId);
   return c && c.workspaceId === a.workspace.id && c.createdBy === a.user.id ? c : null;
 }

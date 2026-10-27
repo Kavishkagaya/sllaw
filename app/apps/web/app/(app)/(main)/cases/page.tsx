@@ -4,9 +4,9 @@ import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { fmtDate } from "@/lib/format";
-import { serverApi } from "../../../trpc/server";
+import { serverApi } from "@/trpc/server";
 
-// /cases: the user's cases as cards, newest first, and the way to a new one.
+// /cases: the user's cases as cards, last worked on first, and the way to a new one.
 export default async function CasesPage() {
   const cases = await (await serverApi()).case.list();
   return (
@@ -23,9 +23,7 @@ export default async function CasesPage() {
       <main className="flex-1 overflow-y-auto">
         <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6">
           <h1 className="font-serif text-3xl font-semibold tracking-tight">Cases</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Each case keeps its files together: the AI reads them as the case's context.
-          </p>
+          <p className="mt-1 text-sm text-muted-foreground">Each case keeps its facts, chats and files together.</p>
           {cases.length === 0 ? (
             <div className="mt-10 flex flex-col items-center gap-3 rounded-xl border border-dashed px-6 py-16 text-center">
               <Briefcase className="size-8 text-muted-foreground" />
@@ -55,7 +53,7 @@ export default async function CasesPage() {
                         <FileText className="size-3.5" />
                         {c.files} {c.files === 1 ? "file" : "files"}
                       </span>
-                      <span>Created {fmtDate(c.createdAt)}</span>
+                      <span>Updated {fmtDate(c.lastActivity)}</span>
                     </CardFooter>
                   </Card>
                 </Link>

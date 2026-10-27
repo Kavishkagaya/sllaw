@@ -1,23 +1,43 @@
 "use client";
 import { useChat } from "@ai-sdk/react";
 import type { AppRouter, ChatMessage } from "@sllaw/api";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import type { inferRouterOutputs } from "@trpc/server";
-import { ArrowLeft, BookMarked, ExternalLink, Loader2, TriangleAlert } from "lucide-react";
+import {
+  ArrowLeft,
+  BookMarked,
+  Briefcase,
+  ChevronRight,
+  ExternalLink,
+  FolderInput,
+  Loader2,
+  Plus,
+  TriangleAlert,
+} from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Streamdown } from "streamdown";
 import { Composer } from "@/components/composer";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { useChatStore } from "@/stores/chat-store";
-import { useTRPC } from "../../../../trpc/client";
+import { useTRPC } from "@/trpc/client";
 import { splitAnswer, Trail } from "./trail";
 
 type View = NonNullable<inferRouterOutputs<AppRouter>["corpus"]["chunk"]>;
@@ -33,23 +53,34 @@ const EXAMPLES = [
   "Which Article of the Constitution protects freedom of expression, and what limits it?",
   "What is the limitation period for an action on a written contract?",
 ];
+// in a case the agent has its facts: start from them
+const CASE_EXAMPLES = [
+  "What are the legal issues in these facts?",
+  "Which provisions apply to this case, as amended today?",
+  "What facts are missing that the law turns on?",
+];
 const SPRING = { type: "spring", stiffness: 260, damping: 30 } as const;
 
-/** A chat: empty (fresh, at /chats) it shows the welcome and the question box in the middle; its first message
- *  moves the box down, brings the thread in and makes the URL /chats/<id> in place, so nothing reloads. */
+/** A chat: empty (fresh, at /chats or /cases/<id>/chats) it shows the welcome and the question box in the middle;
+ *  its first message moves the box down, brings the thread in and makes the URL .../chats/<id> in place, so nothing
+ *  reloads. With a case (caseId, caseTitle) it is a case chat: the agent reads every question with the case's facts. */
 export function Chat({
   id,
   title,
   initial,
   fresh,
+  caseId,
+  caseTitle,
 }: {
   id: string;
   title?: string;
   initial: ChatMessage[];
   fresh?: boolean;
+  caseId?: string;
+  caseTitle?: string;
 }) {
   // the chat lives in the store: this page only shows it, and leaving the page does not stop an answer
-  const chat = useChatStore((s) => s.open)(id, initial);
+  const chat = useChatStore((s) => s.open)(id, initial, caseId);
   const send = useChatStore((s) => s.send);
   const stop = useChatStore((s) => s.stop);
   const { messages, status, error } = useChat<ChatMessage>({ chat });
@@ -104,7 +135,7 @@ export function Chat({
   const busy = status === "submitted" || status === "streaming";
   const empty = messages.length === 0;
   const ask = (text: string) => {
-    send(id, text);
+    send(id, text, caseId);
     // a fresh chat takes its own URL on its first message; Next syncs its router with pushState (no request)
     if (fresh && !location.pathname.endsWith(id)) history.pushState(null, "", `${location.pathname}/${id}`); // /chats → /chats/<id>
   };
@@ -157,17 +188,33 @@ export function Chat({
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex h-12 shrink-0 items-center gap-2 px-3" style={{ borderBottomWidth: empty ? 0 : 1 }}>
           <SidebarTrigger />
+          {caseId && caseTitle && (
+            <>
+              <Link
+                href={`/cases/${caseId}`}
+                className="max-w-48 shrink-0 truncate text-sm text-muted-foreground hover:text-foreground"
+              >
+                {caseTitle}
+              </Link>
+              {!empty && <ChevronRight className="size-3.5 shrink-0 text-muted-foreground" />}
+            </>
+          )}
           {!empty && (
-            <motion.h1 initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="truncate text-sm font-medium">
+            <motion.h1
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="min-w-0 flex-1 truncate text-sm font-medium"
+            >
               {title ??
                 messages.find((m) => m.role === "user")?.parts.find((p) => p.type === "text")?.text ??
                 "New chat"}
             </motion.h1>
           )}
+          {!empty && !caseId && !busy && <MoveToCase chatId={id} />}
           {!empty && (
             <Sheet open={sheet} onOpenChange={setSheet}>
               <SheetTrigger asChild>
-                <Button variant="ghost" size="sm" className="ml-auto xl:hidden">
+                <Button variant="ghost" size="sm" className="xl:hidden">
                   <BookMarked /> Citations {cites.length > 0 && <Badge variant="secondary">{cites.length}</Badge>}
                 </Button>
               </SheetTrigger>
@@ -188,10 +235,12 @@ export function Chat({
                 className="mx-auto w-full max-w-2xl space-y-2 px-4 pb-8 text-center"
               >
                 <h2 className="font-serif text-3xl font-semibold tracking-tight sm:text-4xl">
-                  What would you like to research?
+                  {caseId ? "What would you like to know about this case?" : "What would you like to research?"}
                 </h2>
                 <p className="text-muted-foreground">
-                  Answers drawn from the Constitution and Acts of Sri Lanka, each with its citation.
+                  {caseId
+                    ? "Answers read in the light of the case's facts, drawn from the Constitution and Acts of Sri Lanka."
+                    : "Answers drawn from the Constitution and Acts of Sri Lanka, each with its citation."}
                 </p>
               </motion.div>
             ) : (
@@ -243,7 +292,8 @@ export function Chat({
             className={cn("mx-auto w-full px-4", empty ? "max-w-2xl" : "max-w-3xl pb-4")}
           >
             <Composer
-              draftKey={fresh ? "new" : id}
+              draftKey={fresh ? (caseId ? `new:${caseId}` : "new") : id}
+              placeholder={caseId ? "Ask about this case…" : undefined}
               onSend={ask}
               onStop={() => stop(id)}
               busy={busy}
@@ -257,7 +307,7 @@ export function Chat({
                   transition={{ duration: 0.2 }}
                   className="grid gap-2 overflow-hidden pt-4 sm:grid-cols-3"
                 >
-                  {EXAMPLES.map((q) => (
+                  {(caseId ? CASE_EXAMPLES : EXAMPLES).map((q) => (
                     <button
                       type="button"
                       key={q}
@@ -284,6 +334,53 @@ export function Chat({
       </div>
       {!empty && <aside className="hidden w-96 shrink-0 border-l bg-sidebar xl:block">{panel}</aside>}
     </div>
+  );
+}
+
+/** "Move to case": a quick chat goes into one of the user's cases and opens there (the agent gets the case's facts
+ *  from the next question on). */
+function MoveToCase({ chatId }: { chatId: string }) {
+  const trpc = useTRPC();
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const cases = useQuery(trpc.case.list.queryOptions(undefined, { enabled: open }));
+  const move = useMutation(
+    trpc.chat.move.mutationOptions({
+      onSuccess: ({ caseId }) => {
+        router.push(`/cases/${caseId}/chats/${chatId}`);
+        router.refresh();
+      },
+    }),
+  );
+  return (
+    <DropdownMenu open={open} onOpenChange={setOpen}>
+      <DropdownMenuTrigger asChild>
+        <Button variant="ghost" size="sm" disabled={move.isPending}>
+          {move.isPending ? <Loader2 className="animate-spin" /> : <FolderInput />}
+          <span className="hidden sm:inline">Move to case</span>
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-64">
+        <DropdownMenuLabel>Move this chat to a case</DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        {cases.isPending && <DropdownMenuItem disabled>Loading cases…</DropdownMenuItem>}
+        {cases.isError && <DropdownMenuItem disabled>Could not load your cases</DropdownMenuItem>}
+        {cases.data?.length === 0 && <DropdownMenuItem disabled>No cases yet</DropdownMenuItem>}
+        <div className="max-h-72 overflow-y-auto">
+          {cases.data?.map((c) => (
+            <DropdownMenuItem key={c.id} onSelect={() => move.mutate({ chatId, caseId: c.id })}>
+              <Briefcase /> <span className="truncate">{c.title}</span>
+            </DropdownMenuItem>
+          ))}
+        </div>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem asChild>
+          <Link href="/cases/new">
+            <Plus /> New case
+          </Link>
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 

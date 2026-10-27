@@ -12,7 +12,9 @@ export function Composer({
   onStop,
   busy,
   autoFocus,
+  placeholder = "Ask about Sri Lankan law…",
 }: {
+  placeholder?: string;
   draftKey: string;
   onSend: (text: string) => void;
   onStop?: () => void;
@@ -36,7 +38,7 @@ export function Composer({
         value={input}
         onChange={(e) => setDraft(draftKey, e.target.value)}
         onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && send(e)}
-        placeholder="Ask about Sri Lankan law…"
+        placeholder={placeholder}
         autoFocus={autoFocus}
         rows={2}
         className="max-h-60 min-h-20 resize-none border-0 bg-transparent px-4 py-3 pr-14 shadow-none focus-visible:ring-0 dark:bg-transparent"

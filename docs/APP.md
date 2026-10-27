@@ -79,7 +79,7 @@ in v1; an entity graph can be built later from the same per-file JSON.
   and edits facts; the author also shares, changes roles and deletes. A chat is personal work: nobody else sees
   it, the case author included, unless it is shared.
 - **Chats (user, 2026-10-18):** one route, `/chats/[[...id]]`: `/chats` is a new chat (the server mints its uuid,
-  a fresh one per visit), `/chats/<id>` a stored one; from a case, `/chats/<id>?case=<caseId>`. The first message creates the `chats` row (`case_id` null for plain
+  a fresh one per visit), `/chats/<id>` a stored one; from a case, `/cases/<caseId>/chats/<id>` (was `?case=` until 2026-10-27). The first message creates the `chats` row (`case_id` null for plain
   chat); a case chat is a normal chat whose `ctx` also has that case's access. Every query filters by user, so
   another user's chat id reads as missing. The document viewer is a sidebar on the chat page: every citation in
   the chat is listed; clicking one loads that chunk (path, amended by / cited by) with "open full document".
@@ -89,7 +89,8 @@ in v1; an entity graph can be built later from the same per-file JSON.
   sidebar, with "open full document" and the source file (`docs.source_url`, the `documents.source_url` of the
   law's file, carried by `etl.publish` from 2026-10-18; null until the next publish). A citation of an id the agent
   never loaded in the chat is marked unverified. The client sends only the new message; history is read from the
-  database, so tool outputs cannot be forged.
+  database, so tool outputs cannot be forged. **Changed 2026-10-27:** a case chat is `/cases/<caseId>/chats/<id>`
+  (Case-first UI, below); `/chats` is for quick chats only.
 - **Files (user, 2026-10-18):** one `files` table is the base of an asset system: one row per file, with its
   extracted content (text, and the ingestion card: doc_type, summary, parties, dates, laws cited). Other tables
   say what a file is used for by referencing `files.id` (a case's files, a message's attachments). A case's
@@ -171,8 +172,24 @@ in v1; an entity graph can be built later from the same per-file JSON.
   the pipeline (411 MissingContentLength: aws4fetch sends the body as a stream, which Next's fetch sends chunked);
   `r2.ts` put now signs and sends the bytes with their length. Open: the 411 was recorded as not retryable (any
   4xx), and after a failed extract the UI offered "Try again" (categorize/index left pending) that reruns nothing;
-  the Sinhala/English notes were categorized as a counter affidavit. Not built yet: the floating chat box that
-  starts a case chat (`/chats/<id>?case=<caseId>`).
+  the Sinhala/English notes were categorized as a counter affidavit. (Files moved to `/cases/<id>/files` and
+  `/edit` became `/settings` on 2026-10-27.)
+- **Case-first UI (user, 2026-10-27):** the case is where work happens; chat outside a case stays, second.
+  Two sidebars from two layouts under `(app)` (one `SidebarProvider` above both): `(main)/layout.tsx` outside a case
+  (Home, Cases, the 5 most recent cases, Quick chats: plain chats, 5 then "Show more"), `cases/[id]/layout.tsx`
+  inside one (All cases, a case switcher, Overview, Files, the case's chats, Case settings). Routes: `/` Home (recent
+  cases, New case, a quick-question box); `/cases/<id>` overview (facts, a question box that starts a case chat, latest
+  chats, files by group; the case dashboard grows here); `/cases/<id>/chats/[[...chatId]]`; `/cases/<id>/files`;
+  `/cases/<id>/settings`. Case pages to come (documents, tasks, calendar) go in the case sidebar; **connections are
+  global** (per user, in settings), never inside a case: a case page uses them. A case chat is a `chats` row with
+  `case_id`: the browser sends `caseId` with a new chat's first message, the server checks the case (`caseOf`) and
+  keeps a stored chat's own case; the main agent gets the case's title and facts (6,000 chars) at the end of its
+  instructions, so the shared start stays in the provider's cache. "Move to case" (`chat.move`) puts a quick chat into
+  a case; a stored case chat opened at `/chats/<id>` redirects into its case. Cases list by last activity (created,
+  last file, last own chat). Not built: the agent's case-file search tool (#19), connections. Tested in a browser
+  2026-10-27 (test user, dev server): case chat from the overview (the answer reasoned from the facts' dates), quick
+  chat from Home, move to case, every route, 390 px. Moving route folders into groups left `next dev` serving the old
+  tree (404 on every case route) until it was restarted.
 - **Retryable and non-retryable errors (user, 2026-10-26):** one rule decides (`services/src/files/errors.ts`).
   Retried: network errors, timeouts, 408, 425, 429, 5xx, unknown errors. Not retried: a file its parser cannot read
   (`Unreadable`: a corrupt PDF, a .docx that is not a zip), other 4xx. Packages only describe their errors (an HTTP
@@ -196,7 +213,7 @@ in v1; an entity graph can be built later from the same per-file JSON.
   a chunk id is a cache, looked up again when gone.
 
 - **Chats outlive pages, stop is immediate (user, 2026-10-18):** a zustand store (`apps/web/stores/chat-store.ts`) holds one AI SDK `Chat` per chat id, the drafts, `send` and `stop`; pages show a chat with `useChat({ chat })`, which leaves an external Chat running on unmount, so an answer streams on while the user is elsewhere in the app (spinner in the sidebar, a dot when it finished unseen). A new chat's first message moves the question box from the middle to the bottom and brings the thread in (motion `layout`), and `history.pushState` makes the URL `/chats/<id>` without a navigation, so nothing unmounts; a reload loads `/chats/<id>` from the database. Checked in a browser on a copy of the route with a fake slow stream: URL changed in place, words streamed, the answer kept streaming while another chat was open and was complete on return, unread set while away and cleared on return, with the sidebar's refreshes running. **Stop** (send becomes stop while an answer runs) is the SDK's own: the Chat's `stop()` aborts the request, the route forwards `req.signal` as the agent's `abortSignal`, and `onFinish` stores the answer so far (under `after()`, so the write lands). On Vercel this needs `supportsCancellation` (`apps/web/vercel.json`). The server cannot tell stop from a disconnect, so a closed tab, a reload or a lost connection also stops the answer, keeping what was written. Weighed and dropped (user wanted a stop that acts at once): running every answer to the end on the server (`consumeSseStream` under `after()`) with a stop endpoint that sets a flag the run polls every 1.5 s, the SDK's documented pattern for resumable streams ("Stop an Active Resumable Stream"). Measured with the SDK's mock model, abort after 0.7 s: `onFinish` gets the partial text with or without `consumeSseStream` (its `isAborted` is false without it, so the stored message carries no stopped mark).
-- **UI (2026-10-18):** shadcn/ui (radix, `apps/web/components/ui`) on Tailwind v4; light/dark/system via next-themes (class on `<html>`). Palette: warm paper + navy ink in light, navy + brass in dark (tokens in `app/globals.css`); Geist for the interface, Source Serif 4 for headings and statute text, so the law reads apart from the answer. Clerk's own `<SignIn/>`/`<SignUp/>` at `/sign-in`, `/sign-up`, styled by mapping `appearance.variables` to the theme's CSS variables; every other page needs a session (`proxy.ts`). Signed in: sidebar of chats (Today / 7 days / Older), `/` redirects to `/chats` (a new chat), citations beside the thread at xl, in a sheet below.
+- **UI (2026-10-18):** shadcn/ui (radix, `apps/web/components/ui`) on Tailwind v4; light/dark/system via next-themes (class on `<html>`). Palette: warm paper + navy ink in light, navy + brass in dark (tokens in `app/globals.css`); Geist for the interface, Source Serif 4 for headings and statute text, so the law reads apart from the answer. Clerk's own `<SignIn/>`/`<SignUp/>` at `/sign-in`, `/sign-up`, styled by mapping `appearance.variables` to the theme's CSS variables; every other page needs a session (`proxy.ts`). Signed in: (sidebar and `/`: Case-first UI, 2026-10-27), citations beside the thread at xl, in a sheet below.
 - **Accounts (user, 2026-10-18):** `users`, `workspaces`, `workspace_users` (role: admin | member, Clerk's org role
   without `org:`) keyed by our own uuid, each with its `clerk_id`; everything else in the app refers to our ids. A
   Clerk webhook (`/api/webhooks/clerk`, Svix-verified) keeps them in step: user, organization and

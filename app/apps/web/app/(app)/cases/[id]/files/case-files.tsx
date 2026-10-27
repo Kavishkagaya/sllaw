@@ -65,7 +65,7 @@ export function CaseFiles({ caseId, initial }: { caseId: string; initial: CaseFi
     // the whole section takes dropped files
     <section
       aria-label="Case files: drop files here to add them"
-      className="relative mt-10"
+      className="relative"
       onDragOver={(e) => {
         if (!e.dataTransfer.types.includes("Files")) return;
         e.preventDefault();
@@ -82,7 +82,7 @@ export function CaseFiles({ caseId, initial }: { caseId: string; initial: CaseFi
     >
       <div className="flex items-end justify-between gap-4 border-b pb-3">
         <div>
-          <h2 className="text-lg font-semibold">Files</h2>
+          <h1 className="font-serif text-3xl font-semibold tracking-tight">Files</h1>
           <p className="text-sm text-muted-foreground">
             {files.length ? `${files.length} ${files.length === 1 ? "file" : "files"}` : "Nothing added yet"}
           </p>

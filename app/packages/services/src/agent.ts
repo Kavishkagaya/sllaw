@@ -18,7 +18,13 @@ const asChunk = (c: {
   text: c.text,
 });
 
-type Who = { workspaceId: string; userId: string; caseId?: string | null; asOfDate?: string };
+type Who = {
+  workspaceId: string;
+  userId: string;
+  caseId?: string | null;
+  caseBrief?: { title: string; facts: string } | null;
+  asOfDate?: string;
+};
 
 const CLAUSE = 900; // chars of an amending section kept: the operative words come first
 const clip = (t: string, chunk: number | null) =>
@@ -64,11 +70,12 @@ export const today = () => new Date().toLocaleDateString("en-CA", { timeZone: "A
  * The ctx agents run with. The caller has already checked access (api: chatOwner, and caseEditor for a case chat),
  * so the scopes here are what this request may reach. User-file ports join here (#19).
  */
-export function agentCtx({ workspaceId, userId, caseId = null, asOfDate = today() }: Who): Ctx {
+export function agentCtx({ workspaceId, userId, caseId = null, caseBrief = null, asOfDate = today() }: Who): Ctx {
   return {
     workspaceId,
     userId,
     caseId,
+    caseBrief,
     asOfDate,
     scopes: [`user:${userId}`, ...(caseId ? [`case:${caseId}`] : [])],
     ports: {

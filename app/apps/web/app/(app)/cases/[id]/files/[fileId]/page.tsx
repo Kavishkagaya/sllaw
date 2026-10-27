@@ -2,7 +2,7 @@ import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { docTypeLabel, fmtDate, fmtSize } from "@/lib/format";
-import { orNotFound, serverApi } from "../../../../../../trpc/server";
+import { orNotFound, serverApi } from "@/trpc/server";
 import { FileActions } from "./file-actions";
 
 // The card the categorizer wrote (meta on the row; the summary from the store).
@@ -33,8 +33,8 @@ export default async function CaseFilePage({ params }: { params: Promise<{ id: s
     <div className="flex h-full flex-col">
       <PageHeader
         crumbs={[
-          { label: "Cases", href: "/cases" },
           { label: c.title, href: `/cases/${c.id}` },
+          { label: "Files", href: `/cases/${c.id}/files` },
           { label: m.title || f.name },
         ]}
       />
