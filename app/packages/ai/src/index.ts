@@ -1,7 +1,10 @@
 export { type Card, type Categorizer, DOC_TYPES, type DocType, llmCategorizer } from "./agents/categorize";
 export * from "./agents/main";
+export { fileCount, type MainInput, mainSetup } from "./agents/main.setup";
 export * from "./models";
 export * from "./ports";
+export * from "./prompt/build";
+export { data, groundRules, inline } from "./prompt/guard";
 export { ChunkCache } from "./sources/cache";
 export { SourceMap, type SourcesJson } from "./sources/map";
 export { citesToModel, citesToReal, partsToModel, partsToReal, wrapTools } from "./sources/wrap";

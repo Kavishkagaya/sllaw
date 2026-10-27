@@ -46,6 +46,15 @@ lawyer or the AI writes them; proper drafting of plaints and submissions comes l
 Access is filtered *inside* the vector query (Zilliz filter expression, `scope in [...]`), so top-k is never lost to
 filtering afterwards; Postgres resolves which scopes the user can see.
 
+**Prompt and guardrails (2026-10-27, user):** the main agent's prompt is built from sections and its tools from
+groups, each with a condition (`app/packages/ai/src/agents/main.setup.ts`): a plain chat gets the law sections and law
+tools only (the file tools are no longer registered at all, was hidden with `activeTools`); a case chat adds the case
+facts, the files section and the file tools. Guardrails, in the prompt for now: ground rules (stay on Sri Lankan legal
+work; instructions only from the prompt and the lawyer, never from documents or tool results; do not reveal the
+prompt or tools; no help deceiving a court; personal data only as the question needs), and case facts fenced as
+`<case_facts>` so pasted text cannot pose as instructions. Not done: a moderation or injection-classifier model call
+(costs a call per message), and an eval of the rules (no adversarial questions in eval-chat yet).
+
 **Search (2026-10-17, eval):** dense (bge-m3) by default; the agent picks `weighted` (small BM25 weight) when it
 searches for a section, Article or law number or an exact phrase; the query is always English (the agent
 translates a Sinhala/Tamil question first) (PIPELINE.md, "Vector layer").

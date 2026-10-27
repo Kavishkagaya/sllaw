@@ -268,6 +268,15 @@ Not covered yet: 2000–2008 (384×552 booklet format, extraction still running 
   complete on reading (#10: all three release routes of s. 357, the s. 419 exception, the notice duty) in fewer steps.
   **Pinned: deepinfra, then deepseek** (models.ts `PROVIDERS`, `MODEL_PROVIDERS` to override). Each tagged call also
   pays a $0.00015 `reportingTagWriteCost` (the `tags` option), not in the eval's `cost`.
+- **Prompt from sections + ground rules (main.setup.ts, 2026-10-27), same 9 questions on deepinfra.** main vs this
+  branch: hits 9/9 both; calls 41 / 35; input 280k / 211k tokens; cached 75% / 74%; cost $0.0148 / $0.0118; slowest
+  51 s / 47 s; citations of chunks never read 5 / 9 (one run each: noise or the new rules, not separated). eval-chat had
+  counted no citations since the handle change (it read `[[81234]]`; the model writes `[[s3]]`): fixed to map handles
+  back. **Cache per call** (sequential questions): a plain chat's first call reads 2,816 of 2,866 tokens from cache
+  (the system prompt and tools), and every later step reads all of the previous call; a case's first question reads
+  1,408/4,476, its second 4,352/4,475. **The last step loses the cache:** with no tools and the "last step" note
+  appended to the system prompt, a case question that used all 14 steps read 2,048 of 30,766 tokens from cache
+  (~$0.004 extra, more than a whole plain question). Not fixed yet.
 - **Junior-lawyer prompt (main.ts, 2026-10-20), same 9 questions on deepinfra.** A first version ("ask what else could
   change the answer, search for these") cost +72% and two questions used all 14 steps; one returned raw tool-call
   markup (`<｜DSML｜ calls>`) on its tool-less last step, now told in its instructions that it is the last step.

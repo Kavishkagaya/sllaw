@@ -55,6 +55,12 @@ apps/web → api → services → db
   cycle. So everything an agent gets comes in one `ctx` (workspace, user, case, scopes, ports), built by services
   and already scoped to the request; tools (`tools/`) close over it, agents (`agents/`) take it. Imports no
   package of ours.
+  An agent is a **setup** (`agents/<name>.setup.ts`, built by `prompt/build.ts`): prompt sections (`section(title,
+  content, { when })`, nested = a heading level down) and tool groups (`toolGroup({ name, when, tools })`), each
+  conditional on the turn's input. A new kind of chat or source is a new section and tool group with a `when`, not an
+  edit to one string. Sections that change per chat (the case) go last, for the prompt cache. Guardrails
+  (`prompt/guard.ts`): `groundRules` in every prompt, user and file text fenced with `data(tag, text)`, and tools only
+  for what the chat may use (no file tools outside a case).
 - **`api`**: tRPC routers, thin: input validation (zod), auth, one service call. No logic, no queries, no ai.
   Procedures by role: `signedUser`, `superAdmin`, `workspaceUser`, `workspaceAdmin`, `caseViewer`,
   `caseEditor`, `caseAuthor`, `chatViewer`, `chatOwner` (docs/APP.md, Access).

@@ -1,9 +1,7 @@
-// The case-file tools (real ids, full text) and the case section of the instructions, on fake ports: no model, store
+// The case-file tools (real ids, full text), on fake ports: no model, store
 // or index.
 import { describe, expect, it } from "vitest";
-import { caseSection } from "../agents/main";
 import type { CaseFile, Ctx, FileChunk, FilePassage } from "../ports";
-import { SourceMap } from "../sources/map";
 import { CARDS, fileTools, pageRange, READ_PAGES } from "./files";
 
 const uuid = (c: string) => `${c.repeat(8)}-0000-4000-8000-000000000000`;
@@ -209,30 +207,5 @@ describe("fileCard", () => {
     expect(await card({ files: ["nope"] })).toMatch(/No such case file/);
     expect(await card({ types: ["will"] })).toMatch(/No case file of type will/);
     expect(await setup([], {}).card({})).toMatch(/no files yet/);
-  });
-});
-
-describe("caseSection", () => {
-  it("counts the files and names only those not searchable, by handle; never lists cards", () => {
-    const files = [
-      file("a", { title: "Plaint", parties: [{ name: "Perera", role: "plaintiff" }] }),
-      file("b", { title: "Letter", state: "processing", searchable: false }),
-      file("c", { state: "unreadable", searchable: false }),
-    ];
-    const map = new SourceMap();
-    const s = caseSection({ title: "Perera v Silva", facts: "A lease." }, files, map);
-    expect(s).toContain('case "Perera v Silva"');
-    expect(s).toContain("The lawyer has added 3 files to this case.");
-    expect(s).toContain("- f1  Letter: still being read");
-    expect(s).toContain("- f2  c.pdf: no readable text");
-    expect(s).not.toContain(files[1]!.id);
-    expect(s).not.toContain("Plaint");
-    expect(map.get("f1")?.real).toBe(files[1]!.id);
-    const many = Array.from({ length: 300 }, (_, i) => ({ ...file("a"), id: `${i}` }));
-    expect(caseSection({ title: "T", facts: "" }, many).length).toBe(
-      caseSection({ title: "T", facts: "" }, many.slice(0, 3)).length + 2,
-    );
-    expect(caseSection({ title: "T", facts: "" }, [])).toContain("no files yet");
-    expect(caseSection(null, files)).toBe("");
   });
 });
