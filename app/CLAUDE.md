@@ -12,7 +12,8 @@ pnpm build
 
 Env: `pnpm env:pull` writes `apps/web/.env.local` from Vercel's Development variables (the dev database, dev
 Clerk, R2 `sllaw-files`, the scoped Cloudflare tokens; `vercel link` in `app/` first). A new variable goes into Vercel
-(Development, and Production with its production value) and `.env.example`. Plain `vercel env pull` in `app/` writes
+(Development + Preview as one variable, and Production with its production value) and `.env.example`. Preview
+deployments use the Development values (dev database, dev Clerk; 2026-10-27). Plain `vercel env pull` in `app/` writes
 `app/.env.local`, which nothing reads.
 
 ## Boundaries
