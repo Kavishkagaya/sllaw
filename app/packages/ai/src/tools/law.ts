@@ -89,8 +89,18 @@ export const lawTools = ({ ports }: Ctx) => ({
       "and section, the kind (amends, inserts, replaces, repeals) and that amending section's text, which holds the " +
       "new words. A long amending text is cut short and marked '…[truncated]': read that chunk before saying what " +
       "the rest of it changes. Changes after the date are only named. Use it before saying what a section says now; " +
-      "one call on any chunk of the section covers all its amendments.",
-    inputSchema: z.object({ chunkId }),
-    execute: ({ chunkId }) => ports.asOf(chunkId),
+      "one call on any chunk of the section covers all its amendments. The date is the chat's unless you give one: " +
+      "give date to see the section as it stood earlier (when a contract was made, an act done, a case decided).",
+    inputSchema: z.object({
+      chunkId,
+      date: z
+        .string()
+        .regex(/^\d{4}-\d{2}-\d{2}$/)
+        // a real day: Date rolls 2005-02-30 over to March, so it must come back unchanged
+        .refine((d) => !Number.isNaN(Date.parse(d)) && new Date(d).toISOString().startsWith(d), "not a date")
+        .optional()
+        .describe("YYYY-MM-DD; left out, the chat's date"),
+    }),
+    execute: ({ chunkId, date }) => ports.asOf(chunkId, date),
   }),
 });

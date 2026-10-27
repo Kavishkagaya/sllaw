@@ -89,7 +89,7 @@ export interface Ports {
     direction: Direction,
     opts?: { kinds?: string[]; text?: string },
   ): Promise<Link[]>;
-  asOf(chunkId: number): Promise<AsOf | null>;
+  asOf(chunkId: number, date?: string): Promise<AsOf | null>; // date left out: ctx.asOfDate
   status(chunkIds: number[]): Promise<Record<number, Status>>;
 }
 
