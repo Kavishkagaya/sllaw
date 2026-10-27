@@ -32,7 +32,7 @@ export function Composer({
   return (
     <form
       onSubmit={send}
-      className="relative rounded-xl border bg-card shadow-sm transition-shadow focus-within:border-ring/50 focus-within:ring-2 focus-within:ring-ring/15"
+      className="relative rounded-xl border bg-card shadow-md transition-shadow focus-within:border-ring/50 focus-within:ring-2 focus-within:ring-ring/15"
     >
       <Textarea
         value={input}

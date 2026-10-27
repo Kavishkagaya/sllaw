@@ -52,7 +52,7 @@ export function FileActions({
   }, [settled, status.finished, router]);
 
   return (
-    <div className="mt-6 flex flex-col gap-3 rounded-xl border bg-card p-4">
+    <div className="mt-6 flex flex-col gap-3 rounded-xl border bg-card shadow-xs p-4">
       <div className="flex flex-wrap items-center gap-2">
         <FileStateBadge state={state} />
         <span className="text-xs text-muted-foreground">

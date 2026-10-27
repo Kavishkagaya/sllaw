@@ -1,13 +1,16 @@
 "use client";
 import { useChat } from "@ai-sdk/react";
 import type { ChatMessage } from "@sllaw/api";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQueries, useQuery } from "@tanstack/react-query";
 import {
   ArrowLeft,
   BookMarked,
   Briefcase,
+  ChevronLeft,
   ChevronRight,
+  FileText,
   FolderInput,
+  Landmark,
   Loader2,
   Plus,
   TriangleAlert,
@@ -35,7 +38,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { cn } from "@/lib/utils";
 import { useChatStore } from "@/stores/chat-store";
 import { useTRPC } from "@/trpc/client";
-import { FileSource, LawSource } from "./source-view";
+import { FileSource, LawSource, lawName, shortPin, TONE, type Tone } from "./source-view";
 import { splitAnswer, Trail } from "./trail";
 
 /** A citation as the client gets it (real ids; the server maps the model's handles): a law chunk, a case file's
@@ -61,6 +64,8 @@ const citeOf = (m: RegExpMatchArray): Cite => {
   if (file) return { kind: "file", key: `f:${file}`, label: l || "case file", fileId: file, n: null };
   return { kind: "page", key: `p:${ref}:${page}|${l}`, label: l || `p. ${page}` };
 };
+/** Laws are brass, the user's own case files blue (an old page citation is a case file too). */
+const toneOf = (c: Cite): Tone => (c.kind === "law" ? "law" : "file");
 const toLinks = (s: string) =>
   s.replace(CITE, (...m) => {
     const c = citeOf(m as unknown as RegExpMatchArray);
@@ -184,17 +189,27 @@ export function Chat({
           <button
             type="button"
             onClick={() => show(c)}
+            aria-label={`Citation ${numbers.get(c.key)}: ${c.label}`}
             className={cn(
-              "mx-0.5 inline-flex max-w-64 items-center gap-1 rounded-md border px-1.5 py-px align-baseline font-sans text-xs font-medium transition-colors",
-              ok
-                ? "border-primary/30 bg-primary/5 text-primary hover:bg-primary/10"
-                : "border-dashed border-destructive/50 text-destructive",
-              open?.key === c.key && "bg-primary text-primary-foreground hover:bg-primary/90",
+              "mx-0.5 inline-flex max-w-72 cursor-pointer items-stretch overflow-hidden rounded-md border align-middle font-sans text-xs leading-5.5 font-medium shadow-xs transition-all hover:-translate-y-px hover:shadow-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none active:translate-y-0",
+              !ok
+                ? "border-dashed border-destructive/60 bg-destructive/5 text-destructive"
+                : open?.key === c.key
+                  ? TONE[toneOf(c)].on
+                  : TONE[toneOf(c)].chip,
             )}
           >
-            {!ok && <TriangleAlert className="size-3 shrink-0" />}
-            <span className="tabular-nums">{numbers.get(c.key)}</span>
-            <span className="truncate font-normal opacity-80">{c.label}</span>
+            <span className="flex shrink-0 items-center gap-1 border-r border-current/40 bg-current/10 px-1.5 font-semibold tabular-nums">
+              {!ok ? (
+                <TriangleAlert className="size-3" />
+              ) : toneOf(c) === "file" ? (
+                <FileText className="size-3" />
+              ) : (
+                <Landmark className="size-3" />
+              )}
+              {numbers.get(c.key)}
+            </span>
+            <span className="truncate px-2">{c.label}</span>
           </button>
         );
         return ok ? (
@@ -210,7 +225,16 @@ export function Chat({
     [loaded, numbers, open, show],
   );
 
-  const panel = <CitationPanel open={open} cites={cites} caseId={caseId} onPick={show} onBack={() => setOpen(null)} />;
+  const panel = (
+    <CitationPanel
+      open={open}
+      cites={cites}
+      loaded={loaded}
+      caseId={caseId}
+      onPick={show}
+      onBack={() => setOpen(null)}
+    />
+  );
 
   return (
     <div className="flex h-full">
@@ -341,7 +365,7 @@ export function Chat({
                       type="button"
                       key={q}
                       onClick={() => ask(q)}
-                      className="rounded-lg border bg-card p-3 text-left text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+                      className="rounded-lg border bg-card p-3 text-left shadow-xs text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
                     >
                       {q}
                     </button>
@@ -461,24 +485,89 @@ function Step({
   );
 }
 
+/** A citation's group in the list: its law or case file, named once, with each cited place under it. */
+type Group = {
+  key: string;
+  law: boolean;
+  title: string;
+  sub: string | null;
+  items: { c: Cite; n: number; where: string; snippet?: string }[];
+};
+
+/** The model's label minus the document's name: "PLAINT, p. 2" → "p. 2"; "s. 22, Rent" → "s. 22". */
+const placeOf = (label: string, law: boolean) => {
+  const bits = label.split(",").map((b) => b.trim());
+  if (bits.length < 2) return label;
+  return law ? bits[0]! : bits[bits.length - 1]!;
+};
+
+function useGroups(cites: Cite[], caseId?: string): Group[] {
+  const trpc = useTRPC();
+  const laws = useQueries({
+    queries: cites.map((c) =>
+      trpc.corpus.chunk.queryOptions({ chunkId: c.kind === "law" ? c.chunkId : 0 }, { enabled: c.kind === "law" }),
+    ),
+  });
+  const hasFiles = cites.some((c) => c.kind === "file");
+  const files = useQuery(trpc.case.files.queryOptions({ caseId: caseId ?? "" }, { enabled: !!caseId && hasFiles }));
+  const groups = new Map<string, Group>();
+  cites.forEach((c, i) => {
+    let key: string, title: string, sub: string | null, where: string, snippet: string | undefined;
+    if (c.kind === "law") {
+      const v = laws[i]?.data;
+      key = v ? `d:${v.chunk.docKey}` : c.key;
+      title = v
+        ? (v.doc?.title ?? v.chunk.title ?? v.chunk.docKey)
+        : c.label.split(",").slice(1).join(",").trim() || "Law";
+      sub = v ? lawName(v.chunk.docKey) : null;
+      where = (v && shortPin(v.chunk.path, v.chunk.label)) || placeOf(c.label, true);
+      snippet = v?.chunk.text;
+    } else if (c.kind === "file") {
+      const f = files.data?.find((x) => x.id === c.fileId);
+      key = `f:${c.fileId}`;
+      title = f ? (((f.meta ?? {}) as { title?: string }).title ?? f.name) : c.label.split(",")[0]!;
+      sub = "Case file";
+      where = c.n == null ? "Whole file" : placeOf(c.label, false);
+    } else {
+      key = c.key;
+      title = c.label;
+      sub = "Older citation";
+      where = c.label;
+    }
+    const g = groups.get(key) ?? { key, law: c.kind === "law", title, sub, items: [] };
+    g.items.push({ c, n: i + 1, where, snippet });
+    groups.set(key, g);
+  });
+  return [...groups.values()];
+}
+
 function CitationPanel({
   open,
   cites,
+  loaded,
   caseId,
   onPick,
   onBack,
 }: {
   open: Cite | null;
   cites: Cite[];
+  loaded: Set<string>;
   caseId?: string;
   onPick: (c: Cite) => void;
   onBack: () => void;
 }) {
+  const groups = useGroups(cites, caseId);
   if (!open)
     return (
       <div className="flex h-full flex-col">
-        <div className="flex h-12 shrink-0 items-center border-b px-4">
+        <div className="flex h-12 shrink-0 items-center gap-2 border-b pr-12 pl-4 xl:pr-4">
+          <BookMarked className="size-4 text-muted-foreground" />
           <h2 className="text-sm font-medium">Citations</h2>
+          {cites.length > 0 && (
+            <span className="ml-auto text-xs text-muted-foreground tabular-nums">
+              {cites.length} in {groups.length} {groups.length === 1 ? "source" : "sources"}
+            </span>
+          )}
         </div>
         <div className="flex-1 overflow-y-auto p-3">
           {!cites.length ? (
@@ -487,37 +576,116 @@ function CitationPanel({
               The provisions and case documents an answer cites appear here.
             </div>
           ) : (
-            <ol className="flex flex-col gap-1">
-              {cites.map((c, i) => (
-                <li key={c.key}>
-                  <button
-                    type="button"
-                    onClick={() => onPick(c)}
-                    className="flex w-full gap-3 rounded-md p-2 text-left text-sm hover:bg-sidebar-accent"
-                  >
-                    <span className="w-5 shrink-0 text-right text-xs leading-5 text-muted-foreground tabular-nums">
-                      {i + 1}
-                    </span>
-                    <span>{c.label}</span>
-                  </button>
-                </li>
-              ))}
-            </ol>
+            <div className="flex flex-col gap-3">
+              {groups.map((g) => {
+                const Icon = g.law ? Landmark : FileText;
+                return (
+                  <section key={g.key} className="overflow-hidden rounded-lg border bg-card shadow-xs">
+                    <header className="flex items-start gap-2.5 border-b px-3 py-2.5">
+                      <span
+                        className={cn(
+                          "mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-md border",
+                          TONE[g.law ? "law" : "file"].soft,
+                        )}
+                      >
+                        <Icon className="size-3.5" />
+                      </span>
+                      <div className="min-w-0">
+                        <h3 className="font-serif text-[15px] leading-snug font-semibold">{g.title}</h3>
+                        {g.sub && <p className="text-xs text-muted-foreground">{g.sub}</p>}
+                      </div>
+                    </header>
+                    <ol>
+                      {g.items.map(({ c, n, where, snippet }) => {
+                        const ok = c.kind === "page" || loaded.has(c.key);
+                        return (
+                          <li key={c.key} className="border-b last:border-b-0">
+                            <button
+                              type="button"
+                              onClick={() => onPick(c)}
+                              className="flex w-full items-start gap-3 px-3 py-2 text-left text-sm transition-colors hover:bg-accent/60"
+                            >
+                              <span
+                                className={cn(
+                                  "mt-px flex h-5 w-6 shrink-0 items-center justify-center rounded border px-1 text-[11px] font-medium tabular-nums",
+                                  TONE[toneOf(c)].soft,
+                                )}
+                              >
+                                {n}
+                              </span>
+                              <span className="min-w-0 flex-1">
+                                <span className="flex items-center gap-1.5">
+                                  <span className="truncate font-medium">{where}</span>
+                                  {!ok && (
+                                    <span className="flex shrink-0 items-center gap-1 text-[11px] text-destructive">
+                                      <TriangleAlert className="size-3" /> unverified
+                                    </span>
+                                  )}
+                                </span>
+                                {snippet && (
+                                  <span className="mt-0.5 line-clamp-2 font-serif text-xs leading-snug text-muted-foreground">
+                                    {snippet}
+                                  </span>
+                                )}
+                              </span>
+                              <ChevronRight className="mt-0.5 size-4 shrink-0 text-muted-foreground/60" />
+                            </button>
+                          </li>
+                        );
+                      })}
+                    </ol>
+                  </section>
+                );
+              })}
+            </div>
           )}
         </div>
       </div>
     );
-  const number = cites.findIndex((c) => c.key === open.key) + 1;
+  const at = cites.findIndex((c) => c.key === open.key);
+  const prev = at > 0 ? cites[at - 1] : undefined;
+  const next = at >= 0 && at < cites.length - 1 ? cites[at + 1] : undefined;
   return (
     <div className="flex h-full flex-col">
-      <div className="flex h-12 shrink-0 items-center gap-2 border-b px-2">
-        <Button variant="ghost" size="icon-sm" onClick={onBack} aria-label="All citations">
-          <ArrowLeft />
+      <div className="flex h-12 shrink-0 items-center gap-1 border-b pr-12 pl-2 xl:pr-2">
+        <Button variant="ghost" size="sm" onClick={onBack} className="text-muted-foreground">
+          <ArrowLeft /> All
         </Button>
-        <h2 className="truncate text-sm font-medium">
-          {number > 0 && <span className="mr-1.5 text-muted-foreground tabular-nums">{number}</span>}
-          {open.label}
+        <span className="mx-1 h-4 w-px bg-border" />
+        <h2 className="flex min-w-0 flex-1 items-center gap-2 text-sm font-medium">
+          {at >= 0 && (
+            <span
+              className={cn(
+                "flex h-5 min-w-5 shrink-0 items-center justify-center rounded border px-1 text-[11px] tabular-nums",
+                TONE[toneOf(open)].on,
+              )}
+            >
+              {at + 1}
+            </span>
+          )}
+          <span className="truncate">{open.label}</span>
         </h2>
+        <span className="text-xs text-muted-foreground tabular-nums">
+          {at + 1}/{cites.length}
+        </span>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          disabled={!prev}
+          onClick={() => prev && onPick(prev)}
+          aria-label="Previous citation"
+        >
+          <ChevronLeft />
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          disabled={!next}
+          onClick={() => next && onPick(next)}
+          aria-label="Next citation"
+        >
+          <ChevronRight />
+        </Button>
       </div>
       <div className="flex-1 overflow-y-auto">
         {open.kind === "law" ? (
@@ -525,7 +693,7 @@ function CitationPanel({
         ) : open.kind === "file" ? (
           <FileSource key={open.key} caseId={caseId} fileId={open.fileId} n={open.n} />
         ) : (
-          <p className="p-4 text-sm text-muted-foreground">
+          <p className="p-5 text-sm text-muted-foreground">
             An older citation of a file page. Open the case's files to see it.
           </p>
         )}

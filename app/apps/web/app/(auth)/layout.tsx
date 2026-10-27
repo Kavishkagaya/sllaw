@@ -15,7 +15,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
       <aside className="dark relative hidden overflow-hidden flex-col justify-between border-r bg-sidebar p-10 text-foreground lg:flex">
         <span
           aria-hidden
-          className="pointer-events-none absolute -right-10 -bottom-32 font-serif text-[32rem] leading-none text-primary/[0.07] select-none"
+          className="pointer-events-none absolute -right-10 -bottom-32 font-serif text-[32rem] leading-none text-brass/[0.06] select-none"
         >
           §
         </span>
@@ -27,7 +27,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
           <ul className="space-y-4 text-sm text-muted-foreground">
             {points.map(({ icon: Icon, text }) => (
               <li key={text} className="flex gap-3">
-                <Icon className="mt-0.5 size-4 shrink-0 text-primary" />
+                <Icon className="mt-0.5 size-4 shrink-0 text-brass" />
                 {text}
               </li>
             ))}
