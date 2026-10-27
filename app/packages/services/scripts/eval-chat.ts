@@ -3,7 +3,7 @@
 //   pnpm --filter @sllaw/services eval-chat dl,6,7,13,19     (numbers: etl/eval_questions.json; dl: driving licence)
 // TRACE_DIR=<dir> writes each question's tool calls and answer to <dir>/<n>.json.
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { type Call, mainAgent, recordCalls } from "@sllaw/ai";
+import { type Call, mainAgent, recordCalls, SourceMap } from "@sllaw/ai";
 import { agentCtx } from "../src/agent";
 
 type Q = { n: string; doc?: string; label?: string; id?: number; en: string };
@@ -32,7 +32,8 @@ if (traceDir) mkdirSync(traceDir, { recursive: true });
 
 const calls: Call[] = [];
 recordCalls((c) => calls.push(c));
-const CITE = /\[\[(\d+)(?:\|[^\]|]*)?\]\]/g;
+// the model cites handles ([[s3]], [[s3,s9]]) and its tool results carry them: the chat's map gives the real ids
+const CITE = /\[\[([a-z]\d+(?:\s*[,;]\s*[a-z]\d+)*)\]\]/g;
 const SEEN = new Set(["read", "asOf"]); // tools whose output is chunks the agent has read
 
 const rows: Record<string, number | string | boolean>[] = [];
@@ -41,19 +42,24 @@ const one = async (q: Q) => {
   const ctx = agentCtx({ workspaceId: ws, userId: "eval" });
   const t0 = Date.now();
   try {
-    const r = await mainAgent(ctx).generate({ prompt: q.en });
+    const map = new SourceMap();
+    const r = await mainAgent(ctx, map).generate({ prompt: q.en });
+    const real = (h: unknown) => (typeof h === "string" ? map.get(h, "s")?.real : undefined) as number | undefined;
     const seen = new Set<number>();
     const collect = (x: unknown): void => {
       if (Array.isArray(x)) x.forEach(collect);
       else if (x && typeof x === "object") {
         const o = x as Record<string, unknown>;
-        if (typeof o.chunkId === "number") seen.add(o.chunkId);
-        if (typeof o.byChunk === "number" && typeof o.clause === "string") seen.add(o.byChunk); // amending section shown in asOf
+        const id = real(o.chunkId);
+        if (id != null) seen.add(id);
+        const by = real(o.byChunk);
+        if (by != null && typeof o.clause === "string") seen.add(by); // amending section shown in asOf
         Object.values(o).forEach(collect);
       }
     };
     for (const s of r.steps) for (const t of s.toolResults) if (SEEN.has(t.toolName)) collect(t.output);
-    const cited = [...new Set([...r.text.matchAll(CITE)].map((m) => Number(m[1])))];
+    const handles = [...r.text.matchAll(CITE)].flatMap((m) => m[1]!.split(/\s*[,;]\s*/));
+    const cited = [...new Set(handles.flatMap((h) => real(h) ?? []))];
     // gold by law + label, not chunk id: a rebuild renumbers chunks (the ids in eval_questions.json are pre-rebuild)
     const got = await ctx.ports.read(cited);
     const hit = q.doc ? got.some((c) => c.docKey === q.doc && c.label === q.label) : "-";
@@ -69,6 +75,7 @@ const one = async (q: Q) => {
       calls: mine.length,
       input: mine.reduce((a, c) => a + c.input, 0),
       cached: mine.reduce((a, c) => a + c.cached, 0),
+      cacheRate: `${Math.round((100 * mine.reduce((a, c) => a + c.cached, 0)) / Math.max(1, mine.reduce((a, c) => a + c.input, 0)))}%`,
       output: mine.reduce((a, c) => a + c.output, 0),
       cost: Number.isNaN(cost) ? "?" : cost.toFixed(4),
       secs: Math.round((Date.now() - t0) / 1000),
@@ -103,5 +110,5 @@ const sum = (k: string) =>
   rows.reduce((a, r) => a + (typeof r[k] === "number" ? (r[k] as number) : Number(r[k]) || 0), 0);
 console.log(
   `\n${rows.length} questions | hits ${rows.filter((r) => r.hit === true).length}/${rows.filter((r) => r.hit !== "-").length} | ` +
-    `unread cites ${sum("unread")} | calls ${sum("calls")} | input ${sum("input")} (cached ${sum("cached")}) output ${sum("output")} | cost $${sum("cost").toFixed(4)} | slowest ${Math.max(...rows.map((r) => r.secs as number))} s`,
+    `unread cites ${sum("unread")} | calls ${sum("calls")} | input ${sum("input")} (cached ${sum("cached")}, ${Math.round((100 * sum("cached")) / Math.max(1, sum("input")))}%) output ${sum("output")} | cost $${sum("cost").toFixed(4)} | slowest ${Math.max(...rows.map((r) => r.secs as number))} s`,
 );
