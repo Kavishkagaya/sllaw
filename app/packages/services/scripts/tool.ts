@@ -2,12 +2,12 @@
 // a fresh id map each run, so ids are numbered from 1 and only real ids can be passed in): for checking by hand.
 //   pnpm --filter @sllaw/services -s tool search '{"query":"...","mode":"keyword","docKeys":["act:36/2024"]}'
 // With CASE=<case id> (dev database) the ctx is that case's, so the file tools reach its files; `prompt` prints the
-// case section of the instructions:
+// whole system prompt the agent gets (the case's sections included):
 //   CASE=<id> pnpm --filter @sllaw/services -s tool prompt
 //   CASE=<id> pnpm --filter @sllaw/services -s tool fileSearch '{"query":"rent arrears"}'
 //   CASE=<id> pnpm --filter @sllaw/services -s tool fileRead '{"file":"f1","pages":"1-2"}'  (f1: the first file fileCard lists)
 // RAW=1 runs the tool itself, in real ids and full text.
-import { caseSection, mainTools, SourceMap, wrapTools } from "@sllaw/ai";
+import { mainPrompt, mainTools, SourceMap, wrapTools } from "@sllaw/ai";
 import { caseById } from "@sllaw/db";
 import { agentCtx, caseFilesOf } from "../src/agent";
 
@@ -24,7 +24,7 @@ const ctx = agentCtx({
 });
 const map = new SourceMap();
 if (name === "prompt") {
-  console.log(caseSection(ctx.caseBrief, ctx.caseFiles, map));
+  console.log(mainPrompt(ctx, map));
   process.exit(0);
 }
 // fileRead by file needs its handle: list the files first, as the agent would
