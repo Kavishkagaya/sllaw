@@ -1,16 +1,25 @@
 // The main agent (docs/APP.md, Knowledge): talks to the lawyer and does its own research with the corpus tools
-// (search, read, links, asOf), then answers citing inline as [[chunkId|label]] only chunks it read or asOf'd, so the
-// UI can check every citation against the read/asOf outputs in the chat. One agent, not research sub-agents: on the
-// eval they repeated each other's work on the same law and ran out of steps (PIPELINE.md, eval-chat 2026-10-18).
+// (search, read, links, asOf), then answers citing inline as [[s3]] only chunks it read or asOf'd. In a case chat it
+// also has the case's files (fileSearch, fileCard, fileRead) and cites a passage it read as [[c7]]. The model sees
+// only handles (sources/): the tools work in real ids, the database and the client get real ids and labels
+// ([[81234|s. 22, Rent Act]]), so the UI can check every citation against the reads in the chat. One agent, not
+// research sub-agents: on the eval they repeated each other's work on the same law and ran out of steps (PIPELINE.md,
+// eval-chat 2026-10-18).
 import {
-  createAgentUIStreamResponse,
+  createAgentUIStream,
+  createUIMessageStreamResponse,
   type InferAgentUIMessage,
   stepCountIs,
   ToolLoopAgent,
   validateUIMessages,
 } from "ai";
 import { model } from "../models";
-import type { Ctx } from "../ports";
+import type { CaseFile, Ctx } from "../ports";
+import { ChunkCache } from "../sources/cache";
+import { SourceMap, type SourcesJson } from "../sources/map";
+import { realStream } from "../sources/stream";
+import { partsToModel, partsToReal, wrapTools } from "../sources/wrap";
+import { fileName, fileTools } from "../tools/files";
 import { lawTools } from "../tools/law";
 
 const MAX_STEPS = 14; // ponytail: fixed budget; the last step must answer
@@ -60,29 +69,64 @@ careful junior lawyer prepares a note for a senior, who will rely on it and chec
   exactly as enacted; quote the words that matter. Do not drop a proviso or a definition from a quoted provision.
 - Claim only what you checked: "asOf lists no change" is what you saw, not "confirmed unchanged" when the amending
   text was cut short. If a later turn corrects an earlier answer, say what was wrong.
-- Cite inline. Right after every statement of law, cite the provision it rests on as [[chunkId|label]]: the id of a
-  chunk you read or asOf'd, then a short label a lawyer would write, e.g. [[4521|s. 22, Rent Act No. 7 of 1972]],
-  [[880|Art. 12(1), Constitution]], for an amendment [[9310|s. 3, Act No. 8 of 2009]]. One provision per citation;
-  for two, write two. A search hit is only its first lines: read it before you cite or quote it. Never cite an id
-  you did not read or asOf (an amending section asOf showed counts), and never make one up; no "]" or "|" inside a
-  label. Say what the corpus did not answer rather than filling it from memory; general knowledge is said as such
-  and not cited.
+- Cite inline. Right after every statement of law, cite the provision it rests on as [[id]]: the id of a chunk you
+  read or asOf'd exactly as the tool gave it, e.g. [[s4]]; the app shows the provision's name, so write no label.
+  One provision per citation; for two, write [[s4]][[s9]]. A search hit is only its first lines: read it before you
+  cite or quote it. Never cite an id you did not read or asOf (an amending section asOf showed counts), and never
+  make one up. Say what the corpus did not answer rather than filling it from memory; general knowledge is said as
+  such and not cited.
 
 Answer in the language of the question; search in English. You may call several tools in one step when they do
 not depend on each other. You have ${MAX_STEPS} steps.
 Earlier turns' reads are still in the chat: reuse them.`;
 
-/** A case chat's instructions end with the case (last, so the shared part above stays in the provider's cache). */
+/** A case chat's instructions end with the case (last, so the shared part above stays in the provider's cache): its
+ *  facts, then how to use its files. The files themselves are not listed: the agent finds them by search and asks for
+ *  a file's card when it needs one, so the instructions stay the same size however many files the case has. */
 const FACTS = 6000; // chars of the facts kept: a case brief, not its files
-const withCase = (base: string, c: Ctx["caseBrief"]) =>
-  !c
-    ? base
-    : `${base}
+const NOT_READY = 10; // files named in the instructions as not searchable; beyond, only counted
+
+export function caseSection(c: Ctx["caseBrief"], files: CaseFile[], map = new SourceMap()) {
+  if (!c) return "";
+  const facts = c.facts.trim() ? c.facts.trim().slice(0, FACTS) : "(none written yet: ask for the facts that matter)";
+  const waiting = files.filter((f) => !f.searchable);
+  const named = waiting
+    .slice(0, NOT_READY)
+    .map(
+      (f) =>
+        `- ${map.handle("f", f.id, fileName(f))}  ${fileName(f)}: ${f.state === "processing" ? "still being read" : f.state === "unreadable" ? "no readable text" : "not indexed yet, read its pages with fileRead"}`,
+    );
+  if (waiting.length > NOT_READY) named.push(`- and ${waiting.length - NOT_READY} more`);
+  const count = !files.length
+    ? "The case has no files yet (the lawyer adds them in its Files tab): do not use the file tools."
+    : `The lawyer has added ${files.length} file${files.length === 1 ? "" : "s"} to this case. You do not see them until you look.${
+        named.length ? `\nNot searchable yet:\n${named.join("\n")}` : ""
+      }`;
+  return `
 
 # The case
 This chat is inside the lawyer's case "${c.title}". Read every question in its light: research the law that governs
 these facts, and say which facts the answer turns on and which are missing. The facts as the lawyer wrote them:
-${c.facts.trim() ? c.facts.trim().slice(0, FACTS) : "(none written yet: ask for the facts that matter)"}`;
+${facts}
+
+# The case files
+${count}
+The files are the facts as the parties, witnesses and courts put them; the corpus is the law. A document shows what
+its author says, not that it is true: say whose document a fact comes from.
+- fileSearch finds passages in the files (the passage's id, its file, page and first lines). Search them before
+  asking the lawyer for a fact, and say where they contradict the facts above or each other.
+- fileCard says what a file is (type, parties, dates, court, case numbers, laws cited, a summary); with no input it
+  lists every file. Use it to know whose document a passage is before you rely on it, or to see what the case holds.
+- fileRead reads passages in full, by id (from fileSearch), or a file's pages. Read the passages a point rests on
+  before you state or quote it.
+- A question about the files alone (what the plaint claims, a timeline of the events) is answered from them; no law
+  research unless it asks for the law.
+- Cite a file right after what it supports as [[id]]: the id of a passage you read with fileRead, e.g. [[c7]]; no
+  label (the app shows the file and page). One passage per citation. A search snippet or a card is not a passage
+  you read: never cite one.
+- Before you write, list the passages you will rely on. Any you have not read with fileRead: read them in one call
+  (fileRead takes several ids), or leave them out and say so in the gaps.`;
+}
 
 const LAST = `
 
@@ -90,13 +134,19 @@ const LAST = `
 No tools are left. Write the answer now from what you have read, cited as above; what you did not get to check goes
 in the answer as gaps. Do not write tool calls.`;
 
-export const mainTools = (ctx: Ctx) => lawTools(ctx);
+/** Every tool, in real ids, so a chat's stored messages validate whichever kind of chat it is; a plain chat is
+ *  offered only the law tools (activeTools below). */
+export const mainTools = (ctx: Ctx) => ({ ...lawTools(ctx), ...fileTools(ctx) });
+const LAW_TOOLS = ["search", "read", "links", "asOf"] as const;
 
-export const mainAgent = (ctx: Ctx) =>
-  new ToolLoopAgent({
+/** The agent of one turn: the model's tools are mainTools behind the mapper (handles for ids, snippets for hits). */
+export const mainAgent = (ctx: Ctx, map = new SourceMap(), cache = new ChunkCache()) => {
+  const base = instructions(ctx.asOfDate) + caseSection(ctx.caseBrief, ctx.caseFiles, map);
+  return new ToolLoopAgent({
     model: model("main", ctx.workspaceId),
-    instructions: withCase(instructions(ctx.asOfDate), ctx.caseBrief),
-    tools: mainTools(ctx),
+    instructions: base,
+    tools: wrapTools(mainTools(ctx), map, cache),
+    activeTools: ctx.caseId ? undefined : [...LAW_TOOLS],
     stopWhen: stepCountIs(MAX_STEPS),
     // the last step answers with what it has: no tools sent at all, since DeepSeek ignored toolChoice "none" alone
     // and spent the last step on more calls, leaving no answer (chat of 2026-10-18: 14 steps, no text)
@@ -106,10 +156,11 @@ export const mainAgent = (ctx: Ctx) =>
         ? {
             activeTools: [],
             toolChoice: "none",
-            instructions: withCase(instructions(ctx.asOfDate), ctx.caseBrief) + LAST,
+            instructions: base + LAST,
           }
         : undefined,
   });
+};
 
 export type ChatMessage = InferAgentUIMessage<ReturnType<typeof mainAgent>>;
 
@@ -130,13 +181,17 @@ export type Usage = {
   generations: string[];
 };
 
-/** Run the main agent over a chat's messages (history + the new user message) as a UI message stream response;
- *  onFinish gets the assistant message to store, whole or as far as it got when abortSignal fired (the request's:
- *  the stop button, a closed tab or a lost connection all end the run). */
+type Stored = { parts?: { type: string }[] };
+
+/** Run the main agent over a chat's messages (history + the new user message, real ids, as stored) and its id map
+ *  (chats.sources) as a UI message stream response in real ids. onFinish gets the assistant message to store (real
+ *  ids), whole or as far as it got when abortSignal fired (the request's: the stop button, a closed tab or a lost
+ *  connection all end the run), and the id map to store with it. */
 export async function streamChat(
   ctx: Ctx,
   messages: unknown[],
-  onFinish: (m: ChatMessage, usage: Usage) => Promise<void> | void,
+  sources: SourcesJson | null,
+  onFinish: (m: ChatMessage, usage: Usage, sources: SourcesJson) => Promise<void> | void,
   abortSignal?: AbortSignal,
 ) {
   const t0 = Date.now();
@@ -153,9 +208,13 @@ export async function streamChat(
     ms: 0,
     generations: [],
   };
-  const uiMessages = await validateUIMessages<ChatMessage>({ messages, tools: mainTools(ctx) });
-  return createAgentUIStreamResponse({
-    agent: mainAgent(ctx),
+  const map = new SourceMap(sources);
+  const agent = mainAgent(ctx, map);
+  // the history as the model saw it: the same handles as before (the map is the chat's), so the prompt cache holds
+  const history = (messages as Stored[]).map((m) => (m.parts ? { ...m, parts: partsToModel(m.parts, map) } : m));
+  const uiMessages = await validateUIMessages<ChatMessage>({ messages: history, tools: agent.tools });
+  const stream = await createAgentUIStream({
+    agent,
     uiMessages,
     originalMessages: uiMessages,
     abortSignal,
@@ -180,6 +239,12 @@ export async function streamChat(
       const p = g.routing?.finalProvider;
       if (p && !usage.providers.includes(p)) usage.providers.push(p);
     },
-    onFinish: ({ responseMessage }) => onFinish(responseMessage, { ...usage, ms: Date.now() - t0 }),
+    onFinish: ({ responseMessage }) =>
+      onFinish(
+        { ...responseMessage, parts: partsToReal(responseMessage.parts, map) },
+        { ...usage, ms: Date.now() - t0 },
+        map.toJSON(),
+      ),
   });
+  return createUIMessageStreamResponse({ stream: stream.pipeThrough(realStream(map)) });
 }

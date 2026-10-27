@@ -90,7 +90,8 @@ in v1; an entity graph can be built later from the same per-file JSON.
   law's file, carried by `etl.publish` from 2026-10-18; null until the next publish). A citation of an id the agent
   never loaded in the chat is marked unverified. The client sends only the new message; history is read from the
   database, so tool outputs cannot be forged. **Changed 2026-10-27:** a case chat is `/cases/<caseId>/chats/<id>`
-  (Case-first UI, below); `/chats` is for quick chats only.
+  (Case-first UI, below); `/chats` is for quick chats only. The model now cites handles (`[[s3]]`) and the label is
+  the app's, and the sidebar shows the whole document with the cited chunk highlighted (Source handles, below).
 - **Files (user, 2026-10-18):** one `files` table is the base of an asset system: one row per file, with its
   extracted content (text, and the ingestion card: doc_type, summary, parties, dates, laws cited). Other tables
   say what a file is used for by referencing `files.id` (a case's files, a message's attachments). A case's
@@ -186,10 +187,71 @@ in v1; an entity graph can be built later from the same per-file JSON.
   keeps a stored chat's own case; the main agent gets the case's title and facts (6,000 chars) at the end of its
   instructions, so the shared start stays in the provider's cache. "Move to case" (`chat.move`) puts a quick chat into
   a case; a stored case chat opened at `/chats/<id>` redirects into its case. Cases list by last activity (created,
-  last file, last own chat). Not built: the agent's case-file search tool (#19), connections. Tested in a browser
+  last file, last own chat). Not built: connections. (The case-file tools came 2026-10-27, below.) Tested in a browser
   2026-10-27 (test user, dev server): case chat from the overview (the answer reasoned from the facts' dates), quick
   chat from Home, move to case, every route, 390 px. Moving route folders into groups left `next dev` serving the old
   tree (404 on every case route) until it was restarted.
+- **Case files in the agent (user, 2026-10-27):** three tools, like the law's search -> read, not one tool with modes
+  (`ai/tools/files.ts`): `fileSearch(query, files?, types?, mode?, limit?)` -> `{file, title, type, page, snippet}`
+  (300 chars; the Zilliz `files` collection, scope `case:<id>` and the case's file ids inside the query);
+  `fileCard(files? | types?)` -> the categorizer's card (type, language, pages, parties, dates, court, case numbers,
+  laws cited, tags, summary), up to 10, and with no input a one-line list of every file (ref, title, type, pages,
+  state); `fileRead(file, pages?: "4" | "3-6")` -> the pages in full from `extract.json` (8 pages or 24,000 chars a
+  call, at least one page; `more` = next page). Chunks never cross a page, so every hit and quote has one page. A file
+  is named by its **ref**, the first 8 hex chars of its id (longer only on a clash, the older file keeping the short
+  one): stable while the file is in the case, so an earlier answer's citations keep naming the same file (F1, F2
+  numbering would shift on a delete). A ref the case does not have, a file still being read or with no text, a page
+  past the end: answered in words, not errors.
+  **No file list in the prompt (user, 2026-10-27):** the instructions say how many files the case has, name only the
+  ones search cannot reach yet (still being read, no text: up to 10), and how to use the tools; the agent finds files by
+  search and asks for a card when it needs to know what a file is. First built with every file's card (summary
+  included) in the prompt: ~200 tokens a file on every step, R2 reads before each turn, a cap of 40 files in full, and
+  the model cited files from their summaries without reading them (the plaint and letter of demand, 1-2 of 5-8 file
+  citations in each of 4 runs). Now the turn starts from Postgres alone (`services/src/case-files.ts`: the row's
+  `category` and `meta`); a summary is read from `card.json` only when fileCard asks; the prompt is the same size for 3
+  files or 300. Rules: the files are the facts, the corpus the law; a document shows what its author says; search the
+  files before asking for a fact; a snippet or a card is not a page read; cite a page read with fileRead as
+  `[[ref:pN|label]]`; before writing, read every page relied on or leave it out. The UI checks file citations against
+  the chat's fileRead outputs, shows the page as read in the panel ("Open file"), lists one file page cited for
+  several clauses once per label; the trail shows file searches, cards and pages read. A plain chat is offered only
+  the law tools (`activeTools`). Checked 2026-10-27 on the dev case "Perera v. Silva" (4 files) with
+  `CASE=<id> services tool prompt|fileSearch|fileCard|fileRead` (an English query found the cash-payment line in the
+  Sinhala/English notes first) and in a headed browser (test user, dev server): the agent listed the files, searched,
+  read all 4 and cited 7 pages, all read (4 steps, $0.0013, 15k of 21k input tokens cached); twice the model sent a
+  garbled fileRead (`{"file":"fileRead"}`), was told no such file, and corrected itself. Open: a code-side check of
+  file citations before the answer is stored; card rows in the index (find a file by its summary); the categorizer
+  wrote one summary in Sinhala, and gave the notes a title that is a sentence. **Changed the same day** (Source
+  handles, below): no refs, a file is `f<n>` and a passage `c<n>` to the model; fileRead reads passages (chunks) by
+  id or a file's pages as chunks; a file passage is cited, not a page.
+- **Source handles (user, 2026-10-27):** the model never sees a real id. A mapper around the tools
+  (`ai/src/sources/`) turns every id a tool returns into a short handle the first time, per chat: `s<n>` a law chunk
+  (etl chunk id), `c<n>` a case file's chunk (`<fileId>:<n>`, its place in `chunks.json`), `f<n>` a case file; and
+  the model's handles back into real ids before a tool runs. The tools are unchanged and work in real ids; each
+  tool's id fields are declared once (`sources/specs.ts`), and a field of an output that holds an id must be there
+  or it reaches the model (asOf's "read chunk N" text now says "read its byChunk"). The map is saved on the chat,
+  `chats.sources` json, `{s3: [81234, "s. 22, Rent (Act No. 7 of 1972)"], c7: ["<fileId>:12", "Lease, p. 4"]}`: the
+  real id and a label the mapper builds from the tool output (section from the path, the law's title with its number
+  from the key when the title has none, a file's title and page); no text. Real ids alone are enough because the
+  ETL only adds chunks in production, never renumbers (user, 2026-10-27; a rebuild that renumbers would point old
+  chats' citations at the wrong chunk). **The database keeps real ids** (messages as the client got them); each turn
+  the history is rebuilt in handles from the map (`partsToModel`), the same handles as before, so the provider's
+  prompt cache still matches. The UI stream is rewritten on the way out (`sources/stream.ts`): `[[s3]]` ->
+  `[[81234|label]]`, `[[c7]]` -> `[[f:<fileId>:12|label]]`, `[[f2]]` -> `[[file:<fileId>|label]]`, tool ids ->
+  real; a citation split over deltas is held back until it closes; a handle the chat does not have is dropped.
+  **Crop after cache (user, 2026-10-27):** the search tools return full text; the mapper puts every chunk with text
+  into a per-request cache (`sources/cache.ts`, not saved), then cuts hits to 300-char snippets for the model. A
+  fileRead of passages fileSearch returned is answered from the cache (no R2 read); a law read is a whole section
+  (several chunks from the database), so only the same read again in a turn is answered from memory. **Numbers are
+  the UI's:** a source's number is its place in the chat's order of first citation, shown on the chip with its label
+  ("1 · Lease Agreement, p. 1"); a chunk never cited gets none, so there are no gaps. Clicking one opens the source in
+  the sidebar: a law in full (`corpus.chunk` + `corpus.doc`) scrolled to the chunk and highlighted, with its changes
+  and the source file; a case file in full, page by page, from its chunks (`case.fileChunks`: `chunks.json`, or cut
+  the same way from `extract.json` when not indexed yet), the cited chunk highlighted, "Open file". Old chats still
+  render: their `[[chunkId|label]]` is already the real form, and an old `[[ref:pN|label]]` shows as a chip with a
+  note. Checked 2026-10-27 on "Perera v. Silva" in a headed browser: one question on the files and the Rent Act, 6
+  searches, 33 provisions and 7 file passages read, 15 sources cited (7 file, 8 law), numbered and repeated with the
+  same number, both viewers open at the cited chunk; the stored message and map hold real ids and labels. Tests:
+  `ai/src/sources/sources.test.ts` (map, mapper, cache, crop, citations, parts, the stream).
 - **Retryable and non-retryable errors (user, 2026-10-26):** one rule decides (`services/src/files/errors.ts`).
   Retried: network errors, timeouts, 408, 425, 429, 5xx, unknown errors. Not retried: a file its parser cannot read
   (`Unreadable`: a corrupt PDF, a .docx that is not a zip), other 4xx. Packages only describe their errors (an HTTP

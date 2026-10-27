@@ -36,6 +36,10 @@ export const chatsOf = (userId: string, workspaceId: string, caseId: string | nu
     .orderBy(desc(chats.updatedAt))
     .limit(limit);
 
+/** The chat's source handles (chats.sources), written at the end of each turn. */
+export const setChatSources = (id: string, sources: Record<string, [number | string, string | null]>) =>
+  db.update(chats).set({ sources }).where(eq(chats.id, id));
+
 /** Puts a plain chat into a case ("Move to case"). */
 export const setChatCase = (id: string, caseId: string) => db.update(chats).set({ caseId }).where(eq(chats.id, id));
 

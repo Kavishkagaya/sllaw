@@ -1,6 +1,9 @@
-import type { AsOf, Change, Chunk, Ctx, Status } from "@sllaw/ai";
+import type { AsOf, CaseFile, Change, Chunk, Ctx, Status } from "@sllaw/ai";
+import { filesOfCase } from "@sllaw/db";
 import { changeStatus, changesInto, chunksById, linksOf, sectionsOf } from "@sllaw/etl_db";
-import { searchLaw } from "@sllaw/search";
+import { type FileIndex, fileIndex, searchLaw } from "@sllaw/search";
+import { type BlobStore, blobStore } from "@sllaw/storage";
+import { caseFilesFrom, chunksReader, summaryReader } from "./case-files";
 
 const asChunk = (c: {
   id: number;
@@ -23,14 +26,19 @@ type Who = {
   userId: string;
   caseId?: string | null;
   caseBrief?: { title: string; facts: string } | null;
+  caseFiles?: CaseFile[];
   asOfDate?: string;
 };
 
+/** A case's files for its agent's file tools: the rows only (Postgres), no blob reads. */
+export const caseFilesOf = async (caseId: string) => caseFilesFrom(await filesOfCase(caseId));
+
 const CLAUSE = 900; // chars of an amending section kept: the operative words come first
+// no id in the text: the model sees ids only as handles, in the fields the mapper knows (byChunk)
 const clip = (t: string, chunk: number | null) =>
   t.length <= CLAUSE
     ? t
-    : t.slice(0, CLAUSE) + (chunk != null ? ` …[truncated: read chunk ${chunk} for the full clause]` : " …[truncated]");
+    : t.slice(0, CLAUSE) + (chunk != null ? " …[truncated: read its byChunk for the full clause]" : " …[truncated]");
 const RANK: Record<string, number> = { replaces: 0, repeals: 1, inserts: 2, amends: 3 };
 
 /** A section as enacted and the changes made to it up to a date (YYYY-MM-DD), oldest first, each with its amending
@@ -68,17 +76,35 @@ export const today = () => new Date().toLocaleDateString("en-CA", { timeZone: "A
 
 /**
  * The ctx agents run with. The caller has already checked access (api: chatOwner, and caseEditor for a case chat),
- * so the scopes here are what this request may reach. User-file ports join here (#19).
+ * so the scopes here are what this request may reach. File search reaches the case's scope only, and reads only
+ * the files in caseFiles (caseFilesOf). `files` swaps the store and index (tests).
  */
-export function agentCtx({ workspaceId, userId, caseId = null, caseBrief = null, asOfDate = today() }: Who): Ctx {
+export function agentCtx(
+  { workspaceId, userId, caseId = null, caseBrief = null, caseFiles = [], asOfDate = today() }: Who,
+  files: { store?: BlobStore; index?: FileIndex } = {},
+): Ctx {
+  const scopes = [`user:${userId}`, ...(caseId ? [`case:${caseId}`] : [])];
   return {
     workspaceId,
     userId,
     caseId,
     caseBrief,
+    caseFiles,
     asOfDate,
-    scopes: [`user:${userId}`, ...(caseId ? [`case:${caseId}`] : [])],
+    scopes,
     ports: {
+      fileSearch: async (query, { fileIds, mode, limit }) =>
+        caseId
+          ? (files.index ?? fileIndex()).search(query, {
+              workspaceId,
+              scopes: [`case:${caseId}`],
+              fileIds: fileIds ?? caseFiles.map((f) => f.id),
+              mode,
+              limit,
+            })
+          : [],
+      fileChunks: chunksReader(caseFiles, () => files.store ?? blobStore()),
+      fileSummary: summaryReader(caseFiles, () => files.store ?? blobStore()),
       search: (query, opts) => searchLaw(query, opts),
       read: async (ids) => (await sectionsOf(ids)).map((c) => ({ ...asChunk(c), ...(c.more && { more: c.more }) })),
       links: (target, direction, opts) => linksOf(target, direction, opts),

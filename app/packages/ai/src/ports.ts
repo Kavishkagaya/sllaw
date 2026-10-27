@@ -47,8 +47,42 @@ export type AsOf = {
 /** How much a section was changed, for a search hit: amending sections, last change, date of a repeal. */
 export type Status = { changes: number; last: string | null; repealed: string | null };
 
+/** A file of the case as the agent's file tools know it (not in its instructions: it finds files by search and
+ *  asks for their cards). The tools name it by its id; the model sees it as a handle (sources/map.ts). */
+export type CaseFile = {
+  id: string;
+  name: string; // the filename
+  title: string | null; // the categorizer's title
+  docType: string | null;
+  language: string | null;
+  pages: number | null;
+  state: "ready" | "processing" | "unreadable"; // its text: read, still being read, or none (a scan without OCR)
+  searchable: boolean; // indexed: fileSearch finds it
+  // the categorizer's card, from the file row (its summary is read only when asked for: Ports.fileSummary)
+  parties: { name: string; role: string }[];
+  dates: { date: string; what: string }[];
+  court: string | null;
+  caseNumbers: string[];
+  lawsCited: string[];
+  tags: string[];
+};
+/** A passage of a case file from search: one chunk (n, from 0, its place in the file's chunks.json), never across a
+ *  page. */
+export type FilePassage = { fileId: string; n: number; page: number; text: string; score: number };
+/** One of a file's chunks, as the index cut them (chunks.json): its id is `<fileId>:<n>`. */
+export type FileChunk = { n: number; page: number; text: string };
+
 export interface Ports {
   search(query: string, opts: { mode?: Mode; filters?: Filters; limit?: number }): Promise<Hit[]>;
+  /** The case's files only (services scopes it to case:<id>); fileIds narrows further. */
+  fileSearch(
+    query: string,
+    opts: { fileIds?: string[]; mode?: "dense" | "weighted"; limit?: number },
+  ): Promise<FilePassage[]>;
+  /** Every chunk of a case file, in order; null when it is not a file of this case or has no text. */
+  fileChunks(fileId: string): Promise<FileChunk[] | null>;
+  /** A case file's summary (its card's, in the blob store); null when there is none yet. */
+  fileSummary(fileId: string): Promise<string | null>;
   read(chunkIds: number[]): Promise<ReadChunk[]>;
   links(
     target: { docKey: string; chunkId?: number | null },
@@ -64,6 +98,8 @@ export type Ctx = {
   userId: string;
   caseId: string | null; // a case chat; null in plain chat
   caseBrief: { title: string; facts: string } | null; // that case's title and facts, always in the instructions
+  caseFiles: CaseFile[]; // that case's files, oldest first, for the file tools (only counted in the instructions); []
+  // in plain chat
   asOfDate: string; // YYYY-MM-DD: the law as it stood on this date, set by the lawyer (default today)
   scopes: string[]; // user:<id>, case:<id>: what user-file search may reach (#19)
   ports: Ports;

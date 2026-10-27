@@ -1,11 +1,12 @@
 // The main agent's tools on the law corpus: schema and description here (they are prompt), the work in ctx.ports.
+// They work in real chunk ids and return full text; the model sees handles and snippets (sources/: the mapper cuts a
+// hit to its first lines after caching it whole).
 import { tool } from "ai";
 import { z } from "zod";
 import type { Ctx } from "../ports";
 
 const docKey = z.string().describe("a law's key, from a hit or a link: act:9/2023, law:5/1972, cap:107, cap1956:331");
 const chunkId = z.number().int();
-const SNIPPET = 300; // chars of each hit the model sees; it reads the ones it wants in full (keeps context small)
 
 export const lawTools = ({ ports }: Ctx) => ({
   search: tool({
@@ -29,11 +30,10 @@ export const lawTools = ({ ports }: Ctx) => ({
       if (!hits.length && filters.docKeys?.length && !(await ports.search(query, { filters, limit: 1 })).length)
         return `${filters.docKeys.join(", ")}: no text in the corpus. Do not search it again; use its links, or say so in gaps.`;
       const st = await ports.status(hits.map((h) => h.chunkId));
-      return hits.map(({ text, score, ...h }) => {
+      return hits.map(({ score, ...h }) => {
         const x = st[h.chunkId];
         return {
           ...h,
-          snippet: text.length > SNIPPET ? `${text.slice(0, SNIPPET)}…` : text,
           // from the links, so the agent sees at a glance which hits are as enacted and which were changed
           status: !x
             ? "no recorded change"

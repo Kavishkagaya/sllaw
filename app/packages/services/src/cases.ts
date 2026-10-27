@@ -16,6 +16,8 @@ import {
   STEPS,
   setCase,
 } from "@sllaw/db";
+import { blobStore } from "@sllaw/storage";
+import { chunksOf } from "./case-files";
 import {
   createUpload,
   type FileInput,
@@ -179,6 +181,15 @@ export async function addCaseFile(a: Signed, caseId: string, input: FileInput) {
 export async function openCaseFile(a: Signed, caseId: string, fileId: string) {
   const f = await caseFile(a, caseId, fileId);
   return f ? fileView(f) : null;
+}
+
+/** A case file's text as its chunks, for the citation viewer (the whole file, a cited chunk highlighted): the same
+ *  chunks, and so the same `<fileId>:<n>` ids, as the agent's tools. null when the user cannot see it. */
+export async function caseFileChunks(a: Signed, caseId: string, fileId: string) {
+  const f = await caseFile(a, caseId, fileId);
+  if (!f) return null;
+  const title = ((f.meta ?? {}) as { title?: string }).title ?? null;
+  return { id: f.id, name: f.name, title, chunks: (await chunksOf(blobStore(), f.id)) ?? [] };
 }
 
 export async function reprocessCaseFile(a: Signed, caseId: string, fileId: string, steps?: Step[]) {
