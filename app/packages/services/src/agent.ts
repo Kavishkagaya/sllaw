@@ -108,7 +108,7 @@ export function agentCtx(
       search: (query, opts) => searchLaw(query, opts),
       read: async (ids) => (await sectionsOf(ids)).map((c) => ({ ...asChunk(c), ...(c.more && { more: c.more }) })),
       links: (target, direction, opts) => linksOf(target, direction, opts),
-      asOf: (chunkId) => asOf(chunkId, asOfDate),
+      asOf: (chunkId, date) => asOf(chunkId, date ?? asOfDate),
       status,
     },
   };
