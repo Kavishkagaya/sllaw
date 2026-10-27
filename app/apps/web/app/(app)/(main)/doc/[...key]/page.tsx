@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { Separator } from "@/components/ui/separator";
 import { SidebarTrigger } from "@/components/ui/sidebar";
-import { serverApi } from "../../../../trpc/server";
+import { serverApi } from "@/trpc/server";
 
 // /doc/act:9/2023#c123: a law in full, each chunk anchored by id so citations open at it.
 export default async function DocPage({ params }: { params: Promise<{ key: string[] }> }) {

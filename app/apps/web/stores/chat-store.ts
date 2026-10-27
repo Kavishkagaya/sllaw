@@ -10,18 +10,21 @@ import { create } from "zustand";
 // the Chat objects themselves: not reactive state (a page subscribes to its Chat through useChat), so opening one
 // during render updates nothing
 const chats = new Map<string, Chat<ChatMessage>>();
+// the case a new chat is started in, sent with its first message (a stored chat keeps its own: the server decides)
+const caseOf = new Map<string, string>();
 
 type State = {
-  drafts: Record<string, string>; // per chat id; "new" for the home page
+  drafts: Record<string, string>; // per chat id; "new" for a new chat, "home" / "case:<id>" for those pages' boxes
   busy: Record<string, boolean>; // chats with an answer in flight
   unread: Record<string, boolean>; // answers that finished while their chat was not on screen
   viewing: string | null; // the chat on screen
   view: (id: string | null) => void;
   listVersion: number; // bumped when the server's chat list changed (a chat created, an answer stored)
-  /** The chat for this id: the live one if any, else one starting from the stored messages. */
-  open: (id: string, initial?: ChatMessage[]) => Chat<ChatMessage>;
+  /** The chat for this id: the live one if any, else one starting from the stored messages. caseId: a new chat in
+   *  that case. */
+  open: (id: string, initial?: ChatMessage[], caseId?: string | null) => Chat<ChatMessage>;
   setDraft: (key: string, text: string) => void;
-  send: (id: string, text: string) => void;
+  send: (id: string, text: string, caseId?: string | null) => void;
   /** The stop button: aborts the request, and the server aborts the agent with it (the answer so far is kept). */
   stop: (id: string) => void;
 };
@@ -40,7 +43,9 @@ export const useChatStore = create<State>()((set, get) => {
       transport: new DefaultChatTransport({
         api: "/api/chat",
         // only the new message goes up: the server holds the history
-        prepareSendMessagesRequest: ({ id, messages }) => ({ body: { id, message: messages.at(-1) } }),
+        prepareSendMessagesRequest: ({ id, messages }) => ({
+          body: { id, caseId: caseOf.get(id) ?? null, message: messages.at(-1) },
+        }),
         // the response starts after the server created the chat row: the sidebar can list it now
         fetch: async (input, init) => {
           const res = await fetch(input, init);
@@ -59,17 +64,18 @@ export const useChatStore = create<State>()((set, get) => {
     viewing: null,
     listVersion: 0,
     view: (id) => set((s) => ({ viewing: id, unread: id ? { ...s.unread, [id]: false } : s.unread })),
-    open: (id, initial = []) => {
+    open: (id, initial = [], caseId) => {
       if (typeof window === "undefined") return make(id, initial); // SSR: the module is shared by every request
+      if (caseId) caseOf.set(id, caseId);
       let chat = chats.get(id);
       if (!chat) chats.set(id, (chat = make(id, initial)));
       return chat;
     },
     setDraft: (key, text) => set((s) => ({ drafts: { ...s.drafts, [key]: text } })),
-    send: (id, text) => {
+    send: (id, text, caseId) => {
       if (!text.trim() || get().busy[id]) return;
       set((s) => ({ busy: { ...s.busy, [id]: true } }));
-      void get().open(id).sendMessage({ text: text.trim() });
+      void get().open(id, [], caseId).sendMessage({ text: text.trim() });
     },
     stop: (id) => {
       void chats.get(id)?.stop();

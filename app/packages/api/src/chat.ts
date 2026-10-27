@@ -7,6 +7,7 @@ import { createContext, signedAccount } from "./trpc";
 // Only the new user message, text only: history comes from the database, so a client cannot forge tool outputs.
 const body = z.object({
   id: z.uuid(),
+  caseId: z.uuid().nullish(), // a new chat started in a case; a stored chat keeps its own
   message: z.object({
     id: z.string().min(1).max(100),
     role: z.literal("user"),
@@ -29,6 +30,7 @@ export async function chatRoute(req: Request, waitUntil: (p: Promise<unknown>) =
     const res = await sendMessage(
       { ...account, workspace: account.workspace },
       input.data.id,
+      input.data.caseId ?? null,
       input.data.message,
       waitUntil,
       req.signal,

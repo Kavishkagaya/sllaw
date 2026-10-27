@@ -11,6 +11,7 @@ import {
   listChats,
   listMyFiles,
   MAX_SIZE,
+  moveChat,
   openCase,
   openCaseFile,
   openChat,
@@ -38,13 +39,20 @@ export const appRouter = router({
     me: signedUser.query(({ ctx }) => ctx.account),
   }),
   chat: router({
-    list: workspaceUser.query(({ ctx }) => listChats(ctx.account)),
+    // a case's chats (caseId), or the plain chats outside any case
+    list: workspaceUser
+      .input(z.object({ caseId: z.uuid().nullish(), limit: z.number().int().min(1).max(100).optional() }).optional())
+      .query(async ({ ctx, input }) => found(await listChats(ctx.account, input?.caseId ?? null, input?.limit))),
     // chatOwner: another user's chat reads as missing
     open: workspaceUser.input(z.object({ chatId: z.uuid() })).query(async ({ ctx, input }) => {
       const c = await openChat(ctx.account, input.chatId);
       if (!c) throw new TRPCError({ code: "NOT_FOUND" });
       return c;
     }),
+    // "Move to case": a plain chat goes into one of the user's cases
+    move: workspaceUser
+      .input(z.object({ chatId: z.uuid(), caseId: z.uuid() }))
+      .mutation(async ({ ctx, input }) => found(await moveChat(ctx.account, input.chatId, input.caseId))),
   }),
   // Cases (the case service decides who may see and change one) and their files: the case service checks the case,
   // then hands the file to the file service. Upload is

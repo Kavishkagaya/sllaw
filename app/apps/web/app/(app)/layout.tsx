@@ -1,18 +1,12 @@
-import { AppSidebar } from "@/components/app-sidebar";
-import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
+import { SidebarProvider } from "@/components/ui/sidebar";
 import { UploadTray } from "@/components/upload-tray";
-import { serverApi } from "../../trpc/server";
 
-// The signed-in shell: chats in the sidebar, the page beside it, and every upload in progress (the tray).
-export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  const chats = await (await serverApi()).chat.list().catch((e: Error) => e);
+// The signed-in shell: the sidebar's open state and every upload in progress (the tray). Which sidebar shows is the
+// nested layout's: the main one ((main)/layout.tsx) or, inside a case, the case's (cases/[id]/layout.tsx).
+export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <SidebarProvider>
-      <AppSidebar
-        chats={chats instanceof Error ? [] : chats}
-        error={chats instanceof Error ? chats.message : undefined}
-      />
-      <SidebarInset className="h-svh overflow-hidden">{children}</SidebarInset>
+      {children}
       <UploadTray />
     </SidebarProvider>
   );

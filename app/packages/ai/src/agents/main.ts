@@ -72,6 +72,18 @@ Answer in the language of the question; search in English. You may call several 
 not depend on each other. You have ${MAX_STEPS} steps.
 Earlier turns' reads are still in the chat: reuse them.`;
 
+/** A case chat's instructions end with the case (last, so the shared part above stays in the provider's cache). */
+const FACTS = 6000; // chars of the facts kept: a case brief, not its files
+const withCase = (base: string, c: Ctx["caseBrief"]) =>
+  !c
+    ? base
+    : `${base}
+
+# The case
+This chat is inside the lawyer's case "${c.title}". Read every question in its light: research the law that governs
+these facts, and say which facts the answer turns on and which are missing. The facts as the lawyer wrote them:
+${c.facts.trim() ? c.facts.trim().slice(0, FACTS) : "(none written yet: ask for the facts that matter)"}`;
+
 const LAST = `
 
 # This is your last step
@@ -83,7 +95,7 @@ export const mainTools = (ctx: Ctx) => lawTools(ctx);
 export const mainAgent = (ctx: Ctx) =>
   new ToolLoopAgent({
     model: model("main", ctx.workspaceId),
-    instructions: instructions(ctx.asOfDate),
+    instructions: withCase(instructions(ctx.asOfDate), ctx.caseBrief),
     tools: mainTools(ctx),
     stopWhen: stepCountIs(MAX_STEPS),
     // the last step answers with what it has: no tools sent at all, since DeepSeek ignored toolChoice "none" alone
@@ -91,7 +103,11 @@ export const mainAgent = (ctx: Ctx) =>
     // and told so: without it the model wrote its next tool calls as text (<｜DSML｜ calls>…) as the answer (eval-chat 2026-10-20, #10)
     prepareStep: ({ stepNumber }) =>
       stepNumber === MAX_STEPS - 1
-        ? { activeTools: [], toolChoice: "none", instructions: instructions(ctx.asOfDate) + LAST }
+        ? {
+            activeTools: [],
+            toolChoice: "none",
+            instructions: withCase(instructions(ctx.asOfDate), ctx.caseBrief) + LAST,
+          }
         : undefined,
   });
 

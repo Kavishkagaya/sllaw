@@ -63,6 +63,7 @@ export type Ctx = {
   workspaceId: string;
   userId: string;
   caseId: string | null; // a case chat; null in plain chat
+  caseBrief: { title: string; facts: string } | null; // that case's title and facts, always in the instructions
   asOfDate: string; // YYYY-MM-DD: the law as it stood on this date, set by the lawyer (default today)
   scopes: string[]; // user:<id>, case:<id>: what user-file search may reach (#19)
   ports: Ports;

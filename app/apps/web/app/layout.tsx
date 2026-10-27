@@ -2,7 +2,7 @@ import { ClerkProvider } from "@clerk/nextjs";
 import { Geist, Source_Serif_4 } from "next/font/google";
 import { ThemeProvider } from "next-themes";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { TRPCReactProvider } from "../trpc/client";
+import { TRPCReactProvider } from "@/trpc/client";
 import "./globals.css";
 
 const sans = Geist({ subsets: ["latin"], variable: "--font-sans" });
