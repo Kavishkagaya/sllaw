@@ -28,7 +28,8 @@ from etl.fetch import pg_connect
 from etl.structure import SCHED_HEAD, blocks, sched_name
 
 load_dotenv()
-BUILD = "2026-10-18"   # 18: notes at the end of a chunk's first piece, cover furniture, titled contents pages, issue #23
+BUILD = "2026-10-29"   # 29: paragraphs over MAX split (split_long; gazettes, 484 laws with a paragraph over 1,600 chars)
+                       # 18: notes at the end of a chunk's first piece, cover furniture, titled contents pages, issue #23
                        # 16: contents pages dropped, path (breadcrumb), MAX 3000 -> 1500
 BLOCK = re.compile(r"!\[([\w+-]+)\]\((\d+),(\d+),(\d+),(\d+)\)[ \t]*\n?(.*?)(?=\n!\[[\w+-]+\]\(\d|\Z)", re.S)
 DROP = {"header", "page_number", "footer", "image", "footer_image", "text+", "page_footer", "page_header"}
@@ -178,10 +179,34 @@ def roman(s):
     return sum(-x if i + 1 < len(v) and x < v[i + 1] else x for i, x in enumerate(v))
 
 
+def split_long(t):
+    """A paragraph over MAX in pieces of at most MAX: at line breaks, else sentence ends, else the last space before
+    MAX. Some gazettes come out of docling as a few paragraphs of 80-170k chars (gazette:2013/29, a whole Gazette
+    in 32 lines; 13 chunks over Zilliz's 65,535-char text field, 2026-10-29)."""
+    if len(t) <= MAX:
+        return [t]
+    units = []
+    for line in t.split("\n"):
+        while len(line) > MAX:
+            cut = max(line.rfind(". ", 0, MAX), line.rfind("; ", 0, MAX))
+            cut = cut + 1 if cut > MAX // 3 else line.rfind(" ", 0, MAX)
+            cut = cut if cut > 0 else MAX
+            units.append(line[:cut].rstrip()); line = line[cut:].lstrip()
+        units.append(line)
+    out, piece = [], ""
+    for u in units:
+        if piece and len(piece) + 1 + len(u) > MAX:
+            out.append(piece); piece = u
+        else:
+            piece = f"{piece}\n{u}" if piece else u
+    return out + [piece] if piece else out
+
+
 def chunks(paras, word="section", parts=True):
     """Paragraphs -> [(label, text, path)]: a new chunk at each section opener and each Part/Chapter/Schedule
     heading; a section's note follows its first line as an italic tail, the form LightOn prints. Over MAX, cut at a
-    paragraph end (the label stays on the first piece). The contents page is dropped first (drop_contents), and
+    paragraph end (the label stays on the first piece); a paragraph over MAX is split first (split_long). The
+    contents page is dropped first (drop_contents), and
     the cover's printing lines (FURNITURE). A chunk's notes go at the end of its first piece, not after the block
     they were level with: LightOn splits a sentence into blocks, so that put a note mid-sentence (act:21/2006 s4,
     issue #23); a piece ends at a paragraph end, and refs.py still reads the note-form links in the same chunk.
@@ -207,7 +232,7 @@ def chunks(paras, word="section", parts=True):
     head, seen, path, bad = None, {}, None, []        # bad[i]: cur[i] is an opener rejected outside a schedule
     def close():
         piece, n, first, doubt, at = [], 0, True, False, len(out)
-        for t, b in zip(cur, bad):
+        for t, b in ((s, b and j == 0) for t, b in zip(cur, bad) for j, s in enumerate(split_long(t))):
             if piece and n + len(t) > MAX:
                 out.append((label if first else None, "\n\n".join(piece),
                             path if first else None if doubt or not path else path + " (cont.)"))
@@ -384,7 +409,10 @@ GAZ_RUNNING = re.compile(r"GAZETTE\s+EXTRAORDINARY\s+OF\s+THE\s+DEMOCRATIC|^EOG\
 
 def gazette_body(paras):
     """A gazette's paragraphs without its masthead (up to the last marker in the first 12 paragraphs), running heads,
-    printer's codes ("EOG 06 - 0063") and stray one-letter lines (legacy-font Sinhala, issue #6)."""
+    printer's codes ("EOG 06 - 0063") and stray one-letter lines (legacy-font Sinhala, issue #6). A gazette has no
+    marginal notes: what the layout took for a margin is its second column (gazette:2182/39 put 84k chars of it in
+    one chunk's notes, 2026-10-29), so a "note" becomes its own paragraph after the block it sits beside."""
+    paras = [q for p in paras for q in ([{**p, "note": None}] + ([{"text": p["note"], "note": None}] if p["note"] else []))]
     head = [i for i, p in enumerate(paras[:12]) if GAZ_MAST_END.search(p["text"].strip())]
     return [p for p in paras[head[-1] + 1 if head else 0:] if not GAZ_RUNNING.search(p["text"].strip())]
 

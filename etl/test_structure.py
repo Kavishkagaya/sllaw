@@ -192,3 +192,15 @@ g = gazette_body([P(t) for t in ["The Gazette of the Democratic Socialist Republ
 assert [p["text"] for p in g] == ["CEYLON PETROLEUM CORPORATION ACT, No. 28 OF 1961", "Order under Section 66(1)(a)",
                                   "Anura Karunathilaka, Minister of Energy.", "At Colombo, 30th May, 2026. EOG 06 - 0063"], g
 print("ok gazette body")
+
+from etl.docs import split_long, MAX as _MAX
+_t = ("The Minister may by Order prescribe rates. " * 60) + "\n" + "x" * 4000 + "\n" + " ".join(["HS 0101.21 live horses 10%"] * 300)
+_p = split_long(_t)
+assert max(map(len, _p)) <= _MAX and "".join(_p).replace("\n", "").replace(" ", "") == _t.replace("\n", "").replace(" ", ""), [len(x) for x in _p]
+assert split_long("short") == ["short"]
+print("ok long paragraphs split")
+
+from etl.docs import gazette_body as _gb
+_g = _gb([{"text": "Left column text.", "note": "Right column text."}, {"text": "Next.", "note": None}])
+assert [(p["text"], p["note"]) for p in _g] == [("Left column text.", None), ("Right column text.", None), ("Next.", None)], _g
+print("ok gazette columns are not notes")

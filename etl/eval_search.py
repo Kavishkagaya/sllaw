@@ -42,8 +42,14 @@ def head(hit):
 
 def main():
     qs = json.load(open(os.path.join(os.path.dirname(__file__), "eval_questions.json")))
-    have = {e["id"]: e for e in zilliz("entities/query", {"collectionName": COLL, "limit": 100,
-            "filter": f"id in {[q['id'] for q in qs]}", "outputFields": ["id", "text"]})}
+    # the gold chunk by law and label, not by its stored id: a rebuild gives a law's chunks new ids (every id was
+    # stale after the 2026-10-20 rebuild, so every mode scored 0% until 2026-10-29)
+    have = {}
+    for q in qs:
+        got = zilliz("entities/query", {"collectionName": COLL, "limit": 1, "outputFields": ["id", "text"],
+                     "filter": f'doc_key == "{q["doc"]}" and label == "{q["label"]}"'})
+        if got:
+            have[q["id"]] = got[0]
     qs = [q for q in qs if q["id"] in have]
     print(f"{len(qs)} questions with an embedded gold chunk")
     langs, modes = ("en", "si", "ta"), ("dense", "bm25", "hybrid", "weighted")
