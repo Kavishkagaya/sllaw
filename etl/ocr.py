@@ -166,8 +166,9 @@ def main():
     args = a.parse_args()
     s3, bucket = r2(), os.environ["R2_BUCKET"]
     done = done_keys(s3, bucket)
-    if args.retry_cut:
-        return retry_cut(args.api, s3, bucket, [f"raw/lighton/{sha}.json.gz" for sha in done])
+    if args.retry_cut:              # with --sha, only those files (else every LightOn file in R2)
+        only = {x.strip() for x in open(args.sha) if x.strip()} if args.sha else None
+        return retry_cut(args.api, s3, bucket, [f"raw/lighton/{sha}.json.gz" for sha in done if only is None or sha in only])
     if args.sha:
         shas = [x.strip() for x in open(args.sha) if x.strip()]
         conn = pg_connect()

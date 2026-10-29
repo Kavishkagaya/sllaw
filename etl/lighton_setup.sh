@@ -5,6 +5,9 @@
 #   bash ~/sllaw/etl/lighton_setup.sh > ~/sllaw/logs/lighton_setup.log 2>&1      # in tmux; then etl/ocr_ada.sh
 set -e
 T=/var/tmp/e19309; export UV_CACHE_DIR=$T/pip_cache HF_HOME=$T/hf
+# ~/.cache/{vllm,flashinfer,torch,triton,docling} link here (shared NFS home); /var/tmp is per host, so make the
+# targets on each new host or vLLM dies at start (flashinfer's workspace, ampere 2026-10-29)
+mkdir -p $T/cache/{vllm,flashinfer,torch,triton,docling}
 # GitHub resets the connection mid-wheel from here (2026-10-20, twice): fetch it alone, resuming
 W=$T/wheels/vllm-0.31.0+cu129-cp38-abi3-manylinux_2_28_x86_64.whl; mkdir -p $T/wheels
 until curl -sSfL -C - --retry 20 -o $W https://github.com/vllm-project/vllm/releases/download/v0.31.0/$(basename $W) \
@@ -14,6 +17,9 @@ $T/bin/uv pip install -p $T/lighton_venv/bin/python --index-strategy unsafe-best
     --extra-index-url https://download.pytorch.org/whl/cu129 \
     "vllm @ file://$W" \
     "torch==2.13.0+cu129" ninja boto3 psycopg2-binary python-dotenv pypdfium2 requests
+# torchcodec (vLLM's audio/video decoder) comes as a CUDA 13 build that fails to load with OSError (libnvrtc.so.13),
+# which vLLM doesn't catch: the server died at import (2026-10-29). Without it vLLM skips audio/video; LightOn reads images.
+$T/bin/uv pip uninstall -p $T/lighton_venv/bin/python torchcodec || true
 $T/lighton_venv/bin/python -c "import torch, vllm; print('torch', torch.__version__, torch.version.cuda, torch.cuda.is_available(), 'vllm', vllm.__version__)"
 $T/lighton_venv/bin/hf download lightonai/LightOnOCR-3-0.8B --local-dir $T/models/LightOnOCR-3-0.8B
 du -sh $T/lighton_venv $T/models/LightOnOCR-3-0.8B

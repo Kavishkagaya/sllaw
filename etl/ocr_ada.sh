@@ -6,11 +6,14 @@
 # Re-running is safe: workers skip files whose raw/lighton/<sha256>.json.gz exists.
 T=/var/tmp/e19309; R=~/sllaw; S=$(date +%Y%m%d_%H%M)
 export PATH=$T/lighton_venv/bin:/usr/local/cuda-13/bin:$PATH HF_HOME=$T/hf XDG_CACHE_HOME=$T/cache VLLM_CACHE_ROOT=$T/cache/vllm
+# VLLM_USE_FLASHINFER_SAMPLER=0 on the serve line itself (tmux gives a new session the tmux server's environment, not
+# this script's): FlashInfer's sampler compiles at start with the system nvcc, and ampere's 12.3 rejects
+# --compress-mode (2026-10-29); vLLM's own sampler needs no compile
 read -ra C <<< "${CARDS:-0 2}"
 for s in 0 1; do
     G=${C[$s]}; P=$((8013 + s))
     tmux has-session -t ocr_srv$s 2>/dev/null || tmux new-session -d -s ocr_srv$s \
-        "CUDA_VISIBLE_DEVICES=$G vllm serve $T/models/LightOnOCR-3-0.8B --served-model-name lighton --port $P \
+        "CUDA_VISIBLE_DEVICES=$G VLLM_USE_FLASHINFER_SAMPLER=0 vllm serve $T/models/LightOnOCR-3-0.8B --served-model-name lighton --port $P \
          --default-chat-template-kwargs '{\"enable_thinking\": false}' --gpu-memory-utilization ${MEM:-0.3} \
          --max-model-len 16384 --limit-mm-per-prompt '{\"image\": 1}' > $R/logs/ocr_srv${s}_$S.log 2>&1"
     for w in 0 1; do
