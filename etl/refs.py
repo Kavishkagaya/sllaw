@@ -63,8 +63,10 @@ MADE_UNDER = re.compile(rf"\b(?:under|by|in\s+terms\s+of)\s+(?:the\s+)?(?:provis
                         rf"\b(?:of|in)\s+(?P<law>{LAW})", re.I)
 # an extraordinary gazette by its number: "Gazette Extraordinary No. 1992/29", "Gaz. Ex. Ord. No. 471/6",
 # "Extraordinary Gazette No. 2235/22" -> gazette:1992/29 (the listing pads the sub-number to two digits)
+# "Gazette Extraordinary, No. 1595/14", "Gazette Extraordinary of the Democratic Socialist Republic of Sri Lanka No. 1234/5"
 GAZ = re.compile(r"\b(?:Gazette\s*(?:\(?\s*Extra-?ordinary\s*\)?\s*)?|Gaz\.?\s*(?:Ext?r?a?\.?\s*(?:Ord(?:inary)?\.?\s*)?)?"
-                 r"|Extra-?ordinary\s+Gazette\s*)(?:Notification\s*)?(?:bearing\s+)?No[s.,:]?\s*(\d{3,4})\s*/\s*(\d{1,2})\b", re.I)
+                 r"|Extra-?ordinary\s+Gazette\s*)[\s,]*(?:of\s+the\s+Democratic\s+Socialist\s+Republic\s+of\s+Sri\s+Lanka[\s,]*)?"
+                 r"(?:Notification\s*)?(?:bearing\s+)?No[s.,:]?\s*(\d{3,4})\s*/\s*(\d{1,2})\b", re.I)
 PRINC = re.compile(r"\bprincipal\s+(?:enactment|Act|Law|Ordinance)\b", re.I)
 KIND = {"amendment": "amends", "amended": "amends", "replacement": "replaces", "substitution": "replaces",
         "substituted": "replaces", "repeal": "repeals", "repealed": "repeals", "insertion": "inserts",
@@ -320,7 +322,7 @@ class Doc:
             # the verb of the clause the number sits in: "the Order published in Gaz. Ex. No. 1992/29 ... is hereby rescinded"
             end = r"(?<!No)(?<!Nos)(?<!Gaz)(?<!Ex)(?<!Ord)(?<!Sec)(?<!Cap)[.;]\s"      # not "No. ", "Gaz. Ex. "
             w = re.split(end, t[max(0, m.start() - 160):m.start()])[-1] + m[0] + re.split(end, t[m.end():m.end() + 160])[0]
-            kind = "rescinds" if re.search(r"rescind|revok|cancel", w, re.I) else "amends" if re.search(r"\bamend", w, re.I) else "cites"
+            kind = "rescinds" if re.search(r"rescind|revok|cancel", w, re.I) else "amends" if re.search(r"\bamend|\brepeal|substitut", w, re.I) else "cites"
             out.append((i, kind, k, None, re.sub(r"\s+", " ", t[max(0, m.start() - 120):m.end() + 80]).strip(), {"via": "gazette"}))
         out += [(i, "cites", "constitution", None, re.sub(r"\s+", " ", t[max(0, m.start() - 80):m.end() + 80]).strip(), {"via": "cite"})
                 for m in CONST.finditer(t)]

@@ -49,6 +49,10 @@ r = ls("By virtue of the powers vested in me by section 3 of the Special Commodi
 assert ("made_under", "act:48/2007", "3") in r and ("amends", "gazette:1992/29", None) in r, r
 assert ("rescinds", "gazette:471/06", None) in ls("The Order published in Gaz. Ex. Ord. No. 471/6 of 14.09.1987 is hereby rescinded.", key=G)
 assert ("cites", "gazette:2235/22", None) in ls("as notified in Extraordinary Gazette No. 2235/22 of 6th July 2021. The rates are amended.", key=G)
+assert ("amends", "gazette:1595/14", None) in ls("do by this order, repeal the Schedule I, II and III of the regulations made and "
+       "published in the Gazette Extraordinary, No. 1595/14 of 31 st March, 2009 and substitution of the Schedule I hereto.", key=G)
+assert ("cites", "gazette:1234/05", None) in ls("the Order published in the Gazette Extraordinary of the Democratic Socialist "
+       "Republic of Sri Lanka No. 1234/5 of 1st May, 2002.", key=G)
 assert not any(k == "made_under" for k, _, _ in ls("under section 29 of the Foreign Exchange Act, No. 12 of 2017"))   # only gazettes
 assert ("made_under", "act:28/1961", "66") in ls("AS per the powers vested upon me by the Section 66(1)(a) of Ceylon Petroleum "
                                                    "Corporation Act, No. 28 of 1961, I, Minister of Energy", key=G)

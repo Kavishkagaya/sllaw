@@ -419,7 +419,6 @@ def build(keys=None, limit=None, workers=16, types=tuple(TYPES)):
     conn = pg_connect()
     cur = conn.cursor()
     rows = [r for t in types for r in TYPES[t](cur, keys, limit)]
-    rows = cur.fetchall()
     conn.close()
     print(f"{len(rows)} documents to build", flush=True)
     n = {"ok": 0, "skip": 0, "fail": 0}
