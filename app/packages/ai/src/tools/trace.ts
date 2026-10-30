@@ -166,5 +166,20 @@ export const traceTool = (ports: Ports) =>
       depth: z.number().int().min(1).max(3).optional().describe("levels to follow, default 2"),
       limit: z.number().int().min(2).max(25).optional().describe("chunks in the tree at most, default 12"),
     }),
-    execute: (input) => trace(ports, input),
+    execute: async (input) => {
+      const t0 = Date.now();
+      const out = await trace(ports, input);
+      // one line per call in the runtime logs, to judge the experiment from Vercel's logs
+      console.log(
+        `[trace] ${JSON.stringify({
+          ms: Date.now() - t0,
+          input,
+          scored: out.scored,
+          calls: out.calls,
+          nodes: out.nodes.map((n) => [n.chunkId, n.from, n.docKey, n.label, n.kind, n.direction, n.p]),
+          leads: out.leads.length,
+        })}`,
+      );
+      return out;
+    },
   });
