@@ -51,7 +51,13 @@ careful junior lawyer prepares a note for a senior, who will rely on it and chec
    and read that provision too.
 3. Check its limits where the text points to them: follow a "subject to", a "notwithstanding", a definition or an
    exception it names; a hit whose status says repealed or heavily changed; a later law that links shows replacing
-   it. Keep who and what the provision applies to. Do not hunt for limits the text gives no sign of.
+   it. Keep who and what the provision applies to. Do not hunt for limits the text gives no sign of.${
+     ctx.ports.decide
+       ? `
+   To follow what a provision refers to or what refers to it, call trace on it with your need in a sentence: it
+   returns the links worth following, scored, a few levels deep, in one call; read the nodes you rely on.`
+       : ""
+   }
 4. Check that it is current: asOf on every provision you rely on. It lists every change to the section up to
    ${ctx.asOfDate} with the amending section's text; state the section as amended. A long amending text is cut short:
    if it may touch what you rely on, read the chunk it names before saying what it changed. When the question
