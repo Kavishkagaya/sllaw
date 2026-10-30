@@ -1,7 +1,7 @@
 // Every LLM call goes through Vercel AI Gateway (AI_GATEWAY_API_KEY locally, OIDC on Vercel): one key for every
 // provider, spend per workspace (`user`), fallbacks. The model per task is config, picked later (docs/APP.md): set
 // MODEL_<TASK> ("provider/model", as the gateway names it) to change one without touching code.
-import { gateway, wrapLanguageModel } from "ai";
+import { experimental_decide, gateway, wrapLanguageModel } from "ai";
 
 const tasks = {
   main: process.env.MODEL_MAIN || "deepseek/deepseek-v4.1-flash",
@@ -16,7 +16,7 @@ const PROVIDERS = process.env.MODEL_PROVIDERS?.split(",") ?? ["deepinfra", "deep
 
 export type Call = {
   workspaceId: string;
-  task: Task;
+  task: Task | "decide";
   input: number; // all input tokens
   cached: number; // of which read from the provider's cache
   output: number;
@@ -59,4 +59,30 @@ export function model(task: Task, workspaceId: string) {
       },
     },
   });
+}
+
+// The decision model (trace, tools/trace.ts): typed answers only, no text. Jev is ~100 ms and priced on input alone.
+const DECIDE = process.env.MODEL_DECIDE || "typesafe-ai/jev";
+
+/** Yes/no questions on one state, all in one call: the probability of yes for each question id. */
+export async function decide(workspaceId: string, state: string, questions: Record<string, string>) {
+  const r = await experimental_decide({
+    model: gateway.decisionModel(DECIDE),
+    state,
+    questions: Object.fromEntries(
+      Object.entries(questions).map(([id, instructions]) => [id, { type: "boolean" as const, instructions }]),
+    ),
+    providerOptions: { gateway: { user: workspaceId, tags: ["task:decide"] } },
+  });
+  recorder?.({
+    workspaceId,
+    task: "decide",
+    input: r.usage.inputTokens ?? 0,
+    cached: 0,
+    output: r.usage.outputTokens ?? 0,
+    gateway: r.providerMetadata?.gateway,
+  });
+  const out: Record<string, number> = {};
+  for (const [id, a] of Object.entries(r.answers)) out[id] = (a as { probability: number }).probability;
+  return out;
 }

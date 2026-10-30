@@ -10,3 +10,4 @@ export { SourceMap, type SourcesJson } from "./sources/map";
 export { citesToModel, citesToReal, partsToModel, partsToReal, wrapTools } from "./sources/wrap";
 export { fileTools, pageRange } from "./tools/files";
 export { lawTools } from "./tools/law";
+export { type Trace, type TraceNode, trace } from "./tools/trace";

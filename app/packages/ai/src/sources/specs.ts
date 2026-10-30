@@ -62,6 +62,9 @@ const amending = (up: Obj[]) => {
   const o = own(up);
   return join(o.byLabel ? `s. ${o.byLabel}` : null, lawName(o.byTitle, o.by));
 };
+// a trace node: its law and the part the link named (in-links name none)
+const traced = (up: Obj[]) =>
+  join(own(up).label ? `s. ${own(up).label}` : null, lawNo(own(up).docKey) ?? own(up).docKey);
 const fileTitle = (up: Obj[]) => own(up).title ?? null;
 // a file chunk: its file's title (on the chunk, or the file above it) and page
 const page = (up: Obj[]) =>
@@ -101,6 +104,15 @@ export const SPECS: Record<string, Spec> = {
   links: {
     in: [{ path: "chunkId", kind: "s" }],
     out: [{ path: "[].chunkIds[]", kind: "s" }],
+  },
+  trace: {
+    in: [{ path: "chunkId", kind: "s" }],
+    out: [
+      { path: "nodes[].chunkId", kind: "s", label: traced },
+      { path: "nodes[].from", kind: "s" },
+      { path: "nodes[].linked.chunkId", kind: "s" },
+      { path: "leads[].from", kind: "s" },
+    ],
   },
   asOf: {
     in: [{ path: "chunkId", kind: "s" }],

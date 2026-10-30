@@ -4,6 +4,7 @@
 import { tool } from "ai";
 import { z } from "zod";
 import type { Ctx } from "../ports";
+import { traceTool } from "./trace";
 
 const docKey = z.string().describe("a law's key, from a hit or a link: act:9/2023, law:5/1972, cap:107, cap1956:331");
 const chunkId = z.number().int();
@@ -103,4 +104,6 @@ export const lawTools = ({ ports }: Ctx) => ({
     }),
     execute: ({ chunkId, date }) => ports.asOf(chunkId, date),
   }),
+  // experimental (TRACE=1): the link walk a decision model steers
+  ...(ports.decide ? { trace: traceTool(ports) } : {}),
 });
