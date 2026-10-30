@@ -1,4 +1,4 @@
-import type { AsOf, CaseFile, Change, Chunk, Ctx, Status } from "@sllaw/ai";
+import { type AsOf, type CaseFile, type Change, type Chunk, type Ctx, decide, type Status } from "@sllaw/ai";
 import { filesOfCase } from "@sllaw/db";
 import { changeStatus, changesInto, chunksById, linksOf, sectionsOf } from "@sllaw/etl_db";
 import { type FileIndex, fileIndex, searchLaw } from "@sllaw/search";
@@ -110,6 +110,8 @@ export function agentCtx(
       links: (target, direction, opts) => linksOf(target, direction, opts),
       asOf: (chunkId, date) => asOf(chunkId, date ?? asOfDate),
       status,
+      // the trace experiment (Jev steering the link walk): off unless TRACE=1
+      ...(process.env.TRACE === "1" && { decide: (state, qs) => decide(workspaceId, state, qs) }),
     },
   };
 }
