@@ -79,11 +79,17 @@ export const today = () => new Date().toLocaleDateString("en-CA", { timeZone: "A
  * so the scopes here are what this request may reach. File search reaches the case's scope only, and reads only
  * the files in caseFiles (caseFilesOf). `files` swaps the store and index (tests).
  */
+// once per instance, so the logs show whether the trace experiment is on in this deployment
+let traceLogged = false;
 export function agentCtx(
   { workspaceId, userId, caseId = null, caseBrief = null, caseFiles = [], asOfDate = today() }: Who,
   files: { store?: BlobStore; index?: FileIndex } = {},
 ): Ctx {
   const scopes = [`user:${userId}`, ...(caseId ? [`case:${caseId}`] : [])];
+  if (!traceLogged) {
+    traceLogged = true;
+    console.log(`[trace] experiment ${process.env.TRACE === "1" ? "on" : "off"}`);
+  }
   return {
     workspaceId,
     userId,
@@ -111,7 +117,12 @@ export function agentCtx(
       asOf: (chunkId, date) => asOf(chunkId, date ?? asOfDate),
       status,
       // the trace experiment (Jev steering the link walk): off unless TRACE=1
-      ...(process.env.TRACE === "1" && { decide: (state, qs) => decide(workspaceId, state, qs) }),
+      ...(process.env.TRACE === "1" && {
+        decide: (state, qs) => {
+          console.log(`[trace] decide ${Object.keys(qs).length} questions`);
+          return decide(workspaceId, state, qs);
+        },
+      }),
     },
   };
 }
