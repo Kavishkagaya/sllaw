@@ -110,6 +110,7 @@ export const SPECS: Record<string, Spec> = {
     out: [
       { path: "nodes[].chunkId", kind: "s", label: traced },
       { path: "nodes[].from", kind: "s" },
+      { path: "nodes[].linked.chunkId", kind: "s" },
       { path: "leads[].from", kind: "s" },
     ],
   },

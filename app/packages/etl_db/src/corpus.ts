@@ -38,6 +38,46 @@ export async function chunksById(ids: number[]) {
     .where(inArray(chunks.id, ids));
 }
 
+// How new an edition of a law is, among its same_as twins: the Constitution's consolidations by amendment (21 is the
+// last), the 1980 Revised Edition over the 1956 one. 0: not an edition, never moved to or from.
+function editionRank(key: string) {
+  if (key === "constitution") return 1000;
+  const c = key.match(/^constitution:(\d+)$/);
+  if (c) return 1000 + Number(c[1]);
+  if (key.startsWith("cap:")) return 2;
+  if (/^(cap1956|chapter):/.test(key)) return 1;
+  return 0;
+}
+
+/** For each chunk in an older edition of a law, the chunk with the same label in its newest edition (links often
+ *  resolve to the 1978 Constitution or a 1956 chapter); chunks with no newer twin are left out. */
+export async function latestEditions(chunkIds: number[]): Promise<Record<number, { chunkId: number; docKey: string }>> {
+  const out: Record<number, { chunkId: number; docKey: string }> = {};
+  const rows = (await chunksById(chunkIds)).filter((c) => c.label && editionRank(c.docKey) > 0);
+  const twinsOf = async (keys: string[]) =>
+    (
+      await db
+        .select({ src: links.srcDoc, dst: links.dstDoc })
+        .from(links)
+        .where(and(eq(links.kind, "same_as"), sql`(${inArray(links.srcDoc, keys)} or ${inArray(links.dstDoc, keys)})`))
+    ).flatMap((l) => [l.src, l.dst]);
+  for (const c of rows) {
+    // two hops: constitution:21 and constitution:17 are each same_as constitution, not each other
+    const one = [...new Set([c.docKey, ...(await twinsOf([c.docKey]))])];
+    const all = [...new Set([...one, ...(await twinsOf(one))])];
+    const best = all.sort((a, b) => editionRank(b) - editionRank(a))[0];
+    if (!best || editionRank(best) <= editionRank(c.docKey)) continue;
+    const [hit] = await db
+      .select({ id: chunks.id })
+      .from(chunks)
+      .where(and(eq(chunks.docKey, best), eq(chunks.label, c.label!)))
+      .orderBy(asc(chunks.seq))
+      .limit(1);
+    if (hit) out[c.id] = { chunkId: hit.id, docKey: best };
+  }
+  return out;
+}
+
 export type Direction = "out" | "in";
 
 /**

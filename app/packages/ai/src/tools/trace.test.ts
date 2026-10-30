@@ -73,4 +73,16 @@ describe("trace", () => {
     const none = await trace(fakePorts("nothing matches").ports, { docKey: "act:1", chunkId: 1, need: "x" });
     expect(none.nodes).toHaveLength(1);
   });
+
+  it("moves a node into the newest edition, keeping where the link pointed", async () => {
+    const { ports } = fakePorts("tenant");
+    (ports as any).latest = async (ids: number[]) =>
+      ids.includes(2) ? { 2: { chunkId: 20, docKey: "constitution:21" } } : {};
+    const t = await trace(ports, { docKey: "act:1", chunkId: 1, need: "x", direction: "out", depth: 1 });
+    expect(t.nodes[1]).toMatchObject({
+      chunkId: 20,
+      docKey: "constitution:21",
+      linked: { chunkId: 2, docKey: "act:2" },
+    });
+  });
 });

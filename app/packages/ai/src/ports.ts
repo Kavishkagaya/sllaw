@@ -91,6 +91,8 @@ export interface Ports {
   ): Promise<Link[]>;
   asOf(chunkId: number, date?: string): Promise<AsOf | null>; // date left out: ctx.asOfDate
   status(chunkIds: number[]): Promise<Record<number, Status>>;
+  /** Chunks in an older edition of a law -> the same part in its newest edition (trace moves its nodes there). */
+  latest?(chunkIds: number[]): Promise<Record<number, { chunkId: number; docKey: string }>>;
   /** A decision model's yes/no answers on one state, as probabilities by question id (trace; tools/trace.ts). Set
    *  only when the trace experiment is on (TRACE=1): without it the trace tool is not offered. */
   decide?(state: string, questions: Record<string, string>): Promise<Record<string, number>>;

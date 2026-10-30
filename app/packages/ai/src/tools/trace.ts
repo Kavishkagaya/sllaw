@@ -24,6 +24,7 @@ export type TraceNode = {
   direction: Direction | null;
   p: number | null; // the decision model's probability that following the link serves the need
   context: string | null; // the text around the reference
+  linked?: { chunkId: number; docKey: string }; // where the link pointed, when that was an older edition of the law
   depth: number;
 };
 export type Lead = { from: number; docKey: string; label: string | null; kind: string };
@@ -112,14 +113,21 @@ export async function trace(ports: Ports, input: TraceInput): Promise<Trace> {
     );
     // the best links of the whole level first, so the node limit cuts the weakest
     const next: TraceNode[] = [];
-    for (const { from, e, p } of picked.flat().sort((a, b) => b.p - a.p)) {
+    const ranked = picked.flat().sort((a, b) => b.p - a.p);
+    // a link into the 1978 Constitution or a 1956 chapter: follow the same part in the newest edition instead
+    const newer = ports.latest ? await ports.latest([...new Set(ranked.map((x) => x.e.chunk!))]) : {};
+    for (const { from, e, p } of ranked) {
       if (nodes.length >= limit) break;
-      if (seen.has(e.chunk!)) continue;
+      const to = newer[e.chunk!];
+      const id = to?.chunkId ?? e.chunk!;
+      if (seen.has(id)) continue;
+      seen.add(id);
       seen.add(e.chunk!);
       const node: TraceNode = {
-        chunkId: e.chunk!,
+        chunkId: id,
+        ...(to && { linked: { chunkId: e.chunk!, docKey: e.doc } }),
         from: from.chunkId,
-        docKey: e.doc,
+        docKey: to?.docKey ?? e.doc,
         label: e.dir === "out" ? e.link.dstLabel : null,
         kind: e.link.kind,
         direction: e.dir,
