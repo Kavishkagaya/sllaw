@@ -61,7 +61,7 @@ cp .env.example .env                     # fill DATABASE_URL and R2_*
 
 Fetching and extraction run on **ada**, never locally: no source files on this machine. Use the `/ada-ssh` skill.
 
-**ada (10.40.18.12) has been down since 2026-10-18** (the cluster rebooted; ada never came back: "No route to host"). **The work
+**ada (10.40.18.12) was down 2026-10-18 to ~10-30; back up on 2026-11-01** (up 2 days, 64 threads, 503 GB, 3 GPUs; `/var/tmp/e19309` intact: venvs, models, and the pre-10-18 `pgdata`, which is stale: the current DB is on ampere). **ada does the heavy work, ampere keeps the DB** (2026-11-01): tmux `adalink` on ampere holds `ssh -N -R 5433:localhost:5433 e19309@10.40.18.12` (password login, no keys), so `DB_LOCAL_URL` on ada reaches ampere's Postgres; never start ada's own stale Postgres. If ampere reboots or `adalink` dies, restart it by hand on ampere. `etl.fetch acts --limit 5` from ada worked (2 new files). **The work
 host is now ampere** (10.40.18.10, DNS `ibm`; `ssh ampere`, ProxyJump tesla; same LDAP login): 32 threads, 125 GB, 2× RTX
 A6000 48 GB, shared and busy. Same paths: `/var/tmp/e19309` is per host, `~/sllaw` is the shared NFS home. No pip there:
 `/var/tmp/e19309/bin/uv` (0.8.0) built `etl_venv` (boto3, psycopg2, dotenv, pgserver: fetch, structure, graph, docs,
@@ -119,3 +119,4 @@ Neon Postgres (until 2026-10-10). Tables: `docs`, `chunks`, `links` (migration 0
 - **ada's DNS sometimes fails to resolve the database host** for a minute or so (three times on 2026-10-10; once it killed all four OCR workers at start): connect with `etl.fetch.pg_connect()`, which retries for ~5 minutes.
 - **vLLM (LightOn) won't start on ampere** (2026-10-29): torchcodec is a CUDA 13 build (uninstall it); `~/.cache/*` link into `/var/tmp/e19309/cache`, which must exist on each host; FlashInfer's sampler compiles with the system nvcc 12.3 and fails on `--compress-mode`: set `VLLM_USE_FLASHINFER_SAMPLER=0` on the `vllm serve` line (inside the tmux command; tmux doesn't pass the caller's environment). `etl/lighton_setup.sh` and `etl/ocr_ada.sh` do all three.
 - **docling `PARTIAL_SUCCESS` drops pages** when Surya fails on some of them (15/1991 kept 1 of 7). `etl/extract.py` raises on it so the row stays queued; never store a partial raw.
+- **The work host's Postgres does not start after a reboot** (ampere rebooted 2026-10-30 09:04; found down 2026-11-01, "Connection refused" on 5433): `bash ~/sllaw/etl/db_ada.sh` starts it; crash recovery is automatic, and the data was intact (7,336 docs, 164,853 chunks, 96,344 links, equal to the last publish).
