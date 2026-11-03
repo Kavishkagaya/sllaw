@@ -3,7 +3,8 @@
 //   pnpm --filter @sllaw/services eval-chat dl,6,7,13,19     (numbers: etl/eval_questions.json; dl: driving licence)
 // TRACE_DIR=<dir> writes each question's tool calls and answer to <dir>/<n>.json.
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { type Call, mainAgent, recordCalls, SourceMap } from "@sllaw/ai";
+import { mainAgent, SourceMap } from "@sllaw/ai";
+import { type Metered, setUsageSink } from "@sllaw/usage";
 import { agentCtx } from "../src/agent";
 
 type Q = { n: string; doc?: string; label?: string; id?: number; en: string };
@@ -30,11 +31,14 @@ const qs: Q[] = pick.map((k) => extra[k] ?? { n: k, ...gold[Number(k) - 1]! });
 const traceDir = process.env.TRACE_DIR;
 if (traceDir) mkdirSync(traceDir, { recursive: true });
 
-const calls: Call[] = [];
-recordCalls((c) => calls.push(c));
+// every model call, as usage events, kept here (not in the database)
+const calls: Metered[] = [];
+setUsageSink(async (es) => void calls.push(...es.filter((e) => e.kind === "llm")));
 // the model cites handles ([[s3]], [[s3,s9]]) and its tool results carry them: the chat's map gives the real ids
 const CITE = /\[\[([a-z]\d+(?:\s*[,;]\s*[a-z]\d+)*)\]\]/g;
 const SEEN = new Set(["read", "asOf"]); // tools whose output is chunks the agent has read
+
+const tokens = (cs: Metered[], k: string) => cs.reduce((a, c) => a + (c.quantity[k] ?? 0), 0);
 
 const rows: Record<string, number | string | boolean>[] = [];
 const one = async (q: Q) => {
@@ -64,7 +68,7 @@ const one = async (q: Q) => {
     const got = await ctx.ports.read(cited);
     const hit = q.doc ? got.some((c) => c.docKey === q.doc && c.label === q.label) : "-";
     const mine = calls.filter((c) => c.workspaceId === ws);
-    const cost = mine.reduce((a, c) => a + Number((c.gateway as { cost?: unknown } | undefined)?.cost ?? NaN), 0);
+    const cost = mine.reduce((a, c) => a + Number(c.meta?.inferenceCost ?? NaN), 0);
     const row = {
       q: q.n,
       hit,
@@ -73,10 +77,10 @@ const one = async (q: Q) => {
       unreadIds: cited.filter((id) => !seen.has(id)).join(" "),
       steps: r.steps.length,
       calls: mine.length,
-      input: mine.reduce((a, c) => a + c.input, 0),
-      cached: mine.reduce((a, c) => a + c.cached, 0),
-      cacheRate: `${Math.round((100 * mine.reduce((a, c) => a + c.cached, 0)) / Math.max(1, mine.reduce((a, c) => a + c.input, 0)))}%`,
-      output: mine.reduce((a, c) => a + c.output, 0),
+      input: tokens(mine, "input"),
+      cached: tokens(mine, "cached"),
+      cacheRate: `${Math.round((100 * tokens(mine, "cached")) / Math.max(1, tokens(mine, "input")))}%`,
+      output: tokens(mine, "output"),
       cost: Number.isNaN(cost) ? "?" : cost.toFixed(4),
       secs: Math.round((Date.now() - t0) / 1000),
     };
@@ -90,7 +94,7 @@ const one = async (q: Q) => {
             q,
             row,
             text: r.text,
-            gateway: mine[0]?.gateway,
+            usage: mine[0],
             steps: r.steps.map((s) => ({
               calls: s.toolCalls.map((c) => ({ tool: c.toolName, input: c.input })),
               results: s.toolResults.map((t) => ({ tool: t.toolName, output: t.output })),

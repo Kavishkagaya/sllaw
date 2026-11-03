@@ -18,6 +18,7 @@ import {
   setUploaded,
 } from "@sllaw/db";
 import { getJson } from "@sllaw/storage";
+import { flushUsage, meter } from "@sllaw/usage";
 import { getRun, start } from "workflow/api";
 import type { Account } from "../accounts";
 import { appDeps } from "./deps";
@@ -205,9 +206,15 @@ export async function finishUpload(a: Signed, id: string) {
     await setUploaded(id, "failed", head.size);
     throw new Error("file too large");
   }
-  // only the call that moves it pending -> stored starts the run: two finishUpload calls at once start one
-  if ((await setUploaded(id, "stored", head.size)) && STEPS.some((s) => f[`${s}State`] === "pending"))
-    await startProcessing(id);
+  // only the call that moves it pending -> stored starts the run (and meters the bytes): two calls at once start one
+  if (await setUploaded(id, "stored", head.size)) {
+    meter(
+      { kind: "storage", model: "r2", quantity: { bytes: head.size, files: 1 } },
+      { workspaceId: f.workspaceId, userId: a.user.id, task: "upload", ref: `file:${id}` },
+    );
+    await flushUsage();
+    if (STEPS.some((s) => f[`${s}State`] === "pending")) await startProcessing(id);
+  }
   return fileStatus((await fileById(id))!);
 }
 

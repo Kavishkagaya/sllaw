@@ -25,6 +25,7 @@
     "@sllaw/extract": "workspace:*",
     "@sllaw/search": "workspace:*",
     "@sllaw/storage": "workspace:*",
+    "@sllaw/usage": "workspace:*",
     "workflow": "5.2.1"
   }
 }

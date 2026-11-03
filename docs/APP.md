@@ -315,6 +315,32 @@ in v1; an entity graph can be built later from the same per-file JSON.
   cache missed from the first tool call on (turn 2 of a chat: 2,432 of 18,186 input tokens cached). Weighed and
   dropped: keep jsonb and sort keys in a model middleware; `parts` is never queried, and any path around the
   middleware would silently break the cache.
+- **Usage ledger (user, 2026-11-03):** `usage_events` (app database, migration 0006) holds only usage that costs us
+  money or that a plan will be priced on; product analytics (pages, clicks) go to PostHog later, not here. One row
+  per call: `kind` (llm, embed, ocr, vector, storage), `task` (chat, file.extract/categorize/index, upload), model,
+  `quantity` (jsonb: tokens, pages, chars, bytes, calls), `cost_usd` (the gateway's billed cost for LLM calls; our
+  list price for bge-m3 and Mistral OCR, `estimated` true; null for Zilliz, R2 and self-hosted OCR, whose quantities
+  are kept), `ref` (chat:<id>, file:<id>), `idem` (gateway generation id, stored once). No foreign keys: spend outlives
+  what it was for. Usage and spend are sums over it (`usage.summary`, workspace admins). `@sllaw/usage` is the meter:
+  ai, search and extract call `meter()` where a call's size is known; services opens a scope (workspace, user, task,
+  ref) around a chat turn and each file step and flushes the writes before the function ends. Checked 2026-11-03: a
+  2-step streamed turn read after its scope closed is metered for its user (models.test.ts). Not metered: a chat step
+  cut off by the stop button (no usage reported), stored bytes over time (a gauge: `files.size`, not events), law
+  search outside a chat (none exists). Plan limits are not enforced yet: pricing is not set. **Backfill (migration 0006, user, 2026-11-03):** every assistant message with
+  `usage` becomes one `llm` event (task chat, its chat's workspace and user, cost = gatewayCost, steps and generation
+  ids kept, `meta.backfill`, idem `message:<id>`): one event per turn, not per step. Dev, 2026-11-03: 85 messages ->
+  85 events, 5 workspaces, 6 users, $0.1262 and 2,239,013 input tokens, equal to the messages' sums; 15 assistant
+  messages from before 2026-10-20 have no usage and stay unmetered.
+- **Platform admin pages (user, 2026-11-03):** `/admin` for platform staff: `users.is_admin` (migration 0007, set by
+  hand in SQL: `update users set is_admin = true where email = '...'`), checked by the `superAdmin` procedure. View
+  only for now: **Usage** (the period's totals, every workspace with members, stored bytes and usage, every user who
+  used anything), a workspace (members and what each used, usage per kind/task/model), **Users** (each user's
+  workspaces and role in each, cases, joined, the period's chats and cost) and a user (per workspace, per
+  kind/task/model). Periods: this month, last month, 7, 30, 90 days. **Normal users never learn it exists (user,
+  2026-11-03):** superAdmin answers NOT_FOUND (not FORBIDDEN), so `/admin` is the 404 page; the sidebar's Admin link is
+  built on the server only for staff (passed into the client sidebar as a slot, so no client bundle names it);
+  `user.me` leaves out `isAdmin`. Checked 2026-11-03 on the dev database with the test user: every admin procedure
+  NOT_FOUND as a normal user, all answer as admin; signed out, `/admin/*` redirects to sign-in like any other path.
 - **Drafting:** later. v1 documents are markdown.
 - **Users:** reach lawyers once a working base exists.
 

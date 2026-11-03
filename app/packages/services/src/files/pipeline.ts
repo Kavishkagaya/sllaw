@@ -13,6 +13,7 @@ import type { FileRow, Step, StepEnd, StepError, StepState } from "@sllaw/db";
 import { type ExtractCtx, type Extracted, NoText } from "@sllaw/extract";
 import { chunkPages, type FileIndex, indexBy } from "@sllaw/search";
 import { type BlobStore, getJson, putJson } from "@sllaw/storage";
+import { flushUsage, withUsage } from "@sllaw/usage";
 import { isRetryable } from "./errors";
 
 export const keys = {
@@ -116,8 +117,10 @@ export async function runStep(
   const ac = new AbortController();
   const timer = setTimeout(() => ac.abort(new StepTimeout(step, ms)), ms);
   let end: StepEnd;
+  // the step's model, embedding, OCR and vector calls are metered for the file's workspace and owner
+  const scope = { workspaceId: claimed.workspaceId, userId: claimed.ownerId, task: `file.${step}`, ref: `file:${id}` };
   try {
-    end = await untilAborted(STEP[step](claimed, d, ac.signal), ac.signal);
+    end = await withUsage(scope, () => untilAborted(STEP[step](claimed, d, ac.signal), ac.signal));
   } catch (e) {
     const error: StepError = { message: String((e as Error)?.message ?? e).slice(0, 1000), retryable: isRetryable(e) };
     if (o.retriesLeft && error.retryable) {
@@ -128,6 +131,7 @@ export async function runStep(
     end = { state: "failed", error };
   } finally {
     clearTimeout(timer);
+    await flushUsage();
   }
   const at = await d.rows.end(id, step, end, o.runId);
   if (!at) return null; // reset or claimed by another run while it ran: that run's states are the ones that count

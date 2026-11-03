@@ -27,6 +27,7 @@ apps/web → api → services → db
                           → storage
                           → extract
                           → ai  (ports: services fills them in ctx when it runs an agent)
+usage: imported by ai, search, extract, services (it imports nothing of ours)
 ```
 
 - **`db`**: the app's own database (`DATABASE_URL`: database `app` in Neon sllaw-app, beside the corpus in `neondb`):
@@ -54,13 +55,17 @@ apps/web → api → services → db
   need search, read, links, as_of, which are services, while services calls ai; importing services would be a
   cycle. So everything an agent gets comes in one `ctx` (workspace, user, case, scopes, ports), built by services
   and already scoped to the request; tools (`tools/`) close over it, agents (`agents/`) take it. Imports no
-  package of ours.
+  package of ours but `usage` (the model middleware meters every call).
   An agent is a **setup** (`agents/<name>.setup.ts`, built by `prompt/build.ts`): prompt sections (`section(title,
   content, { when })`, nested = a heading level down) and tool groups (`toolGroup({ name, when, tools })`), each
   conditional on the turn's input. A new kind of chat or source is a new section and tool group with a `when`, not an
   edit to one string. Sections that change per chat (the case) go last, for the prompt cache. Guardrails
   (`prompt/guard.ts`): `groundRules` in every prompt, user and file text fenced with `data(tag, text)`, and tools only
   for what the chat may use (no file tools outside a case).
+- **`usage`**: the meter (docs/APP.md, Usage ledger): `meter(event)` where a paid call's size is known (model
+  middleware, embed, Zilliz, OCR), `withUsage(scope, fn)` in services around a chat turn or a file step (who it is
+  for), `flushUsage()` before the function ends, and the sink services sets (`services/src/usage.ts` ->
+  `usage_events`). The one package every other may import. Only usage that costs money or is priced; no analytics.
 - **`api`**: tRPC routers, thin: input validation (zod), auth, one service call. No logic, no queries, no ai.
   Procedures by role: `signedUser`, `superAdmin`, `workspaceUser`, `workspaceAdmin`, `caseViewer`,
   `caseEditor`, `caseAuthor`, `chatViewer`, `chatOwner` (docs/APP.md, Access).

@@ -43,6 +43,20 @@
       "when": 1793109042589,
       "tag": "0005_chat_sources",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1793698344072,
+      "tag": "0006_usage_events",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1793700132709,
+      "tag": "0007_user_is_admin",
+      "breakpoints": true
     }
   ]
 }

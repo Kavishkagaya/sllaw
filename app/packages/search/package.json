@@ -10,6 +10,9 @@
     "eval": "tsx --env-file=../../apps/web/.env.local scripts/eval.ts",
     "files-collection": "tsx --env-file=../../apps/web/.env.local scripts/files-collection.ts"
   },
+  "dependencies": {
+    "@sllaw/usage": "workspace:*"
+  },
   "devDependencies": {
     "@types/node": "^26.6.5",
     "typescript": "^7.0.2"

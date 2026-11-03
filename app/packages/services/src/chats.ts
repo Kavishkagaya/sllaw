@@ -1,8 +1,10 @@
 import { streamChat } from "@sllaw/ai";
 import { chatById, chatsOf, createChat, messagesOf, saveMessages, setChatCase, setChatSources } from "@sllaw/db";
+import { flushUsage, withUsage } from "@sllaw/usage";
 import type { Account } from "./accounts";
 import { agentCtx, caseFilesOf } from "./agent";
 import { caseOf } from "./cases";
+import "./usage"; // metered usage goes to the database
 
 type Signed = Account & { workspace: NonNullable<Account["workspace"]> };
 export type UserMessage = { id: string; role: "user"; parts: { type: "text"; text: string }[] };
@@ -76,12 +78,17 @@ export async function sendMessage(
     caseBrief: theCase && { title: theCase.title, facts: theCase.facts },
     caseFiles: theCase ? await caseFilesOf(theCase.id) : [],
   });
-  return streamChat(
-    ctx,
-    [...history, message],
-    chat.sources ?? null,
-    (m, usage, sources) =>
-      waitUntil(Promise.all([saveMessages(chatId, [{ ...m, usage }]), setChatSources(chatId, sources)])),
-    abortSignal,
+  // every model call and search of the turn is metered for this user and chat; their writes end with the turn's
+  return withUsage({ workspaceId: a.workspace.id, userId: a.user.id, task: "chat", ref: `chat:${chatId}` }, () =>
+    streamChat(
+      ctx,
+      [...history, message],
+      chat.sources ?? null,
+      (m, usage, sources) =>
+        waitUntil(
+          Promise.all([saveMessages(chatId, [{ ...m, usage }]), setChatSources(chatId, sources), flushUsage()]),
+        ),
+      abortSignal,
+    ),
   );
 }
