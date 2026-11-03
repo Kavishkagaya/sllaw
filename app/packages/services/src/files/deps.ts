@@ -7,6 +7,7 @@ import { type Extractor, extract, extractors, ocrFromEnv } from "@sllaw/extract"
 import { fileIndex } from "@sllaw/search";
 import { blobStore } from "@sllaw/storage";
 import type { Deps, FileRows } from "./pipeline";
+import "../usage"; // metered usage goes to the database: workflow steps load this file, not services' index
 
 export const dbRows: FileRows = { get: fileById, claim: claimStep, end: endStep };
 

@@ -17,3 +17,14 @@ export function fmtSize(bytes: number) {
 
 /** A doc type as a label: "written_submissions" -> "Written submissions". */
 export const docTypeLabel = (t: string) => t.charAt(0).toUpperCase() + t.slice(1).replaceAll("_", " ");
+
+/** USD with enough digits to see a cent fraction: $12.40, $0.0123, $0. */
+export function fmtUsd(n: number) {
+  if (n === 0) return "$0";
+  if (Math.abs(n) >= 1) return `$${n.toFixed(2)}`;
+  return `$${n.toPrecision(3).replace(/0+$/, "")}`;
+}
+
+const compact = new Intl.NumberFormat("en-GB", { notation: "compact", maximumFractionDigits: 1 });
+/** A count, short: 950, 12.3K, 4.1M. */
+export const fmtNum = (n: number) => compact.format(n);

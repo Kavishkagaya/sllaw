@@ -1,5 +1,10 @@
 import {
   addCaseFile,
+  adminDashboard,
+  adminUsage,
+  adminUsers,
+  adminUserUsage,
+  adminWorkspaceUsage,
   caseFileChunks,
   createCase,
   deleteCase,
@@ -17,15 +22,25 @@ import {
   openCaseFile,
   openChat,
   openFile,
+  PERIODS,
   removeCaseFile,
   reprocessCaseFile,
   reprocessFile,
   startUpload,
   updateCase,
+  workspaceUsage,
 } from "@sllaw/services";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-import { createCallerFactory, publicProcedure, router, signedUser, workspaceUser } from "./trpc";
+import {
+  createCallerFactory,
+  publicProcedure,
+  router,
+  signedUser,
+  superAdmin,
+  workspaceAdmin,
+  workspaceUser,
+} from "./trpc";
 
 const fileInput = {
   name: z.string().min(1).max(255),
@@ -33,11 +48,16 @@ const fileInput = {
   size: z.number().int().positive().max(MAX_SIZE),
 };
 const caseInput = { title: z.string().trim().min(1).max(200), facts: z.string().max(20_000) };
+const period = z.enum(PERIODS).optional();
 const steps = z.array(z.enum(["extract", "categorize", "index"])).optional();
 
 export const appRouter = router({
   user: router({
-    me: signedUser.query(({ ctx }) => ctx.account),
+    // without is_admin: a normal user's client never learns there is an admin side
+    me: signedUser.query(({ ctx }) => {
+      const { isAdmin: _, ...user } = ctx.account.user;
+      return { ...ctx.account, user };
+    }),
   }),
   chat: router({
     // a case's chats (caseId), or the plain chats outside any case
@@ -109,6 +129,25 @@ export const appRouter = router({
     delete: workspaceUser
       .input(z.object({ fileId: z.uuid() }))
       .mutation(async ({ ctx, input }) => removed(await deleteFile(ctx.account, input.fileId))),
+  }),
+  // What the workspace used and what it cost us (usage_events), for its admins: this month, or [from, to)
+  usage: router({
+    summary: workspaceAdmin
+      .input(z.object({ from: z.coerce.date(), to: z.coerce.date() }).optional())
+      .query(({ ctx, input }) => workspaceUsage(ctx.account, input)),
+  }),
+  // The platform admin pages (/admin): superAdmin only; NOT_FOUND to everyone else
+  admin: router({
+    check: superAdmin.query(() => true),
+    dashboard: superAdmin.input(z.object({ period }).optional()).query(({ input }) => adminDashboard(input?.period)),
+    users: superAdmin.input(z.object({ period }).optional()).query(({ input }) => adminUsers(input?.period)),
+    usage: superAdmin.input(z.object({ period }).optional()).query(({ input }) => adminUsage(input?.period)),
+    workspace: superAdmin
+      .input(z.object({ id: z.uuid(), period }))
+      .query(async ({ input }) => found(await adminWorkspaceUsage(input.id, input.period))),
+    user: superAdmin
+      .input(z.object({ id: z.uuid(), period }))
+      .query(async ({ input }) => found(await adminUserUsage(input.id, input.period))),
   }),
   corpus: router({
     doc: publicProcedure.input(z.object({ key: z.string() })).query(({ input }) => getDoc(input.key)),

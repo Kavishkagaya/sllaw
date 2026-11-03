@@ -4,6 +4,7 @@ import type { FileRow, Step, StepEnd } from "@sllaw/db";
 import { extract } from "@sllaw/extract";
 import { memoryFileIndex } from "@sllaw/search";
 import { getJson, memoryStore } from "@sllaw/storage";
+import { type Metered, meter, setUsageSink } from "@sllaw/usage";
 import { describe, expect, it } from "vitest";
 import { type Deps, type FileEvent, type FileRows, keys, runFile, runStep, StepTimeout } from "./pipeline";
 
@@ -370,5 +371,32 @@ describe("the state writer", () => {
     await file("held", "text", { extractState: "running" });
     expect(await runStep("held", "extract", d, { writer: { write: async (e) => void events.push(e) } })).toBe("busy");
     expect(events).toHaveLength(0);
+  });
+});
+
+describe("usage", () => {
+  it("meters what a step spends for the file's workspace and owner, as that step, written before it ends", async () => {
+    const events: Metered[] = [];
+    setUsageSink(async (es) => {
+      await new Promise((r) => setTimeout(r, 5)); // a slow write: the step still waits for it
+      events.push(...es);
+    });
+    try {
+      const { d, file } = setup();
+      d.categorizer = {
+        by: "metered@1",
+        categorize: async () => {
+          meter({ kind: "llm", model: "m", quantity: { input: 10 }, costUsd: 0.01 });
+          return card;
+        },
+      };
+      await file("f1", "PLAINT\n\nThe plaintiff sues for rent.", { workspaceId: "w1", ownerId: "u1" });
+      await runFile("f1", d);
+      expect(events.map((e) => [e.kind, e.workspaceId, e.userId, e.task, e.ref, e.costUsd])).toEqual([
+        ["llm", "w1", "u1", "file.categorize", "file:f1", 0.01],
+      ]);
+    } finally {
+      setUsageSink(null);
+    }
   });
 });

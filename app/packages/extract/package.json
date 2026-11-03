@@ -9,6 +9,7 @@
     "typecheck": "tsc"
   },
   "dependencies": {
+    "@sllaw/usage": "workspace:*",
     "mammoth": "^1.13.0",
     "unpdf": "^1.9.1"
   },

@@ -1,7 +1,21 @@
 // The app tables (drizzle-kit migrations). Every row is keyed by our own ids (uuid); Clerk ids (user_..., org_...)
 // live only in users.clerk_id and workspaces.clerk_id, filled by the Clerk webhook (services/accounts.ts).
 import { sql } from "drizzle-orm";
-import { bigint, index, integer, json, jsonb, pgTable, primaryKey, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import {
+  bigint,
+  boolean,
+  index,
+  integer,
+  json,
+  jsonb,
+  numeric,
+  pgTable,
+  primaryKey,
+  text,
+  timestamp,
+  uniqueIndex,
+  uuid,
+} from "drizzle-orm/pg-core";
 
 const createdAt = timestamp("created_at", { withTimezone: true }).notNull().defaultNow();
 
@@ -11,6 +25,7 @@ export const users = pgTable("users", {
   email: text(),
   name: text(),
   imageUrl: text("image_url"),
+  isAdmin: boolean("is_admin").notNull().default(false), // platform staff (superAdmin): the /admin pages; set by hand in SQL
   createdAt,
 });
 
@@ -150,4 +165,27 @@ export const caseFiles = pgTable(
     createdAt,
   },
   (t) => [primaryKey({ columns: [t.caseId, t.fileId] }), index().on(t.fileId)],
+);
+
+// Metered usage (docs/APP.md, Usage; @sllaw/usage): one row per call that costs money or counts toward a plan. Append
+// only; usage and spend are sums over it. No foreign keys: rows outlive the workspace, user, chat or file they were
+// for (what was spent stays spent). workspace_id null = metered outside any scope (a bug to find, or a script).
+export const usageEvents = pgTable(
+  "usage_events",
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    at: timestamp({ withTimezone: true }).notNull().defaultNow(),
+    workspaceId: uuid("workspace_id"),
+    userId: uuid("user_id"),
+    kind: text().notNull(), // llm | embed | ocr | vector | storage
+    task: text().notNull(), // chat, file.extract, file.categorize, file.index, upload, delete
+    model: text(),
+    quantity: jsonb().notNull().$type<Record<string, number>>(), // tokens, pages, chars, bytes, calls
+    costUsd: numeric("cost_usd", { precision: 18, scale: 10, mode: "number" }), // what we pay; null: unknown or free
+    estimated: boolean().notNull().default(false), // cost from our price list, not the provider's bill
+    ref: text(), // chat:<id>, file:<id>
+    idem: text(), // the provider's id for the call (gateway:<generation id>): stored once
+    meta: jsonb().$type<Record<string, unknown>>(), // counts and ids only, never client text
+  },
+  (t) => [index().on(t.workspaceId, t.at), uniqueIndex().on(t.idem)],
 );

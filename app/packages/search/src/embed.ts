@@ -1,4 +1,6 @@
 // Query vectors: bge-m3 on Workers AI, the model etl/embed.py built the index with, so query and chunk vectors match.
+import { meter, PRICES, roughTokens } from "@sllaw/usage";
+
 const MODEL = "@cf/baai/bge-m3";
 
 export async function embed(texts: string[], signal?: AbortSignal): Promise<number[][]> {
@@ -10,7 +12,19 @@ export async function embed(texts: string[], signal?: AbortSignal): Promise<numb
   });
   if (!r.ok)
     throw Object.assign(new Error(`embed ${r.status}: ${(await r.text()).slice(0, 300)}`), { status: r.status });
-  const data: number[][] = (await r.json()).result.data;
+  const { result } = await r.json();
+  const data: number[][] = result.data;
   if (data.length !== texts.length) throw new Error(`embed: ${data.length} vectors for ${texts.length} texts`);
+  // Workers AI may return no token count: then ~4 characters a token
+  const chars = texts.reduce((a, t) => a + t.length, 0);
+  const tokens: number = result.usage?.prompt_tokens ?? roughTokens(chars);
+  meter({
+    kind: "embed",
+    task: "embed",
+    model: MODEL,
+    quantity: { texts: texts.length, chars, tokens },
+    costUsd: tokens * PRICES.bgeM3Token,
+    estimated: true,
+  });
   return data;
 }

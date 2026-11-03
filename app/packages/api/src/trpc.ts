@@ -27,6 +27,20 @@ export const workspaceUser = signedUser.use(({ ctx, next }) => {
   return next({ ctx: { ...ctx, account: { ...ctx.account, workspace } } });
 });
 
+/** Platform staff (users.is_admin). To anyone else an admin procedure does not exist: NOT_FOUND, as for a path
+ *  that is not there, never FORBIDDEN. */
+export const superAdmin = signedUser.use(({ ctx, next }) => {
+  if (!ctx.account.user.isAdmin) throw new TRPCError({ code: "NOT_FOUND" });
+  return next();
+});
+
+/** workspaceUser who is an admin of the active workspace (Clerk org role admin). */
+export const workspaceAdmin = workspaceUser.use(({ ctx, next }) => {
+  if (ctx.account.workspace.role !== "admin")
+    throw new TRPCError({ code: "FORBIDDEN", message: "workspace admins only" });
+  return next();
+});
+
 /** The account behind a Clerk session, for procedures and for routes outside tRPC (the chat stream). */
 export async function signedAccount(ctx: Context) {
   if (!ctx.clerk.userId) throw new TRPCError({ code: "UNAUTHORIZED" });

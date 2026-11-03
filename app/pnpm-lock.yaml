@@ -117,6 +117,9 @@ importers:
 
   packages/ai:
     dependencies:
+      '@sllaw/usage':
+        specifier: workspace:*
+        version: link:../usage
       ai:
         specifier: ^7.0.143
         version: 7.0.143(zod@4.6.7)
@@ -196,6 +199,9 @@ importers:
 
   packages/extract:
     dependencies:
+      '@sllaw/usage':
+        specifier: workspace:*
+        version: link:../usage
       mammoth:
         specifier: ^1.13.0
         version: 1.13.0
@@ -211,6 +217,10 @@ importers:
         version: 7.0.2
 
   packages/search:
+    dependencies:
+      '@sllaw/usage':
+        specifier: workspace:*
+        version: link:../usage
     devDependencies:
       '@types/node':
         specifier: ^26.6.5
@@ -242,6 +252,9 @@ importers:
       '@sllaw/storage':
         specifier: workspace:*
         version: link:../storage
+      '@sllaw/usage':
+        specifier: workspace:*
+        version: link:../usage
       workflow:
         specifier: 5.2.1
         version: 5.2.1(@aws-sdk/credential-provider-web-identity@3.972.49)(@nestjs/common@12.2.0(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@12.2.0(@nestjs/common@12.2.0(reflect-metadata@0.2.2)(rxjs@7.8.2))(reflect-metadata@0.2.2)(rxjs@7.8.2))(@swc/cli@0.8.1(@swc/core@1.15.3(@swc/helpers@0.5.23))(chokidar@5.0.0))(@swc/core@1.15.3(@swc/helpers@0.5.23))(@swc/helpers@0.5.23)(next@16.4.2(@babel/core@7.29.7)(@types/node@26.6.5)(react-dom@19.3.1(react@19.3.1))(react@19.3.1))(react@19.3.1)(typescript@7.0.2)(ws@8.22.0)
@@ -258,6 +271,15 @@ importers:
       aws4fetch:
         specifier: ^1.0.20
         version: 1.0.20
+    devDependencies:
+      '@types/node':
+        specifier: ^26.6.5
+        version: 26.6.5
+      typescript:
+        specifier: ^7.0.2
+        version: 7.0.2
+
+  packages/usage:
     devDependencies:
       '@types/node':
         specifier: ^26.6.5

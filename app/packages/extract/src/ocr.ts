@@ -1,6 +1,7 @@
 // OCR for scans: an OCR endpoint gets a signed URL to the whole file, fetches it itself and returns its text page by
 // page as JSON. We send no bytes and split nothing. The provider is swapped by passing another one; its `by` goes
 // into extract_by, so files read by the old one can be found and read again.
+import { meter, PRICES } from "@sllaw/usage";
 import { type ExtractCtx, type Extractor, ext, NoText } from "./extractor";
 import { pdfPagesText } from "./pdf";
 
@@ -25,6 +26,8 @@ export function httpOcr(env = process.env): OcrProvider | null {
         pages?: (string | { n: number; text: string })[];
       };
       if (!Array.isArray(pages)) throw Object.assign(new Error("ocr: no pages in the response"), { retryable: true });
+      // our own endpoint (LightOn): pages counted, no price
+      meter({ kind: "ocr", task: "ocr", model: OCR_NAME, quantity: { pages: pages.length } });
       return pages
         .map((p, i) => (typeof p === "string" ? { n: i + 1, text: p } : p))
         .sort((a, b) => a.n - b.n)
@@ -47,7 +50,7 @@ export function mistralOcr(env = process.env): OcrProvider {
       const document = mime.startsWith("image/")
         ? { type: "image_url", image_url: url }
         : { type: "document_url", document_url: url };
-      const { pages } = (await postJson(
+      const { pages, usage_info } = (await postJson(
         "https://api.mistral.ai/v1/ocr",
         key,
         { model, document },
@@ -56,9 +59,19 @@ export function mistralOcr(env = process.env): OcrProvider {
         signal,
       )) as {
         pages?: { index: number; markdown?: string }[];
+        usage_info?: { pages_processed?: number; doc_size_bytes?: number };
       };
       if (!Array.isArray(pages))
         throw Object.assign(new Error("mistral ocr: no pages in the response"), { retryable: true });
+      const n = usage_info?.pages_processed ?? pages.length;
+      meter({
+        kind: "ocr",
+        task: "ocr",
+        model,
+        quantity: { pages: n, bytes: usage_info?.doc_size_bytes ?? 0 },
+        costUsd: n * PRICES.mistralOcrPage,
+        estimated: true,
+      });
       return pages
         .slice()
         .sort((a, b) => a.index - b.index)

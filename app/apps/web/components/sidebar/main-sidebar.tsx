@@ -20,7 +20,19 @@ import {
 } from "@/components/ui/sidebar";
 import { AccountFooter, ChatItem, Collapsed, type SidebarCase, type SidebarChat, useChatListRefresh } from "./shared";
 
-export function MainSidebar({ cases, chats, error }: { cases: SidebarCase[]; chats: SidebarChat[]; error?: string }) {
+/** `footer`: rows the server adds above the account (the admin link, rendered only for staff: this bundle never
+ *  names it). */
+export function MainSidebar({
+  cases,
+  chats,
+  error,
+  footer,
+}: {
+  cases: SidebarCase[];
+  chats: SidebarChat[];
+  error?: string;
+  footer?: React.ReactNode;
+}) {
   const path = usePathname();
   useChatListRefresh();
   return (
@@ -99,7 +111,7 @@ export function MainSidebar({ cases, chats, error }: { cases: SidebarCase[]; cha
           </SidebarMenu>
         </SidebarGroup>
       </SidebarContent>
-      <AccountFooter />
+      <AccountFooter>{footer}</AccountFooter>
       <SidebarRail />
     </Sidebar>
   );

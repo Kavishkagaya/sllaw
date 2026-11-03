@@ -7,6 +7,7 @@ const config = {
   transpilePackages: [
     "@sllaw/api",
     "@sllaw/ai",
+    "@sllaw/usage",
     "@sllaw/services",
     "@sllaw/db",
     "@sllaw/etl_db",
