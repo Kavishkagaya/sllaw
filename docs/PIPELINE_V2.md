@@ -423,6 +423,20 @@ unchanged. All 7,336 documents built in memory in 276 s (16 workers), 0 failed, 
   Scratch test (2026-11-08, `etl_v2` on ampere): 7,359 docs, 187,583 chunks, 102,090 links in 14 s, equal to the
   source tables; a rerun publishes 0; two documents marked changed are replaced alone; `vid` in SQL equals
   `downstream.vid` on 2,000 random chunks. The app's `etl_db` package must move to `kb` (uuid ids, text from R2).
+- **Dates (2026-11-08): the v2 build had none; it now stores v1's** (`etl/v2/dates.py`, in `docs.meta`): certified =
+  the listing's date (a year-only listing as 1 January), else the printed "[Certified on ...]" / "[ 3 rd September ,
+  1985 ]" for a year-only listing in the key's year (read from the build's paragraphs: the chunks leave the cover
+  out), a 1980 chapter's printed date under its long title; commenced = v1's "this Act shall come into operation on"
+  rule on section 1 or a section noted operation/commencement/retrospective, else certified. **Against v1 on 600
+  random laws, rebuilt in memory: every act (409), law (33), amendment and the constitution equal on both dates**;
+  chapters where v1 had none now get one (1980: 8, 1956: 55 of the sample); not checked by hand. A link is dated by
+  its source law's commencement, as v1 (the app's "as at a date").
+- **kb's columns (2026-11-08):** `kb.docs` key, kind, title, year, certified, commenced, commencement, long_title,
+  source_url (the chosen listing's URL), parts; `kb.chunks` id = vid (an Int64 under 2^53: a JS number, and the
+  Zilliz id), uuid, address, seq, label, kind, path (= crumb), part, text_hash; `kb.links` src/dst chunk as vids,
+  status, date, plus v1's `same_as` rows from the `same_as` table. Links whose target law was never identified (2 on
+  the scratch run) are left out. The app reads text from R2 with a read-only key for the `sllaw` bucket: its own
+  `sllaw-files` key gets 403 there (2026-11-08).
 - **Decided 2026-11-08 (user): daily, and each stage runs only when it has something to do.** A stage op plans and
   starts no worker when its queue is empty. `marks.gated` holds the state hash (every document's build fingerprint +
   its links' hash, `downstream.checked`) the quality gate last passed: the gold sets and the gate (24 min) are
