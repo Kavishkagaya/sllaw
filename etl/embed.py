@@ -14,7 +14,7 @@ completes, so a stopped run resumes. The text sent is "law title › chunks.path
 Part, section and note, "(cont.)"; only what is certain) + the chunk. Zilliz computes `sparse` (BM25, English
 analyzer) from `text` itself.
 """
-import argparse, hashlib, os, threading, time
+import argparse, hashlib, os, re, threading, time
 from concurrent.futures import ThreadPoolExecutor
 
 import psycopg2, requests
@@ -124,8 +124,13 @@ def embed(texts):
     for i in range(6):
         r = requests.post(url, json={"text": texts}, timeout=120,
                           headers={"Authorization": f"Bearer {os.environ['CLOUDFLARE_API_TOKEN']}"})
-        if r.status_code == 400 and "Max context" in r.text and len(texts) > 1:   # split, not shrink every batch
-            return embed(texts[:len(texts) // 2]) + embed(texts[len(texts) // 2:])
+        if r.status_code == 400 and ("Max context" in r.text or "Sequence too long" in r.text) and len(texts) > 1:
+            return embed(texts[:len(texts) // 2]) + embed(texts[len(texts) // 2:])   # split, not shrink every batch
+        if r.status_code == 400 and (m := re.search(r"Sequence too long: (\d+) > (\d+)", r.text)):
+            # one text over bge-m3's 8,192 tokens: cut it as the local model's truncation does (2026-11-08: a
+            # 10,622-token chunk stopped the first full v2 embed)
+            n, lim = int(m[1]), int(m[2])
+            return embed([texts[0][:int(len(texts[0]) * lim / n * 0.95)]])
         if r.ok:
             data = r.json()["result"]["data"]
             assert len(data) == len(texts), f"{len(data)} vectors for {len(texts)} texts"

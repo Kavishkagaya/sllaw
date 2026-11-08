@@ -545,7 +545,7 @@ rewrites a run's summary against another); (4) one site down no longer stops the
    `tree/`, `app/law/` (new prefixes, nothing overwritten).
 3. The app's `etl_db` on `kb` (chunk ids uuid, `vid` for search hits, text read from R2 parts); then the first
    `publish --apply` into Neon's `kb` (needs a gate pass recorded in `marks`: the next run's gate does it).
-4. `run embed --apply` (184,288+ chunks; the Dagster op uses Workers AI unless `EMBED_LOCAL=1`), then the app's
+4. `run embed --apply` (the Dagster op runs bge-m3 locally: gpu_venv, `EMBED_LOCAL=1`, the freest card with 6 GB; 2026-11-08 the first full embed hit Workers AI's 8,192-token limit on one chunk, and the API path now cuts only the text sent to the model, never the stored text), then the app's
    search reads v2 ids, then `run embed --apply --prune-v1`.
 5. Turn on the `daily` schedule in the Dagster UI.
 6. An OCR server (`V2_OCR_API`, LightOn on a free GPU) for new English scans.

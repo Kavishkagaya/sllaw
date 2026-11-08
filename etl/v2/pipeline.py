@@ -317,9 +317,20 @@ def publish(context: dg.OpExecutionContext, config: Apply):
     context.add_output_metadata({"result": out[-1] if out else "", "applied": config.apply})
 
 
+PY_GPU = os.environ.get("SLLAW_PY_GPU", f"{T}/gpu_venv/bin/python")   # torch + transformers: bge-m3 on a GPU
+EMBED_GB = 6         # bge-m3 (fp16, batches of 16 up to 8,192 tokens) on a shared card
+
+
 @dg.op(ins={"after": dg.In(dg.Nothing)})
 def embed(context: dg.OpExecutionContext, config: Apply):
-    out = run(context, ["etl.v2.run", "embed", *(["--apply"] if config.apply else [])])
+    """bge-m3 on this host's freest GPU (EMBED_LOCAL=1, decision 2026-11-07/08: no Workers AI). No card with room ->
+    the step fails and nothing is marked, so the next run embeds what is still missing."""
+    gpu, free, _ = free_gpu()
+    if free < EMBED_GB * 1024:
+        raise dg.Failure(f"embed: no GPU with {EMBED_GB} GB free (best: card {gpu}, {free} MiB)")
+    context.log.info(f"embed: bge-m3 on card {gpu} ({free} MiB free)")
+    out = run(context, ["etl.v2.run", "embed", *(["--apply"] if config.apply else [])], py=PY_GPU,
+              extra={"EMBED_LOCAL": "1", "CUDA_VISIBLE_DEVICES": str(gpu), "HF_HOME": f"{T}/hf"})
     context.add_output_metadata({"result": out[-1] if out else "", "applied": config.apply})
 
 
