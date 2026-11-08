@@ -33,10 +33,13 @@ usage: imported by ai, search, extract, services (it imports nothing of ours)
 - **`db`**: the app's own database (`DATABASE_URL`: database `app` in Neon sllaw-app, beside the corpus in `neondb`):
   drizzle schema, client, and every query on it. Nothing else.
   Migrations: `pnpm --filter @sllaw/db generate` / `migrate`.
-- **`etl_db`**: the ETL's Neon only (`ETL_DATABASE_URL`, a separate database): schema, client, queries on `docs`,
-  `chunks`, `links`. **Read-only, no migrations**: `etl.publish` owns these tables, truncates them each run, and a
-  rebuild renumbers chunk ids. The app database stores `doc_key` + `label` + quote, never a chunk id alone, and no
-  foreign key crosses the two databases.
+- **`etl_db`**: the corpus: schema `kb` in the ETL's state database (`ETL_DATABASE_URL`, Neon sllaw-etl): schema,
+  client, queries on `docs`, `chunks`, `links`. **Read-only, no migrations**: the v2 pipeline's publish step
+  (`etl/v2/downstream.py`) replaces changed documents in one transaction. A chunk's id is its `vid` (the Zilliz id,
+  under 2^53); chunk text is not in the database but in R2 text parts (`src/text.ts`: bucket `R2_LAW_BUCKET`, its
+  own read-only key `R2_LAW_ACCESS_KEY_ID`/`R2_LAW_SECRET_ACCESS_KEY`), cached in memory (content-hash names, never
+  change). The app database stores `doc_key` + `label` + quote, never a chunk id alone, and no foreign key crosses
+  the two databases.
 - **`search`**: the vector DB (Zilliz now): law chunks (`chunks`, written by `etl/embed.py`) and user files
   (`FileIndex`: the Zilliz `files` collection, `pnpm --filter @sllaw/search files-collection` creates it; chunking;
   filtered by workspace and scope inside the query; a doc_type filter is resolved to file ids in Postgres). It owns the query embedding (bge-m3, the model the
