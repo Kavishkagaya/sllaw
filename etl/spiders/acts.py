@@ -50,19 +50,60 @@ def discover():
     raise SystemExit("could not find TableDataAction — the site layout changed")
 
 
+def rsc(body):
+    """A React Server Component reply (bytes) -> {row id: value}. JSON rows are "<id>:<json>"; a long string is
+    sent apart as a text row "<id>:T<hex byte length>,<text>" and referenced from the JSON as "$<id>" (a gazette
+    with a long description: numbers 1825 and 1846 failed on it, 2026-11-08). Text rows are put back in place."""
+    rows, text, i = {}, {}, 0
+    head = re.compile(rb"([0-9a-f]+):")
+    while i < len(body):
+        m = head.match(body, i)
+        if not m:
+            nl = body.find(b"\n", i)
+            if nl < 0:
+                break
+            i = nl + 1
+            continue
+        rid, j = m[1].decode(), m.end()
+        if body[j:j + 1] == b"T" and (c := body.find(b",", j)) > 0 and re.fullmatch(rb"[0-9a-f]+", body[j + 1:c]):
+            n = int(body[j + 1:c], 16)
+            text[rid] = body[c + 1:c + 1 + n].decode("utf8", "replace")
+            i = c + 1 + n
+            continue
+        e = j
+        while True:                        # a JSON row ends at a newline where its JSON is complete
+            e = body.find(b"\n", e + 1)
+            e = len(body) if e < 0 else e
+            try:
+                rows[rid] = json.loads(body[j:e])
+                break
+            except ValueError:
+                if e >= len(body):
+                    break
+        i = e + 1
+
+    def put(v):
+        if isinstance(v, str) and v[:1] == "$" and v[1:] in text:
+            return text[v[1:]]
+        if isinstance(v, list):
+            return [put(x) for x in v]
+        if isinstance(v, dict):
+            return {k: put(x) for k, x in v.items()}
+        return v
+    return {k: put(v) for k, v in rows.items()}
+
+
 def search(action, endpoint, q=None, page=1, limit=100):
     args = {"apiEndpoint": endpoint, "page": page, "limit": limit}
     if q:
         args["q"] = args["search"] = q          # the site sends both
     body = _get(PAGE, data=json.dumps([args]).encode(),
                 headers={"Next-Action": action, "Referer": PAGE,
-                         "Content-Type": "text/plain;charset=UTF-8"}).decode("utf8", "replace")
-    # RSC flight rows are "<id>:<json>", and the payload itself contains raw
-    # newlines, so seek the row rather than splitting on lines
-    m = re.search(r'^\d+:(?=\{"data")', body, re.M)
-    if not m:
-        raise SystemExit(f"unexpected action response: {body[:200]}")
-    return DEC.raw_decode(body, m.end())[0]
+                         "Content-Type": "text/plain;charset=UTF-8"})
+    for v in rsc(body).values():
+        if isinstance(v, dict) and "data" in v:
+            return v
+    raise SystemExit(f"unexpected action response: {body[:200].decode('utf8', 'replace')}")
 
 
 def crawl(q=None, limit=100, max_pages=None):

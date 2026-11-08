@@ -25,7 +25,8 @@ ITEM = r"\d{1,3}[A-Za-z]{0,5}"
 SEP = r"(?:\s*,\s*(?:and\s+)?|\s+and\s+|\s*(?:to|-|–)\s*|\s+(?=\d))"
 LIST = rf"{ITEM}(?:\s*\(\w{{1,5}}\))*(?:{SEP}(?:sections?\s*)?{ITEM}(?:\s*\(\w{{1,5}}\))*)*"
 ORD = r"(?:first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth)"
-PARTS = (rf"(?:(?<!sub)(?<!sub-)(?:sections?|articles?)\s*{LIST}"   # not "subsection 9 of section 31" -> 9
+# not "subsection 9 of section 31" -> 9; a stray comma or dot after the word is OCR ("Section, 11", law:37/1974)
+PARTS = (rf"(?:(?<!sub)(?<!sub-)(?:sections?|articles?)\s*[,.]?\s*{LIST}"
          rf"|(?:the\s+)?{ORD}(?:\s*(?:,|and)\s*{ORD})*\s+Schedules?|Schedules?\s+(?:[A-Z]{{1,2}}|[IVX]+|\d+)\b"
          rf"|(?:the\s+)?Schedule\b|(?:Part|Chapter)s?\s+[IVXL]+[A-Z]?(?:\s*(?:,|and)\s*[IVXL]+[A-Z]?)*\b|(?:the\s+)?long\s+title|(?:the\s+)?preamble)")
 NAME = r"(?:[A-Z][\w’'-]*\s+(?:(?:of|and|for|the|in|on|to|\([^)]{1,40}\))\s+)*){1,12}?(?:Act|Law|Ordinance|Code|Order\s+in\s+Council)"
@@ -36,7 +37,7 @@ LAW = (rf"(?:the\s+)?principal\s+(?:enactment|Act|Law|Ordinance)|that\s+(?:enact
 G = r"(?:(?!\s\d{1,3}[A-Z]{0,2}\.\s+[(A-Z]|\.\s+(?:[A-Z^*†]|\(\d))[^;:])"
 PATTERNS = [
     ("operative", re.compile(rf"(?P<parts>{PARTS}){G}{{0,120}}?\b(?:of|to|in)\s+(?P<law>{LAW}){G}{{0,250}}?"
-                             rf"\b(?:is|are)\s+(?:hereby\s+)?(?:further\s+)?(?P<verb>amended|repealed)"
+                             rf"\b(?:is|are)\s+(?:hereby\.?\s+)?(?:further\s+)?(?P<verb>amended|repealed)"
                              rf"(?P<subst>[,\s]*and\s+(?:the\s+following|there\s+shall\s+be)[^.;]{{0,120}}?substituted)?", re.I)),
     ("note", re.compile(rf"\b(?P<verb>Amendment|Replacement|Substitution|Repeal|Insertion|Addition)s?\s+(?:of\s+|to\s+)?(?:new\s+)?"
                         rf"(?P<parts>{PARTS})\s+(?:of|in|to|into)\s+(?P<law>{LAW})", re.I)),

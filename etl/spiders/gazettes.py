@@ -48,21 +48,47 @@ def _page(action, endpoint, page, limit):
         return [it for k in range(4) for it in _page(action, endpoint, (page - 1) * 4 + k + 1, limit // 4)]
 
 
-def crawl(limit=1000, passes=4):
-    """Every record, deduped by id. The upstream ordering shifts between pages (one pass got 38,500 of 39,107,
-    2026-10-20), so pass again until a pass adds nothing new."""
+def by_number(action, endpoint, n, limit=500):
+    """Every record of gazette number n (2513 -> 2513/01, 2513/02, ...): the free-text search matches the number,
+    and one number is a week (6-60 records), so it fits one page and the shifting order cannot drop any. The search
+    also returns other numbers that mention n in their text; they are kept too (deduped by id)."""
+    page, out = 1, []
+    while True:
+        for i in range(3):
+            try:
+                rows = acts.search(action, endpoint, q=f"{n}/", page=page, limit=limit).get("data") or []
+                break
+            except (SystemExit, Exception) as e:   # acts.search exits on an odd reply; one number must not stop all
+                if i == 2:
+                    print(f"number {n} unreadable, skipped: {str(e)[:100]}", file=sys.stderr, flush=True)
+                    return out
+        out += rows
+        if len(rows) < limit:
+            return out
+        page += 1
+
+
+def crawl(limit=1000, threads=4):
+    """Every record, deduped by id. The site's order shifts between pages and the site sends no sort (its own
+    page neither; 2026-11-08), so paging drops ~2% (4 passes saw 38,591 of 39,323, 2026-11-07). So: one pass of
+    pages for the range of gazette numbers, then each number on its own (checked 2026-11-08: for 2508-2512 the
+    search found exactly the records the listing has, none missing, none extra)."""
+    from concurrent.futures import ThreadPoolExecutor
     action, endpoint = discover()
     acts.PAGE = PAGE
     total = int(acts.search(action, endpoint, page=1, limit=5)["pagination"]["total"])
     seen = {}
-    for p in range(passes):
-        before = len(seen)
-        for page in range(1, total // limit + 2):
-            for it in _page(action, endpoint, page, limit):
+    for page in range(1, total // limit + 2):
+        for it in _page(action, endpoint, page, limit):
+            seen.setdefault(it["id"], it)
+    paged = len(seen)
+    nums = [r["gazetteNo"] for r in seen.values() if isinstance(r.get("gazetteNo"), int)]
+    with ThreadPoolExecutor(threads) as ex:
+        for rows in ex.map(lambda n: by_number(action, endpoint, n), range(min(nums), max(nums) + 1)):
+            for it in rows:
                 seen.setdefault(it["id"], it)
-        print(f"pass {p + 1}: {len(seen)} of {total} listed", file=sys.stderr, flush=True)
-        if len(seen) >= total or len(seen) == before:
-            break
+    print(f"{len(seen)} of {total} listed ({paged} by pages, then numbers {min(nums)}-{max(nums)} one by one)",
+          file=sys.stderr, flush=True)
     return list(seen.values())
 
 
