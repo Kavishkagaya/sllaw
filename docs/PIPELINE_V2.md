@@ -548,8 +548,9 @@ rewrites a run's summary against another); (4) one site down no longer stops the
   (100% used by others) in 3 h 17 min, ~960/min**; the rerun found all **192,065 in the index, 0 to upsert**. The
   first mark failed: Neon had closed the connection left idle for 3 h; the mark now opens a fresh one.
 - **The app reads kb** (PR #39, merged 2026-11-08, production deployed): `ETL_DATABASE_URL` = role `app_reader`
-  (read-only on schema kb), chunk text from R2 with the ETL's R2 key for now (`R2_LAW_*`; a read-only token is
-  still to make: the permission check refused creating one). Checked against kb: act:9/2023 263 chunks, none
+  (read-only on schema kb), chunk text from R2 with its own token (`R2_LAW_*`, Cloudflare account token
+  "sllaw-app law read (kb text parts)": Workers R2 Storage Bucket Item Read on `sllaw` only; tested 2026-11-08: read
+  200, write to `sllaw` 403, `sllaw-files` 403; set in Vercel for all three environments, production redeployed). Checked against kb: act:9/2023 263 chunks, none
   without text; cap:25 s114's 1962 amendment with its date; a whole section joined from its "(cont.)" chunks.
 - **Cleanup:** R2 `v2test/` deleted (15,144 objects), the scratch database `etl_v2` dropped (320 MB); every
   `app/law/` and `tree/` object (15,533) is referenced by docs or kb.docs, none missing.
