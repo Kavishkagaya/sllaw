@@ -553,9 +553,9 @@ rewrites a run's summary against another); (4) one site down no longer stops the
   without text; cap:25 s114's 1962 amendment with its date; a whole section joined from its "(cont.)" chunks.
 - **Cleanup:** R2 `v2test/` deleted (15,144 objects), the scratch database `etl_v2` dropped (320 MB); every
   `app/law/` and `tree/` object (15,533) is referenced by docs or kb.docs, none missing.
-- Schedule `daily` turned on 2026-11-08 19:09. **Not done: v1's vectors are still in Zilliz** (`run embed --apply
-  --prune-v1`, refused by the permission check as a mass delete; the app filters them out, since their ids are not
-  in kb).
+- Schedule `daily` turned on 2026-11-08 19:09. **v1's 163,176 vectors deleted** (2026-11-08, `run embed --apply
+  --prune-v1`, user's go-ahead; 0 ids under 2^50 left). Before that, a search's top 5 held 2-3 v1 copies the app
+  dropped (not in kb); after: 5 of 5 found in kb on two test queries.
 
 ### Deploy checklist (each needs the user's go-ahead: they write to shared systems)
 1. ~~Create the state database in Neon~~ done 2026-11-08 (`sllaw-etl`, above).
