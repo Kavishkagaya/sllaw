@@ -237,7 +237,9 @@ def embed(state, apply=False, prune_v1=False):
         E.zilliz("entities/delete", {"collectionName": E.COLL, "filter": f"id in {gone[i:i + 1000]}"})
     if prune_v1:
         E.zilliz("entities/delete", {"collectionName": E.COLL, "filter": f"id < {V2_BASE}"})
-    with state.cursor() as cur:
+    # a fresh connection: a full embed leaves this one idle for hours, and Neon closes it (2026-11-08: 3 h of bge-m3,
+    # then "SSL connection has been closed" on the mark)
+    import psycopg2
+    with psycopg2.connect(os.environ["V2_DATABASE_URL"]) as db, db.cursor() as cur:
         mark(cur, "embedded", kb)
-    state.commit()
     return out

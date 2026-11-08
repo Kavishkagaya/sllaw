@@ -539,6 +539,24 @@ rewrites a run's summary against another); (4) one site down no longer stops the
   scratch state's inventory tables (listings 20,516, files 7,690, listing_files 7,715, documents 7,359, same_as
   1,333); build outputs were not copied (they named `v2test/` objects): the first Dagster run builds them.
 
+### First production run (2026-11-08, Dagster run `b76a802e`, Neon sllaw-etl)
+- listings 2-9 min each; fetch, extract, ocr nothing new (4-10 s); **build 7,715 documents in 33 min, 0 failed**
+  (the dates: every fingerprint changed); links 8 s (no chunk text changed, nothing relinked); resolve 1 min; link gold
+  210/210; **quality gate passed in 25 min** (state `c1d14c01…` marked); **publish 7,715 documents into kb in 14 s**.
+- **Embed:** the op then used Workers AI and stopped on one chunk of 10,622 tokens (bge-m3's limit is 8,192); since
+  then the op runs bge-m3 locally (gpu_venv, the freest card, `EMBED_LOCAL=1`). **189,374 chunks on one shared A6000
+  (100% used by others) in 3 h 17 min, ~960/min**; the rerun found all **192,065 in the index, 0 to upsert**. The
+  first mark failed: Neon had closed the connection left idle for 3 h; the mark now opens a fresh one.
+- **The app reads kb** (PR #39, merged 2026-11-08, production deployed): `ETL_DATABASE_URL` = role `app_reader`
+  (read-only on schema kb), chunk text from R2 with the ETL's R2 key for now (`R2_LAW_*`; a read-only token is
+  still to make: the permission check refused creating one). Checked against kb: act:9/2023 263 chunks, none
+  without text; cap:25 s114's 1962 amendment with its date; a whole section joined from its "(cont.)" chunks.
+- **Cleanup:** R2 `v2test/` deleted (15,144 objects), the scratch database `etl_v2` dropped (320 MB); every
+  `app/law/` and `tree/` object (15,533) is referenced by docs or kb.docs, none missing.
+- Schedule `daily` turned on 2026-11-08 19:09. **Not done: v1's vectors are still in Zilliz** (`run embed --apply
+  --prune-v1`, refused by the permission check as a mass delete; the app filters them out, since their ids are not
+  in kb).
+
 ### Deploy checklist (each needs the user's go-ahead: they write to shared systems)
 1. ~~Create the state database in Neon~~ done 2026-11-08 (`sllaw-etl`, above).
 2. `V2_R2_PREFIX=` (empty, production) in the env file, then `bash etl/v2/all.sh`: trees and text parts land in R2
