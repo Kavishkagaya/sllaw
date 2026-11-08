@@ -1,22 +1,54 @@
 import { aliasedTable, and, asc, eq, ilike, inArray, like, sql } from "drizzle-orm";
 import { db } from "./client";
 import { chunks, docs, links } from "./schema";
+import { partTexts } from "./text";
 
 const docCols = { key: docs.key, kind: docs.kind, title: docs.title, year: docs.year, commenced: docs.commenced };
+// uuid and part find a chunk's text in R2 (withText); callers get `text` in their place
 const chunkCols = {
   id: chunks.id,
   docKey: chunks.docKey,
   seq: chunks.seq,
   label: chunks.label,
   path: chunks.path,
-  text: chunks.text,
+  uuid: chunks.uuid,
+  part: chunks.part,
 };
+
+type Ref = { docKey: string; uuid: string; part: number };
+
+/** uuid -> text for the chunks asked: their docs' part keys from kb.docs, the parts from R2 (cached). */
+async function textsOf(refs: Ref[]) {
+  const out = new Map<string, string>();
+  if (!refs.length) return out;
+  const keys = [...new Set(refs.map((r) => r.docKey))];
+  const ds = await db.select({ key: docs.key, parts: docs.parts }).from(docs).where(inArray(docs.key, keys));
+  const partsOf = new Map(ds.map((d) => [d.key, d.parts]));
+  const byPart = new Map<string, Ref[]>();
+  for (const r of refs) {
+    const k = partsOf.get(r.docKey)?.[r.part];
+    if (k) byPart.set(k, [...(byPart.get(k) ?? []), r]);
+  }
+  await Promise.all(
+    [...byPart].map(async ([k, rs]) => {
+      const t = await partTexts(k);
+      for (const r of rs) out.set(r.uuid, t.get(r.uuid) ?? "");
+    }),
+  );
+  return out;
+}
+
+/** Rows with their text in place of uuid and part. */
+async function withText<T extends Ref>(rows: T[]) {
+  const t = await textsOf(rows);
+  return rows.map(({ uuid, part, ...r }) => ({ ...r, text: t.get(uuid) ?? "" }));
+}
 
 export async function docWithChunks(key: string) {
   const [doc] = await db.select(docCols).from(docs).where(eq(docs.key, key));
   if (!doc) return null;
   const parts = await db.select(chunkCols).from(chunks).where(eq(chunks.docKey, key)).orderBy(asc(chunks.seq));
-  return { ...doc, chunks: parts };
+  return { ...doc, chunks: await withText(parts) };
 }
 
 /** A law's title, key and source link, for the viewer. */
@@ -31,11 +63,13 @@ export async function docInfo(key: string) {
 /** Chunks by id, each with its law's title; ids no longer in the corpus are left out. */
 export async function chunksById(ids: number[]) {
   if (!ids.length) return [];
-  return db
-    .select({ ...chunkCols, title: docs.title })
-    .from(chunks)
-    .innerJoin(docs, eq(docs.key, chunks.docKey))
-    .where(inArray(chunks.id, ids));
+  return withText(
+    await db
+      .select({ ...chunkCols, title: docs.title })
+      .from(chunks)
+      .innerJoin(docs, eq(docs.key, chunks.docKey))
+      .where(inArray(chunks.id, ids)),
+  );
 }
 
 export type Direction = "out" | "in";
@@ -101,7 +135,7 @@ export async function sectionsOf(chunkIds: number[]): Promise<Read[]> {
         )
         .orderBy(asc(chunks.seq));
       const sec: Read[] = [h];
-      for (const c of run)
+      for (const c of await withText(run))
         if (c.seq === sec.at(-1)!.seq + 1) sec.push(c);
         else break;
       if (sec.length === SECTION_MAX) {
@@ -134,7 +168,7 @@ async function withHeads(chunkIds: number[]) {
   const rows = await db
     .select({
       id: chunks.id,
-      head: sql<number | null>`(select h.id from chunks h where h.doc_key = "chunks".doc_key and h.seq < "chunks".seq
+      head: sql<number | null>`(select h.id from kb.chunks h where h.doc_key = "chunks".doc_key and h.seq < "chunks".seq
         and h.path = left("chunks".path, -8) order by h.seq desc limit 1)`.mapWith(Number),
     })
     .from(chunks)
@@ -159,7 +193,8 @@ export async function changesInto(chunkIds: number[]) {
       srcChunk: links.srcChunk,
       srcTitle: docs.title,
       srcLabel: src.label,
-      srcText: src.text,
+      srcUuid: src.uuid,
+      srcPart: src.part,
       context: links.context,
     })
     .from(links)
@@ -169,8 +204,15 @@ export async function changesInto(chunkIds: number[]) {
       and(inArray(links.dstChunk, [...new Set([...chunkIds, ...head.values()])]), inArray(links.kind, CHANGE_KINDS)),
     )
     .orderBy(asc(links.date));
+  const texts = await textsOf(
+    rows.flatMap((r) => (r.srcUuid != null ? [{ docKey: r.srcDoc, uuid: r.srcUuid, part: r.srcPart! }] : [])),
+  );
+  const withSrc = rows.map(({ srcUuid, srcPart, ...r }) => ({
+    ...r,
+    srcText: srcUuid != null ? (texts.get(srcUuid) ?? "") : null,
+  }));
   return chunkIds.flatMap((id) =>
-    rows.filter((r) => r.dstChunk === id || r.dstChunk === head.get(id)).map((r) => ({ ...r, dstChunk: id })),
+    withSrc.filter((r) => r.dstChunk === id || r.dstChunk === head.get(id)).map((r) => ({ ...r, dstChunk: id })),
   );
 }
 
