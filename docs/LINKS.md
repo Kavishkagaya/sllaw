@@ -200,6 +200,13 @@ etl.test_mentions` (new), `python -m etl.test_refs` (unchanged, passes).
 - **Fixed on the way (also wrong in refs.py):** customs tariff "Chapter 46" in gazettes read as a law's chapter;
   "part is formed" read as a Part; "section 27 A (1)" read as 27.
 
+- **Agent eval after the publish (2026-11-09, `eval-chat current`, traces `logs/eval-chat-links/`):** 17/20 by the
+  eval's rule, 20/20 in fact: #18, #23, #26 cite the gold section in the 1980 Revised Edition (cap:21 s95, cap:235
+  s114, cap:105 s306), the edition in force; the rule wants the 1956 key. 4.7 steps (6.4 on 2026-10-18), 21 s (68 s),
+  $0.033 for 20 ($0.28): mostly the agent's own changes since 2026-10-18, not separable from the links. Citations of
+  chunks never read: 24 (8); 116 of 126 cited chunks were first seen in search results, so this is the agent citing
+  snippets, not links. `links` called 7 times; #8 used a same-law link (act:43/2000 s18 <- s29, s30).
+
 ## Measuring it next
 
 - About 100 new gold links for the new forms (anaphora, same-law, in-quote, defined names, Constitution
