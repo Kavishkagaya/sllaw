@@ -62,7 +62,7 @@ export function UsageView({ s }: { s: Status }) {
             )}
           </div>
           <div>
-            <h3 className="mb-3 text-sm font-medium">Per day this month</h3>
+            <h3 className="mb-5 text-sm font-medium">Per day this month</h3>
             <ContextChart days={s.days} limit={today?.max ?? null} />
           </div>
         </CardContent>

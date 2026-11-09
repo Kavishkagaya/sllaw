@@ -81,5 +81,8 @@ describe("resets", () => {
       "You have sent today's 10 messages on the Free plan. You can send more at midnight (Sri Lanka time).",
     );
     expect(new LimitReached("tokens_month", 1, 1, "Free", resetOf("tokens_month", now)).message).toContain("on 1 Dec");
+    expect(new LimitReached("case_files", 4, 0, "Pro", null).message).toBe(
+      "This case has 4 files; the Pro plan allows 0 per case. Remove one to add another.",
+    );
   });
 });

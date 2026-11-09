@@ -9,10 +9,13 @@ import { cn } from "@/lib/utils";
 
 type Day = { day: string; tokens: number; messages: number };
 
+// a YYYY-MM-DD day as text, the same on the server and in the browser (UTC both sides: no hydration mismatch)
 const dayLabel = (d: string, long = false) =>
-  new Date(`${d}T00:00:00`).toLocaleDateString(
+  new Date(`${d}T00:00:00Z`).toLocaleDateString(
     "en-GB",
-    long ? { weekday: "short", day: "numeric", month: "short" } : { day: "numeric", month: "short" },
+    long
+      ? { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" }
+      : { day: "numeric", month: "short", timeZone: "UTC" },
   );
 
 export function ContextChart({ days, limit }: { days: Day[]; limit: number | null }) {
