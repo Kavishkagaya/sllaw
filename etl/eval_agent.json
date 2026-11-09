@@ -1,0 +1,858 @@
+[
+ {
+  "id": "lookup-4",
+  "cat": "lookup",
+  "q": "Is it allowed to get on a train without buying a ticket first?",
+  "gold": [
+   [
+    "cap1956:200",
+    "5"
+   ]
+  ],
+  "must": []
+ },
+ {
+  "id": "lookup-6",
+  "cat": "lookup",
+  "q": "What is the punishment for signing a property deed that states a false price?",
+  "gold": [
+   [
+    "cap:25",
+    "406"
+   ]
+  ],
+  "must": []
+ },
+ {
+  "id": "lookup-7",
+  "cat": "lookup",
+  "q": "What happens if a private hospital operates without being registered?",
+  "gold": [
+   [
+    "act:21/2006",
+    "4"
+   ]
+  ],
+  "must": []
+ },
+ {
+  "id": "lookup-8",
+  "cat": "lookup",
+  "q": "Can the insurance regulator make an insurer increase its deposit?",
+  "gold": [
+   [
+    "act:43/2000",
+    "53"
+   ]
+  ],
+  "must": []
+ },
+ {
+  "id": "lookup-10",
+  "cat": "lookup",
+  "q": "When is a liquidator released from office?",
+  "gold": [
+   [
+    "act:12/2026",
+    "357"
+   ]
+  ],
+  "must": []
+ },
+ {
+  "id": "lookup-11",
+  "cat": "lookup",
+  "q": "Who issues identity cards to farmers who cultivate agricultural land?",
+  "gold": [
+   [
+    "act:46/2000",
+    "75"
+   ]
+  ],
+  "must": []
+ },
+ {
+  "id": "lookup-13",
+  "cat": "lookup",
+  "q": "Does the Industrial Disputes Act apply to local authority employees?",
+  "gold": [
+   [
+    "act:3/1979",
+    "6"
+   ]
+  ],
+  "must": []
+ },
+ {
+  "id": "lookup-14",
+  "cat": "lookup",
+  "q": "Does an insolvency practitioner have to carry insurance?",
+  "gold": [
+   [
+    "act:12/2026",
+    "20"
+   ]
+  ],
+  "must": []
+ },
+ {
+  "id": "lookup-16",
+  "cat": "lookup",
+  "q": "Is it an offence to lead cattle across a railway line?",
+  "gold": [
+   [
+    "cap1956:200",
+    "35"
+   ]
+  ],
+  "must": []
+ },
+ {
+  "id": "lookup-17",
+  "cat": "lookup",
+  "q": "How are the members of the Productivity Commission paid?",
+  "gold": [
+   [
+    "act:45/2024",
+    "144"
+   ]
+  ],
+  "must": []
+ },
+ {
+  "id": "lookup-18",
+  "cat": "lookup",
+  "q": "Can evidence be given when the words of a document make no sense in relation to the actual facts?",
+  "gold": [
+   [
+    "cap1956:14",
+    "95"
+   ]
+  ],
+  "must": []
+ },
+ {
+  "id": "lookup-19",
+  "cat": "lookup",
+  "q": "Within how many days must the buyer pay the balance after a court auction sale?",
+  "gold": [
+   [
+    "cap:105",
+    "261"
+   ]
+  ],
+  "must": []
+ },
+ {
+  "id": "lookup-20",
+  "cat": "lookup",
+  "q": "Who is disqualified from becoming a member of a Provincial Council?",
+  "gold": [
+   [
+    "act:42/1987",
+    "3"
+   ]
+  ],
+  "must": []
+ },
+ {
+  "id": "lookup-21",
+  "cat": "lookup",
+  "q": "Is match fixing in sports a criminal offence?",
+  "gold": [
+   [
+    "act:24/2019",
+    "4"
+   ]
+  ],
+  "must": []
+ },
+ {
+  "id": "lookup-22",
+  "cat": "lookup",
+  "q": "What happens to Primary Court cases when the judge is absent?",
+  "gold": [
+   [
+    "cap:18",
+    "36"
+   ]
+  ],
+  "must": []
+ },
+ {
+  "id": "lookup-23",
+  "cat": "lookup",
+  "q": "Can a ship's agent do what the ship's master is required to do under customs law?",
+  "gold": [
+   [
+    "cap1956:235",
+    "114"
+   ]
+  ],
+  "must": []
+ },
+ {
+  "id": "lookup-26",
+  "cat": "lookup",
+  "q": "When is an arrested judgment debtor released if he pays the decree amount into court?",
+  "gold": [
+   [
+    "cap1956:101",
+    "306"
+   ]
+  ],
+  "must": []
+ },
+ {
+  "id": "lookup-27",
+  "cat": "lookup",
+  "q": "Does the microfinance regulator keep a register of licensed lenders?",
+  "gold": [
+   [
+    "act:9/2026",
+    "68"
+   ]
+  ],
+  "must": []
+ },
+ {
+  "id": "lookup-29",
+  "cat": "lookup",
+  "q": "Can a judge charge a fee for certifying the execution of a deed?",
+  "gold": [
+   [
+    "cap1956:71",
+    "6"
+   ]
+  ],
+  "must": []
+ },
+ {
+  "id": "lookup-30",
+  "cat": "lookup",
+  "q": "Are a ship's stores subject to customs duty like imported goods?",
+  "gold": [
+   [
+    "cap1956:235",
+    "39"
+   ]
+  ],
+  "must": []
+ },
+ {
+  "id": "si-6",
+  "cat": "language",
+  "lang": "si",
+  "q": "බොරු මිලක් සඳහන් කළ දේපළ ඔප්පුවක් අත්සන් කිරීමට ඇති දඬුවම කුමක්ද?",
+  "gold": [
+   [
+    "cap:25",
+    "406"
+   ]
+  ],
+  "must": []
+ },
+ {
+  "id": "si-7",
+  "cat": "language",
+  "lang": "si",
+  "q": "ලියාපදිංචි නොවී පෞද්ගලික රෝහලක් පවත්වාගෙන ගියහොත් කුමක් සිදුවේද?",
+  "gold": [
+   [
+    "act:21/2006",
+    "4"
+   ]
+  ],
+  "must": []
+ },
+ {
+  "id": "si-19",
+  "cat": "language",
+  "lang": "si",
+  "q": "අධිකරණ වෙන්දේසියකින් පසු ගැනුම්කරු ඉතිරි මුදල දින කීයක් ඇතුළත ගෙවිය යුතුද?",
+  "gold": [
+   [
+    "cap:105",
+    "261"
+   ]
+  ],
+  "must": []
+ },
+ {
+  "id": "ta-13",
+  "cat": "language",
+  "lang": "ta",
+  "q": "தொழில் பிணக்குகள் சட்டம் உள்ளூராட்சி நிறுவன ஊழியர்களுக்குப் பொருந்துமா?",
+  "gold": [
+   [
+    "act:3/1979",
+    "6"
+   ]
+  ],
+  "must": []
+ },
+ {
+  "id": "ta-16",
+  "cat": "language",
+  "lang": "ta",
+  "q": "ரயில் பாதையைக் கடந்து மாடுகளை ஓட்டிச் செல்வது குற்றமா?",
+  "gold": [
+   [
+    "cap1956:200",
+    "35"
+   ]
+  ],
+  "must": []
+ },
+ {
+  "id": "ta-30",
+  "cat": "language",
+  "lang": "ta",
+  "q": "கப்பலின் களஞ்சியப் பொருட்கள் இறக்குமதிப் பொருட்களைப் போல் சுங்க வரிக்கு உட்பட்டவையா?",
+  "gold": [
+   [
+    "cap1956:235",
+    "39"
+   ]
+  ],
+  "must": []
+ },
+ {
+  "id": "repealed-bribery",
+  "cat": "repealed",
+  "q": "My client is being investigated under the Bribery Act. Is that Act still the law, and if not what replaced it?",
+  "gold": [
+   [
+    "act:9/2023",
+    "163"
+   ]
+  ],
+  "must": [
+   "repeal",
+   "Anti-?Corruption Act",
+   "9 of 2023|No\\.? ?9,? (of )?2023|2023"
+  ]
+ },
+ {
+  "id": "repealed-sec",
+  "cat": "repealed",
+  "q": "Does the Securities and Exchange Commission of Sri Lanka Act No. 36 of 1987 still regulate the securities market?",
+  "gold": [
+   [
+    "act:19/2021",
+    "187"
+   ]
+  ],
+  "must": [
+   "repeal",
+   "19 of 2021|No\\.? ?19,? (of )?2021|2021"
+  ]
+ },
+ {
+  "id": "repealed-fiscal",
+  "cat": "repealed",
+  "q": "Is the Fiscal Management (Responsibility) Act No. 3 of 2003 still in force?",
+  "gold": [
+   [
+    "act:44/2024",
+    "69"
+   ]
+  ],
+  "must": [
+   "repeal",
+   "Public Financial Management Act",
+   "44 of 2024|2024"
+  ]
+ },
+ {
+  "id": "repealed-microfinance",
+  "cat": "repealed",
+  "q": "Which law now governs microfinance companies: is the Microfinance Act No. 6 of 2016 still in force?",
+  "gold": [
+   [
+    "act:9/2026",
+    "81"
+   ]
+  ],
+  "must": [
+   "repeal",
+   "Microfinance and Credit Regulatory Authority Act",
+   "9 of 2026|2026"
+  ]
+ },
+ {
+  "id": "repealed-mediation-centre",
+  "cat": "repealed",
+  "q": "Is the Commercial Mediation Centre of Sri Lanka Act No. 44 of 2000 still in force?",
+  "gold": [
+   [
+    "act:13/2026",
+    "28"
+   ]
+  ],
+  "must": [
+   "repeal",
+   "Mediation \\(Civil and Commercial Disputes\\) Act|Mediation Act",
+   "13 of 2026|2026"
+  ]
+ },
+ {
+  "id": "repealed-fair-trading",
+  "cat": "repealed",
+  "q": "Can a complaint still be made to the Fair Trading Commission under the Fair Trading Commission Act No. 1 of 1987?",
+  "gold": [
+   [
+    "act:9/2003",
+    null
+   ]
+  ],
+  "must": [
+   "repeal",
+   "Consumer Affairs Authority",
+   "9 of 2003|2003"
+  ]
+ },
+ {
+  "id": "repealed-insolvency",
+  "cat": "repealed",
+  "q": "Does the Insolvency Ordinance still govern the bankruptcy of individuals in Sri Lanka?",
+  "gold": [
+   [
+    "act:12/2026",
+    "477"
+   ]
+  ],
+  "must": [
+   "repeal",
+   "Rescue, Rehabilitation and Insolvency",
+   "12 of 2026|2026"
+  ]
+ },
+ {
+  "id": "repealed-tourist-board",
+  "cat": "repealed",
+  "q": "Is the Ceylon Tourist Board Act No. 10 of 1966 still in force?",
+  "gold": [
+   [
+    "act:38/2005",
+    "67"
+   ]
+  ],
+  "must": [
+   "repeal",
+   "Tourism Act",
+   "38 of 2005|2005"
+  ]
+ },
+ {
+  "id": "repealed-victims",
+  "cat": "repealed",
+  "q": "Is the Assistance to and Protection of Victims of Crime and Witnesses Act No. 4 of 2015 the current law?",
+  "gold": [
+   [
+    "act:10/2023",
+    "103"
+   ]
+  ],
+  "must": [
+   "repeal",
+   "10 of 2023|2023"
+  ]
+ },
+ {
+  "id": "repealed-debits-tax",
+  "cat": "repealed",
+  "q": "Do banks still have to collect debits tax under the Debits Tax Act No. 16 of 2002?",
+  "gold": [
+   [
+    "act:14/2011",
+    "2"
+   ]
+  ],
+  "must": [
+   "repeal",
+   "14 of 2011|2011",
+   "March 31,? 2011|31(st)? March,? 2011"
+  ]
+ },
+ {
+  "id": "amended-hc-retirement",
+  "cat": "amended",
+  "q": "At what age does a Judge of the High Court retire?",
+  "gold": [
+   [
+    "act:2/1978",
+    "6"
+   ],
+   [
+    "act:23/2026",
+    null
+   ]
+  ],
+  "must": [
+   "sixty[- ]three|\\b63\\b"
+  ],
+  "note": "Judicature Act s6(3): sixty-one, amended to sixty-three by Act No. 23 of 2026"
+ },
+ {
+  "id": "amended-mediation-limit",
+  "cat": "amended",
+  "q": "Up to what value must a dispute about a debt go to a Mediation Board before a court will hear it?",
+  "gold": [
+   [
+    "act:72/1988",
+    "7"
+   ],
+   [
+    "act:2/2024",
+    null
+   ]
+  ],
+  "must": [
+   "one million|1,000,000|1 million|10,00,000"
+  ],
+  "note": "Mediation Boards Act s7(1)(a): Rs 25,000 in 1988, now one million rupees (Act No. 2 of 2024)"
+ },
+ {
+  "id": "amended-pta-detention",
+  "cat": "amended",
+  "q": "Under the Prevention of Terrorism Act, what is the longest a person can be held on detention orders in total?",
+  "gold": [
+   [
+    "act:48/1979",
+    "9"
+   ],
+   [
+    "act:12/2022",
+    null
+   ]
+  ],
+  "must": [
+   "twelve months|12 months|one year"
+  ],
+  "note": "PTA s9(1) proviso: eighteen months, now twelve (Act No. 12 of 2022)"
+ },
+ {
+  "id": "amended-company-name-notice",
+  "cat": "amended",
+  "q": "When a private company becomes a public company and its name changes, how long does it have to give public notice of the change?",
+  "gold": [
+   [
+    "act:7/2007",
+    "11"
+   ],
+   [
+    "act:12/2025",
+    null
+   ]
+  ],
+  "must": [
+   "twenty working days|20 working days"
+  ],
+  "note": "Companies Act s11(5): ten working days, now twenty (Act No. 12 of 2025)"
+ },
+ {
+  "id": "amended-wc-notice-book",
+  "cat": "amended",
+  "q": "What is the fine for an employer who fails to keep the workmen's compensation notice-book required by regulations?",
+  "gold": [
+   [
+    "cap:158",
+    "18"
+   ],
+   [
+    "act:10/2022",
+    null
+   ]
+  ],
+  "must": [
+   "one hundred thousand|100,000|1,00,000"
+  ],
+  "note": "Workmen's Compensation Ordinance s18(2): fifty rupees, now one hundred thousand (Act No. 10 of 2022)"
+ },
+ {
+  "id": "amended-pmla-disclose",
+  "cat": "amended",
+  "q": "Under the Prevention of Money Laundering Act, what is the fine for a person who learns in the course of his business that property came from unlawful activity and does not disclose it to the Financial Intelligence Unit?",
+  "gold": [
+   [
+    "act:5/2006",
+    "5"
+   ],
+   [
+    "act:16/2026",
+    null
+   ]
+  ],
+  "must": [
+   "five hundred thousand|500,000|5,00,000"
+  ],
+  "note": "Prevention of Money Laundering Act s5(2): fifty thousand, now five hundred thousand (Act No. 16 of 2026)"
+ },
+ {
+  "id": "amended-sequestration",
+  "cat": "amended",
+  "q": "What is the minimum money claim for which a plaintiff can ask for sequestration of the defendant's property before judgment?",
+  "gold": [
+   [
+    "cap:105",
+    "653"
+   ],
+   [
+    "cap1956:101",
+    "653"
+   ],
+   [
+    "act:43/2024",
+    null
+   ]
+  ],
+  "must": [
+   "two million|2,000,000|20,00,000"
+  ],
+  "note": "Civil Procedure Code s653: one thousand five hundred rupees, now two million (Act No. 43 of 2024)"
+ },
+ {
+  "id": "xref-deposit-seizure",
+  "cat": "xref",
+  "q": "If the Insurance Board orders an insurer to make an additional deposit, can a creditor seize that deposit in execution of a decree?",
+  "gold": [
+   [
+    "act:43/2000",
+    "53"
+   ],
+   [
+    "act:43/2000",
+    "22"
+   ]
+  ],
+  "must": [
+   "\\b22\\b",
+   "not|cannot|can.t"
+  ],
+  "note": "s53 applies s22: the deposit is not liable to seizure"
+ },
+ {
+  "id": "xref-hospital-closure",
+  "cat": "xref",
+  "q": "A private hospital kept operating without registration even after being convicted for ignoring the Regulatory Council's directive. What more can be done?",
+  "gold": [
+   [
+    "act:21/2006",
+    "4"
+   ]
+  ],
+  "must": [
+   "clos",
+   "one month|1 month"
+  ],
+  "note": "s4(3): closure order after one month of continued offence"
+ },
+ {
+  "id": "xref-liquidator-solvent",
+  "cat": "xref",
+  "q": "In a solvent liquidation, whose objection can stop a liquidator from being released?",
+  "gold": [
+   [
+    "act:12/2026",
+    "357"
+   ],
+   [
+    "act:12/2026",
+    "302"
+   ]
+  ],
+  "must": [
+   "shareholder",
+   "302|declaration of solvency"
+  ],
+  "note": "s357(1)(a) applies where s302 (declaration of solvency) applies"
+ },
+ {
+  "id": "xref-liquidator-liability",
+  "cat": "xref",
+  "q": "After a liquidator is released, is he free of all liability for what he did in the liquidation?",
+  "gold": [
+   [
+    "act:12/2026",
+    "357"
+   ]
+  ],
+  "must": [
+   "\\b419\\b"
+  ],
+  "note": "s357(2): discharged except liability under section 419"
+ },
+ {
+  "id": "xref-mediation-certificate",
+  "cat": "xref",
+  "q": "Can I file a court case to recover a debt of Rs 200,000 without first going to the Mediation Board?",
+  "gold": [
+   [
+    "act:72/1988",
+    "7"
+   ]
+  ],
+  "must": [
+   "certificate of non-settlement|non-settlement certificate",
+   "one million|1,000,000|1 million"
+  ],
+  "note": "s7: below the limit (one million rupees since 2024) a court needs the certificate of non-settlement"
+ },
+ {
+  "id": "constitution-fr-time",
+  "cat": "constitution",
+  "q": "How long do I have to file a fundamental rights petition in the Supreme Court?",
+  "gold": [
+   [
+    "constitution",
+    "126"
+   ]
+  ],
+  "must": [
+   "one month|1 month"
+  ]
+ },
+ {
+  "id": "constitution-fr-decide",
+  "cat": "constitution",
+  "q": "Within what time must the Supreme Court decide a fundamental rights petition?",
+  "gold": [
+   [
+    "constitution",
+    "126"
+   ]
+  ],
+  "must": [
+   "two months|2 months"
+  ]
+ },
+ {
+  "id": "constitution-equality",
+  "cat": "constitution",
+  "q": "On what grounds does the Constitution forbid discrimination against citizens?",
+  "gold": [
+   [
+    "constitution",
+    "12"
+   ]
+  ],
+  "must": [
+   "race",
+   "religion",
+   "caste",
+   "sex",
+   "political opinion",
+   "place of birth"
+  ]
+ },
+ {
+  "id": "constitution-expression",
+  "cat": "constitution",
+  "q": "Which Article of the Constitution protects freedom of expression, and what limits it?",
+  "gold": [
+   [
+    "constitution",
+    "14"
+   ],
+   [
+    "constitution",
+    "15"
+   ]
+  ],
+  "must": [
+   "\\b14\\b",
+   "\\b15\\b"
+  ]
+ },
+ {
+  "id": "constitution-provincial-councils",
+  "cat": "constitution",
+  "q": "Which amendment to the Constitution established Provincial Councils, and in which Article?",
+  "gold": [
+   [
+    "constitution",
+    "154A"
+   ]
+  ],
+  "must": [
+   "Thirteenth|13th",
+   "154A"
+  ]
+ },
+ {
+  "id": "define-personal-data",
+  "cat": "definition",
+  "q": "What counts as 'personal data' under the Personal Data Protection Act?",
+  "gold": [
+   [
+    "act:9/2022",
+    "56"
+   ]
+  ],
+  "must": [
+   "identif"
+  ]
+ },
+ {
+  "id": "define-cognizable",
+  "cat": "definition",
+  "q": "What is a cognizable offence under the Code of Criminal Procedure?",
+  "gold": [
+   [
+    "act:15/1979",
+    "2"
+   ]
+  ],
+  "must": [
+   "without (a )?warrant",
+   "First Schedule"
+  ]
+ },
+ {
+  "id": "multi-railway-public-servant",
+  "cat": "multi_law",
+  "q": "Is an officer of the Sri Lanka Railways Authority a public servant for the purposes of the Penal Code?",
+  "gold": [
+   [
+    "act:60/1993",
+    "32"
+   ]
+  ],
+  "must": [
+   "\\byes\\b|deemed",
+   "public servant"
+  ]
+ },
+ {
+  "id": "none-ai-act",
+  "cat": "out_of_scope",
+  "q": "Under the Artificial Intelligence Regulation Act No. 5 of 2025, what fine applies to running an unregistered AI system?",
+  "gold": [],
+  "must": [
+   "(not|no)\\b[^\\n]{0,120}?\\b(in|within|part of|covered by|available in|held in|find|found|locate)\\b[^\\n]{0,40}?\\b(corpus|library|database|collection|sources?|records|materials)|could(n.t| not) (find|locate)|unable to (find|locate)|no (such|record of (an?|the|this))\\b|does not (appear|exist)|doesn.t (appear|exist)|not aware of"
+  ],
+  "note": "no such Act"
+ },
+ {
+  "id": "none-judgment",
+  "cat": "out_of_scope",
+  "q": "What did the Supreme Court decide in Sriyani Silva v. Iddamalgoda about the State's liability for a death in police custody?",
+  "gold": [],
+  "must": [
+   "(not|no)\\b[^\\n]{0,120}?\\b(in|within|part of|covered by|available in|held in|find|found|locate)\\b[^\\n]{0,40}?\\b(corpus|library|database|collection|sources?|records|materials)|could(n.t| not) (find|locate)|unable to (find|locate)|no (such|record of (an?|the|this))\\b|does not (appear|exist)|doesn.t (appear|exist)|not aware of|judgment|case law|decisions"
+  ],
+  "note": "judgments are not in the corpus; it may say so and still point to Article 11/13/126"
+ },
+ {
+  "id": "none-indian-ipc",
+  "cat": "out_of_scope",
+  "q": "What is the punishment for murder under section 302 of the Indian Penal Code?",
+  "gold": [],
+  "must": [
+   "Sri Lank",
+   "(not|no)\\b[^\\n]{0,120}?\\b(in|within|part of|covered by|available in|held in|find|found|locate)\\b[^\\n]{0,40}?\\b(corpus|library|database|collection|sources?|records|materials)|could(n.t| not) (find|locate)|unable to (find|locate)|no (such|record of (an?|the|this))\\b|does not (appear|exist)|doesn.t (appear|exist)|not aware of|outside|only (covers|holds|has) Sri Lank|not Indian"
+  ],
+  "note": "foreign law: should say it holds Sri Lankan law (may give Penal Code s296)"
+ }
+]

@@ -188,6 +188,17 @@ Not covered yet: 2000–2008 (384×552 booklet format, extraction still running 
   | weighted 0.7 dense / 0.3 BM25 (BM25 skipped for Sinhala/Tamil script) | 63 / 80 / 87 | = dense | = dense |
 
   **Decision: dense-only by default.** BM25 adds nothing on paraphrased questions and dilutes dense in fusion; the English analyzer reads no Sinhala or Tamil, so RRF fuses noise for them. Weights are per request (`"rerank": {"strategy": "weighted", "params": {"weights": [w_dense, w_bm25]}}`, checked live), so the agent can ask for weighted hybrid when a query carries exact strings (section or Act numbers, defined terms), which this set does not test. Cross-language: searching the English version scores 93% @5 against 60-73% in the original script, so the agent searches Sinhala/Tamil questions in English too and merges. Misses are often a sensible other answer (the same Act's s16 "Determination of compensation" for s12; Microfinance Act 6/2016 s8 register for 9/2026 s68): one gold per question understates recall. 30 questions = ~3 points each.
+- **Agent eval v2 (2026-11-09, `pnpm --filter @sllaw/services eval-agent`, cases `etl/eval_agent.json`, traces
+  `logs/eval-agent-v2-2026-11-09/`):** 59 cases in 9 categories, each read against the law's text before it was written:
+  lookup 20 (the current questions above), language 6 (3 Sinhala, 3 Tamil), repealed 10 (the answer must say repealed and
+  name the repealing Act: Bribery Act -> Anti-Corruption Act 9/2023 s163, SEC Act 36/1987 -> 19/2021 s187, ...), amended 7
+  (the figure as amended: PTA detention 18 -> 12 months, Mediation Boards Rs 25,000 -> 1 million, High Court retirement 61
+  -> 63, ...), xref 5 (the answer needs a section the gold section points to), constitution 5, definition 2, multi_law 1,
+  out_of_scope 3 (a made-up Act, a judgment, Indian law: say so, invent nothing). A hit = a gold section cited in any
+  edition (same_as twins); facts = regexes the answer must match. **Result: 59/59 hit and facts** (after fixing two cases of
+  mine: a not-found regex that stopped at the "." in "No. 5", and a money-laundering question two Acts answer); 4.4 steps,
+  $0.10 for all 59. Weak spot: 71 citations of chunks the agent never read (it cites search snippets). Not tested: whether
+  an answer is wrong beyond the facts checked (no judge model), questions needing several hops of asOf history.
 - **Gold set checked against the law in force (2026-10-18, by hand with the research tools, `pnpm --filter
   @sllaw/services tool`):** the 30 golds were sampled for retrieval, not for being current law. **7 are dead law:**
   #2 Electricity 20/2009 s43 (Act repealed by 36/2024 s51 from the appointed date; s43 itself replaced 2013,
