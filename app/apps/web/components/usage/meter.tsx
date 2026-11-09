@@ -5,7 +5,9 @@ import { cn } from "@/lib/utils";
 
 export type Unit = "count" | "tokens" | "bytes";
 
-export const fmtUnit = (n: number, unit: Unit) => (unit === "bytes" ? fmtSize(n) : fmtNum(n));
+const GB = 1024 ** 3;
+export const fmtUnit = (n: number, unit: Unit) =>
+  unit !== "bytes" ? fmtNum(n) : n >= GB ? `${Number((n / GB).toFixed(1))} GB` : fmtSize(n);
 
 const resetLabel = (at: Date | null, per: string) =>
   !at
@@ -31,7 +33,7 @@ export function Meter({
   resetsAt: Date | null;
   big?: boolean;
 }) {
-  const scale = max == null ? Math.max(used, 1) : Math.max(used, max, 1);
+  const scale = Math.max(used, max ?? 0, 1);
   const pct = (v: number) => `${Math.min(100, (v / scale) * 100)}%`;
   const share = max ? used / max : 0;
   const reset = resetLabel(resetsAt, per);
@@ -44,29 +46,27 @@ export function Meter({
           {max == null ? " · no limit" : ` of ${fmtUnit(max, unit)}`}
         </span>
       </div>
-      <div
-        className={cn("relative mt-2 rounded-full bg-muted", big ? "h-3" : "h-2")}
-        role="meter"
-        aria-label={label}
-        aria-valuemin={0}
-        aria-valuemax={max ?? undefined}
-        aria-valuenow={used}
-      >
+      {max != null && (
         <div
-          className={cn(
-            "h-full rounded-full transition-[width]",
-            share >= 1 ? "bg-destructive" : share >= 0.8 ? "bg-brass" : "bg-primary",
-          )}
-          style={{ width: used ? `max(4px, ${pct(used)})` : 0 }}
-        />
-        {max != null && (
+          className={cn("relative mt-2 rounded-full bg-muted", big ? "h-3" : "h-2")}
+          aria-hidden // the numbers above say it in words
+        >
           <div
-            className="absolute -inset-y-1 w-0.5 -translate-x-1/2 rounded bg-foreground/70"
-            style={{ left: pct(max) }}
-            title={`Limit: ${fmtUnit(max, unit)}`}
+            className={cn(
+              "h-full rounded-full transition-[width]",
+              share >= 1 ? "bg-destructive" : share >= 0.8 ? "bg-brass" : "bg-primary",
+            )}
+            style={{ width: used ? `max(4px, ${pct(used)})` : 0 }}
           />
-        )}
-      </div>
+          {max != null && (
+            <div
+              className="absolute -inset-y-1 w-0.5 -translate-x-1/2 rounded bg-foreground/70"
+              style={{ left: pct(max) }}
+              title={`Limit: ${fmtUnit(max, unit)}`}
+            />
+          )}
+        </div>
+      )}
       <div className="mt-1.5 flex justify-between text-xs text-muted-foreground">
         <span>{max ? `${Math.round(share * 100)}% used` : ""}</span>
         <span>{reset}</span>

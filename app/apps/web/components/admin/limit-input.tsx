@@ -1,6 +1,6 @@
 "use client";
 // A limit's max as typed on /admin: storage in MB, everything else as is; empty = no limit (null).
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Input } from "@/components/ui/input";
 
 const MB = 1024 * 1024;
@@ -28,11 +28,18 @@ export function LimitInput({
   disabled?: boolean;
 }) {
   const [s, setS] = useState(toInput(unit, value));
-  useEffect(() => setS(toInput(unit, value)), [unit, value]);
+  const saved = useRef(value); // the last value sent, so Enter then blur saves once
+  useEffect(() => {
+    setS(toInput(unit, value));
+    saved.current = value;
+  }, [unit, value]);
   const commit = () => {
     const v = fromInput(unit, s);
     if (v === undefined) return setS(toInput(unit, value));
-    if (v !== value) onSave(v);
+    if (v !== saved.current) {
+      saved.current = v;
+      onSave(v);
+    }
   };
   return (
     <div className="flex items-center gap-2">
@@ -44,7 +51,7 @@ export function LimitInput({
         disabled={disabled}
         onChange={(e) => setS(e.target.value)}
         onBlur={commit}
-        onKeyDown={(e) => e.key === "Enter" && (e.currentTarget as HTMLInputElement).blur()}
+        onKeyDown={(e) => e.key === "Enter" && commit()}
       />
       <span className="w-12 text-xs text-muted-foreground">{unitHint(unit)}</span>
     </div>

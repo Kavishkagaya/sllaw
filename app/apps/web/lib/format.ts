@@ -25,6 +25,13 @@ export function fmtUsd(n: number) {
   return `$${n.toPrecision(3).replace(/0+$/, "")}`;
 }
 
-const compact = new Intl.NumberFormat("en-GB", { notation: "compact", maximumFractionDigits: 1 });
-/** A count, short: 950, 12.3K, 4.1M. */
-export const fmtNum = (n: number) => compact.format(n);
+/** A count, short: 950, 12.3K, 4.1M. By hand, not Intl's compact notation: Node writes "4.1m" where browsers write
+ *  "4.1M", and a server-rendered number then fails hydration. */
+export function fmtNum(n: number) {
+  const a = Math.abs(n);
+  const [d, s] = a >= 1e9 ? [1e9, "B"] : a >= 1e6 ? [1e6, "M"] : a >= 1e3 ? [1e3, "K"] : [1, ""];
+  const v = Math.round((n / d) * 10) / 10;
+  // 999,950 rounds to 1000K: step up a unit
+  if (s && Math.abs(v) >= 1000) return fmtNum(Math.sign(n) * 1000 * d);
+  return `${s ? v : Math.round(n)}${s}`;
+}

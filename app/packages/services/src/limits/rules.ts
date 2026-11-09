@@ -81,25 +81,25 @@ export class LimitReached extends Error {
     readonly plan: string,
     readonly resetsAt: Date | null,
   ) {
-    super(limitMessage(metric, max, plan, resetsAt));
+    super(limitMessage(metric, max, plan, resetsAt, used));
     this.name = "LimitReached";
   }
 }
 
-export function limitMessage(m: Metric, max: number, plan: string, resetsAt: Date | null) {
+export function limitMessage(m: Metric, max: number, plan: string, resetsAt: Date | null, used = max) {
   const at =
     resetsAt && METRICS[m].per === "month" ? `on ${monthDay.format(resetsAt)}` : "at midnight (Sri Lanka time)";
   switch (m) {
     case "messages":
-      return `You have sent today's ${num.format(max)} messages on the ${plan} plan. You can send more ${at}.`;
+      return `You have sent today's ${num.format(max)} ${max === 1 ? "message" : "messages"} on the ${plan} plan. You can send more ${at}.`;
     case "tokens":
       return `You have used today's context allowance on the ${plan} plan (${num.format(max)} tokens). It resets ${at}.`;
     case "tokens_month":
       return `You have used this month's context allowance on the ${plan} plan (${num.format(max)} tokens). It resets ${at}.`;
     case "searches":
-      return `You have reached today's ${num.format(max)} searches on the ${plan} plan. It resets ${at}.`;
+      return `You have reached today's ${num.format(max)} ${max === 1 ? "search" : "searches"} on the ${plan} plan. It resets ${at}.`;
     case "case_files":
-      return `This case has ${num.format(max)} files, the most the ${plan} plan allows. Remove one to add another.`;
+      return `This case has ${num.format(used)} ${used === 1 ? "file" : "files"}; the ${plan} plan allows ${num.format(max)} per case. Remove one to add another.`;
     case "storage":
       return `This file would take you past your ${size(max)} of storage on the ${plan} plan. Delete files to make room.`;
   }
