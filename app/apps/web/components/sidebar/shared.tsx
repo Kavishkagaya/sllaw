@@ -3,12 +3,18 @@
 // shows the first few with "Show more", the account footer, and the refresh that keeps the server-rendered lists
 // current when a chat is created or an answer stored.
 import { OrganizationSwitcher, UserButton } from "@clerk/nextjs";
-import { Loader2 } from "lucide-react";
+import { Gauge, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { SidebarFooter, SidebarMenuBadge, SidebarMenuButton, SidebarMenuItem } from "@/components/ui/sidebar";
+import {
+  SidebarFooter,
+  SidebarMenu,
+  SidebarMenuBadge,
+  SidebarMenuButton,
+  SidebarMenuItem,
+} from "@/components/ui/sidebar";
 import { useChatStore } from "@/stores/chat-store";
 
 export type SidebarChat = { id: string; title: string; updatedAt: Date };
@@ -71,9 +77,19 @@ export function Collapsed<T>({
 }
 
 export function AccountFooter({ children }: { children?: React.ReactNode }) {
+  const path = usePathname();
   return (
     <SidebarFooter className="gap-2 border-t p-3">
       {children}
+      <SidebarMenu>
+        <SidebarMenuItem>
+          <SidebarMenuButton asChild isActive={path === "/usage"}>
+            <Link href="/usage">
+              <Gauge /> <span>Usage</span>
+            </Link>
+          </SidebarMenuButton>
+        </SidebarMenuItem>
+      </SidebarMenu>
       <OrganizationSwitcher
         hidePersonal
         appearance={{ elements: { rootBox: "w-full", organizationSwitcherTrigger: "w-full justify-between" } }}

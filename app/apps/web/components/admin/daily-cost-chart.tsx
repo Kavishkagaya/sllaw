@@ -14,7 +14,7 @@ const dayLabel = (d: string, long = false) =>
   );
 
 /** Clean ticks from 0 to at least max: 1, 2 or 5 times a power of ten per step, 3-4 steps. */
-function ticks(max: number) {
+export function ticks(max: number) {
   if (max <= 0) return [0];
   const raw = max / 3;
   const pow = 10 ** Math.floor(Math.log10(raw));

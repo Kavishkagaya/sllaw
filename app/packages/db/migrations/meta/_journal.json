@@ -57,6 +57,13 @@
       "when": 1793700132709,
       "tag": "0007_user_is_admin",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1794241012867,
+      "tag": "0008_limits",
+      "breakpoints": true
     }
   ]
 }

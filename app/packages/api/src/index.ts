@@ -1,7 +1,17 @@
 import {
   addCaseFile,
   adminDashboard,
+  adminDeletePlan,
+  adminEndUserPlan,
+  adminGiveUserPlan,
+  adminPlans,
+  adminRemoveUserLimit,
+  adminSavePlan,
+  adminSetDefaultPlan,
+  adminSetPlanLimit,
+  adminSetUserLimit,
   adminUsage,
+  adminUserLimits,
   adminUsers,
   adminUserUsage,
   adminWorkspaceUsage,
@@ -17,6 +27,7 @@ import {
   listChats,
   listMyFiles,
   MAX_SIZE,
+  METRIC_KEYS,
   moveChat,
   openCase,
   openCaseFile,
@@ -28,6 +39,7 @@ import {
   reprocessFile,
   startUpload,
   updateCase,
+  usageStatus,
   workspaceUsage,
 } from "@sllaw/services";
 import { TRPCError } from "@trpc/server";
@@ -49,6 +61,9 @@ const fileInput = {
 };
 const caseInput = { title: z.string().trim().min(1).max(200), facts: z.string().max(20_000) };
 const period = z.enum(PERIODS).optional();
+const metric = z.enum(METRIC_KEYS);
+const max = z.number().int().nonnegative().nullable(); // null: unlimited
+const note = z.string().trim().max(500).nullable();
 const steps = z.array(z.enum(["extract", "categorize", "index"])).optional();
 
 export const appRouter = router({
@@ -132,6 +147,8 @@ export const appRouter = router({
   }),
   // What the workspace used and what it cost us (usage_events), for its admins: this month, or [from, to)
   usage: router({
+    // the signed-in user's plan, each limit with what is used, and their context per day this month (/usage)
+    mine: signedUser.query(({ ctx }) => usageStatus(ctx.account.user.id)),
     summary: workspaceAdmin
       .input(z.object({ from: z.coerce.date(), to: z.coerce.date() }).optional())
       .query(({ ctx, input }) => workspaceUsage(ctx.account, input)),
@@ -139,6 +156,45 @@ export const appRouter = router({
   // The platform admin pages (/admin): superAdmin only; NOT_FOUND to everyone else
   admin: router({
     check: superAdmin.query(() => true),
+    // plans and their limits (/admin/plans), and one user's plan and own limits (/admin/users/<id>)
+    plans: router({
+      list: superAdmin.query(() => adminPlans()),
+      save: superAdmin
+        .input(
+          z.object({
+            id: z.uuid().optional(),
+            key: z
+              .string()
+              .trim()
+              .regex(/^[a-z0-9_-]{1,40}$/),
+            name: z.string().trim().min(1).max(80),
+          }),
+        )
+        .mutation(({ input }) => adminSavePlan(input)),
+      remove: superAdmin.input(z.object({ id: z.uuid() })).mutation(async ({ input }) => {
+        if (!(await adminDeletePlan(input.id)))
+          throw new TRPCError({ code: "CONFLICT", message: "The default plan cannot be deleted." });
+      }),
+      setDefault: superAdmin.input(z.object({ id: z.uuid() })).mutation(({ input }) => adminSetDefaultPlan(input.id)),
+      setLimit: superAdmin
+        .input(z.object({ planId: z.uuid(), metric, max }))
+        .mutation(({ input }) => adminSetPlanLimit(input.planId, input.metric, input.max)),
+    }),
+    limits: router({
+      user: superAdmin.input(z.object({ userId: z.uuid() })).query(({ input }) => adminUserLimits(input.userId)),
+      givePlan: superAdmin
+        .input(z.object({ userId: z.uuid(), planId: z.uuid(), endsAt: z.coerce.date().nullable(), note }))
+        .mutation(({ ctx, input }) => adminGiveUserPlan(ctx.account.user, input)),
+      endPlan: superAdmin
+        .input(z.object({ userId: z.uuid(), id: z.uuid() }))
+        .mutation(({ input }) => adminEndUserPlan(input.userId, input.id)),
+      setUserLimit: superAdmin
+        .input(z.object({ userId: z.uuid(), metric, max, expiresAt: z.coerce.date().nullable(), note }))
+        .mutation(({ ctx, input }) => adminSetUserLimit(ctx.account.user, input)),
+      removeUserLimit: superAdmin
+        .input(z.object({ userId: z.uuid(), metric }))
+        .mutation(({ input }) => adminRemoveUserLimit(input.userId, input.metric)),
+    }),
     dashboard: superAdmin.input(z.object({ period }).optional()).query(({ input }) => adminDashboard(input?.period)),
     users: superAdmin.input(z.object({ period }).optional()).query(({ input }) => adminUsers(input?.period)),
     usage: superAdmin.input(z.object({ period }).optional()).query(({ input }) => adminUsage(input?.period)),

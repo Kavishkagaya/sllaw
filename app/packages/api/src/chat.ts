@@ -1,4 +1,4 @@
-import { sendMessage } from "@sllaw/services";
+import { LimitReached, sendMessage } from "@sllaw/services";
 import { TRPCError } from "@trpc/server";
 import { getHTTPStatusCodeFromError } from "@trpc/server/http";
 import { z } from "zod";
@@ -37,6 +37,8 @@ export async function chatRoute(req: Request, waitUntil: (p: Promise<unknown>) =
     );
     return res ?? new Response("not found", { status: 404 });
   } catch (e) {
+    // the message is what the chat shows (useChat's error is the response's text)
+    if (e instanceof LimitReached) return new Response(e.message, { status: 429 });
     if (e instanceof TRPCError) return new Response(e.message, { status: getHTTPStatusCodeFromError(e) });
     throw e;
   }

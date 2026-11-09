@@ -10,7 +10,8 @@
 // This package imports nothing of ours, so every package may import it (ai included).
 import { AsyncLocalStorage } from "node:async_hooks";
 
-export type Kind = "llm" | "embed" | "ocr" | "vector" | "storage";
+// action: something the user did that a plan limits but that costs nothing itself (a message sent)
+export type Kind = "llm" | "embed" | "ocr" | "vector" | "storage" | "action";
 
 /** Who the usage is for and what it was part of. */
 export type Scope = {
