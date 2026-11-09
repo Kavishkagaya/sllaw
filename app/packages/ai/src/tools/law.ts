@@ -54,9 +54,10 @@ export const lawTools = ({ ports }: Ctx) => ({
   links: tool({
     description:
       "What refers to a chunk or a whole law ('in'), or what it refers to ('out'), grouped by the other law and kind: " +
-      "how many links, the chunk ids on the other side (up to 10), and for 'out' the parts named (labels; a label " +
-      "without a chunk id was not resolved: find it with a keyword search in that law). kinds: amends, inserts, " +
-      "replaces, repeals, amends_act, repeals_act, cites, same_as, consolidates. For what changed a section, use asOf " +
+      "how many links, the chunk ids on the other side (up to 10), and for 'out' the parts named (labels). Every link " +
+      "is resolved; a provision the ETL could not find is not listed (find it with a keyword search in that law). " +
+      "A law's own references ('under section 12') are 'out' links to itself and in 'in' only for a chunk. kinds: amends, inserts, " +
+      "replaces, repeals, amends_act, repeals_act, rescinds, made_under, cites, same_as, consolidates. For what changed a section, use asOf " +
       "instead. On a whole law narrow with kinds or text (words that must all be in the link's text, e.g. 'section 43').",
     inputSchema: z.object({
       docKey,
