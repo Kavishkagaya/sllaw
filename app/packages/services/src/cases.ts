@@ -29,6 +29,7 @@ import {
   rerun,
   type Signed,
 } from "./files";
+import { checkCaseUpload } from "./limits";
 
 /** The case if this user may see and change it, else null. ponytail: only the case's author may until case_shares
  *  exists (docs/APP.md, Access: viewer reads, editor adds/removes). Then this becomes the caseViewer / caseEditor
@@ -165,6 +166,7 @@ export async function listCaseFiles(a: Signed, caseId: string) {
  *  browser sends the bytes; file.finishUpload then starts the processing, as for any file. */
 export async function addCaseFile(a: Signed, caseId: string, input: FileInput) {
   if (!(await caseOf(a, caseId))) return null;
+  await checkCaseUpload(a, caseId, input.size); // LimitReached: the case is full, or the uploader's storage
   const up = await createUpload({ workspaceId: a.workspace.id, userId: a.user.id }, input, {
     steps: STEPS,
     scopes: [scope(caseId)],

@@ -1,5 +1,5 @@
 import { auth } from "@clerk/nextjs/server";
-import { accountOf } from "@sllaw/services";
+import { accountOf, LimitReached } from "@sllaw/services";
 import { initTRPC, TRPCError } from "@trpc/server";
 import superjson from "superjson";
 
@@ -12,11 +12,19 @@ export const createContext = async (opts: { headers: Headers }) => {
 type Context = Awaited<ReturnType<typeof createContext>>;
 const t = initTRPC.context<Context>().create({ transformer: superjson });
 export const router = t.router;
-export const publicProcedure = t.procedure;
+
+/** A plan limit reached in a service (LimitReached) is TOO_MANY_REQUESTS (429), its message for the user. */
+const base = t.procedure.use(async ({ next }) => {
+  const r = await next();
+  if (!r.ok && r.error.cause instanceof LimitReached)
+    throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: r.error.cause.message, cause: r.error.cause });
+  return r;
+});
+export const publicProcedure = base;
 export const createCallerFactory = t.createCallerFactory;
 
 /** A signed-in user: ctx.account = our user, their workspaces (with role) and the active workspace (or null). */
-export const signedUser = t.procedure.use(async ({ ctx, next }) =>
+export const signedUser = base.use(async ({ ctx, next }) =>
   next({ ctx: { ...ctx, account: await signedAccount(ctx) } }),
 );
 

@@ -27,3 +27,10 @@ export function previousOf(name: PeriodName, p: Period): Period {
   if (name === "month" || name === "last-month") return monthOf(new Date(p.from.getTime() - 1));
   return { from: new Date(p.from.getTime() - (p.to.getTime() - p.from.getTime())), to: p.from };
 }
+
+/** The Sri Lanka day d falls in, as [from, to): what daily limits count and when they reset. */
+export function dayOf(d = new Date()) {
+  const local = new Date(d.getTime() + COLOMBO);
+  const from = Date.UTC(local.getUTCFullYear(), local.getUTCMonth(), local.getUTCDate()) - COLOMBO;
+  return { from: new Date(from), to: new Date(from + 86_400_000) };
+}

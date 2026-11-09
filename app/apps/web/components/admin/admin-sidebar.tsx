@@ -1,6 +1,6 @@
 "use client";
 // The admin side's sidebar (/admin, platform staff only): the dashboard, usage and users, and the way back.
-import { ArrowLeft, ChartColumn, LayoutDashboard, Users } from "lucide-react";
+import { ArrowLeft, ChartColumn, Gauge, LayoutDashboard, Users } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Brand } from "@/components/brand";
@@ -21,6 +21,7 @@ const items = [
   { href: "/admin", label: "Dashboard", icon: LayoutDashboard, match: [] as string[] },
   { href: "/admin/usage", label: "Usage", icon: ChartColumn, match: ["/admin/usage", "/admin/workspaces"] },
   { href: "/admin/users", label: "Users", icon: Users, match: ["/admin/users"] },
+  { href: "/admin/plans", label: "Plans", icon: Gauge, match: ["/admin/plans"] },
 ];
 
 export function AdminSidebar() {

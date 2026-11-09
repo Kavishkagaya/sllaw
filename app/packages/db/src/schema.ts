@@ -37,6 +37,73 @@ export const workspaces = pgTable("workspaces", {
   createdAt,
 });
 
+// Plans and limits (docs/APP.md, Limits). A plan is a user's, not a workspace's: one allowance per lawyer across
+// every workspace they are in. Which metrics exist and how each is counted is code (services/limits.ts); a plan sets
+// only each one's max. Edited on /admin/plans. Exactly one plan is the default: a user with no active plan is on it.
+export const plans = pgTable(
+  "plans",
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    key: text().notNull().unique(), // free, pro
+    name: text().notNull(),
+    isDefault: boolean("is_default").notNull().default(false),
+    createdAt,
+  },
+  (t) => [uniqueIndex("plans_one_default").on(t.isDefault).where(sql`${t.isDefault}`)],
+);
+
+// A plan's max per metric. No row = unlimited.
+export const planLimits = pgTable(
+  "plan_limits",
+  {
+    planId: uuid("plan_id")
+      .notNull()
+      .references(() => plans.id, { onDelete: "cascade" }),
+    metric: text().notNull(), // services/limits.ts METRICS
+    max: bigint({ mode: "number" }).notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.planId, t.metric] })],
+);
+
+// A user's plan, from starts_at until ends_at (null: no end). source says who gave it: staff (by hand, now); later
+// self (they paid) or workspace:<id> (a firm's seat). The active row with the latest start wins.
+export const userPlans = pgTable(
+  "user_plans",
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    planId: uuid("plan_id")
+      .notNull()
+      .references(() => plans.id, { onDelete: "cascade" }),
+    source: text().notNull().default("staff"),
+    startsAt: timestamp("starts_at", { withTimezone: true }).notNull().defaultNow(),
+    endsAt: timestamp("ends_at", { withTimezone: true }),
+    note: text(),
+    setBy: uuid("set_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt,
+  },
+  (t) => [index().on(t.userId)],
+);
+
+// One user's own max for a metric, in place of their plan's (null = unlimited), until expires_at (null: no end).
+export const userLimits = pgTable(
+  "user_limits",
+  {
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    metric: text().notNull(),
+    max: bigint({ mode: "number" }),
+    expiresAt: timestamp("expires_at", { withTimezone: true }),
+    note: text(),
+    setBy: uuid("set_by").references(() => users.id, { onDelete: "set null" }),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.metric] })],
+);
+
 export const workspaceUsers = pgTable(
   "workspace_users",
   {
@@ -177,8 +244,8 @@ export const usageEvents = pgTable(
     at: timestamp({ withTimezone: true }).notNull().defaultNow(),
     workspaceId: uuid("workspace_id"),
     userId: uuid("user_id"),
-    kind: text().notNull(), // llm | embed | ocr | vector | storage
-    task: text().notNull(), // chat, file.extract, file.categorize, file.index, upload, delete
+    kind: text().notNull(), // llm | embed | ocr | vector | storage | action (counts toward a limit, costs nothing itself)
+    task: text().notNull(), // chat, chat.message, file.extract, file.categorize, file.index, upload, delete
     model: text(),
     quantity: jsonb().notNull().$type<Record<string, number>>(), // tokens, pages, chars, bytes, calls
     costUsd: numeric("cost_usd", { precision: 18, scale: 10, mode: "number" }), // what we pay; null: unknown or free
@@ -187,5 +254,6 @@ export const usageEvents = pgTable(
     idem: text(), // the provider's id for the call (gateway:<generation id>): stored once
     meta: jsonb().$type<Record<string, unknown>>(), // counts and ids only, never client text
   },
-  (t) => [index().on(t.workspaceId, t.at), uniqueIndex().on(t.idem)],
+  // (user_id, at): a user's counters since midnight or the 1st (services/limits.ts)
+  (t) => [index().on(t.workspaceId, t.at), index().on(t.userId, t.at), uniqueIndex().on(t.idem)],
 );

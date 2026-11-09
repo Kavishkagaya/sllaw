@@ -10,6 +10,7 @@ import {
   ChevronRight,
   FileText,
   FolderInput,
+  Gauge,
   Landmark,
   Loader2,
   Plus,
@@ -327,12 +328,23 @@ export function Chat({
                       Researching…
                     </Step>
                   )}
-                  {error && (
-                    <Alert variant="destructive">
-                      <TriangleAlert />
-                      <AlertDescription>Something went wrong: {error.message}</AlertDescription>
-                    </Alert>
-                  )}
+                  {error &&
+                    (isLimit(error.message) ? (
+                      <Alert>
+                        <Gauge />
+                        <AlertDescription>
+                          {error.message}{" "}
+                          <Link href="/usage" className="font-medium underline underline-offset-4">
+                            See your usage
+                          </Link>
+                        </AlertDescription>
+                      </Alert>
+                    ) : (
+                      <Alert variant="destructive">
+                        <TriangleAlert />
+                        <AlertDescription>Something went wrong: {error.message}</AlertDescription>
+                      </Alert>
+                    ))}
                   <div ref={end} />
                 </div>
               </motion.div>
@@ -344,6 +356,7 @@ export function Chat({
             transition={SPRING}
             className={cn("mx-auto w-full px-4", empty ? "max-w-2xl" : "max-w-3xl pb-4")}
           >
+            <UsageHint status={status} />
             <Composer
               draftKey={fresh ? (caseId ? `new:${caseId}` : "new") : id}
               placeholder={caseId ? "Ask about this case…" : undefined}
@@ -707,4 +720,31 @@ function readFiles(o: unknown) {
   return o && typeof o === "object" && "files" in o && Array.isArray(o.files)
     ? (o.files as { file: string; chunks: { chunk: string }[] }[])
     : [];
+}
+
+/** A plan limit's message (the chat route's 429 text: services/limits rules.ts, limitMessage). */
+const isLimit = (m: string) => /^(You have|This case has|This file would)\b.* plan\b/.test(m);
+
+/** Above the box once a chat limit is 80% used: how much, and the way to /usage. Read again after each answer. */
+function UsageHint({ status }: { status: string }) {
+  const trpc = useTRPC();
+  const usage = useQuery(trpc.usage.mine.queryOptions());
+  const { refetch } = usage;
+  useEffect(() => {
+    if (status === "ready" || status === "error") void refetch();
+  }, [status, refetch]);
+  const near = usage.data?.limits
+    .filter((l) => l.kind === "counter" && l.max && l.used != null && l.used / l.max >= 0.8)
+    .sort((a, b) => b.used! / b.max! - a.used! / a.max!)[0];
+  if (!near) return null;
+  const pct = Math.min(100, Math.round((near.used! / near.max!) * 100));
+  return (
+    <p className="mb-2 flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
+      <Gauge className="size-3.5" />
+      {pct >= 100 ? "Used up" : `${pct}% used`}: {near.label.toLowerCase()}.{" "}
+      <Link href="/usage" className="font-medium text-foreground underline-offset-4 hover:underline">
+        Usage
+      </Link>
+    </p>
+  );
 }

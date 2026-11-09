@@ -326,7 +326,7 @@ in v1; an entity graph can be built later from the same per-file JSON.
   ref) around a chat turn and each file step and flushes the writes before the function ends. Checked 2026-11-03: a
   2-step streamed turn read after its scope closed is metered for its user (models.test.ts). Not metered: a chat step
   cut off by the stop button (no usage reported), stored bytes over time (a gauge: `files.size`, not events), law
-  search outside a chat (none exists). Plan limits are not enforced yet: pricing is not set. **Backfill (migration 0006, user, 2026-11-03):** every assistant message with
+  search outside a chat (none exists). Plan limits: see Limits (2026-11-09). **Backfill (migration 0006, user, 2026-11-03):** every assistant message with
   `usage` becomes one `llm` event (task chat, its chat's workspace and user, cost = gatewayCost, steps and generation
   ids kept, `meta.backfill`, idem `message:<id>`): one event per turn, not per step. Dev, 2026-11-03: 85 messages ->
   85 events, 5 workspaces, 6 users, $0.1262 and 2,239,013 input tokens, equal to the messages' sums; 15 assistant
@@ -341,6 +341,27 @@ in v1; an entity graph can be built later from the same per-file JSON.
   built on the server only for staff (passed into the client sidebar as a slot, so no client bundle names it);
   `user.me` leaves out `isAdmin`. Checked 2026-11-03 on the dev database with the test user: every admin procedure
   NOT_FOUND as a normal user, all answer as admin; signed out, `/admin/*` redirects to sign-in like any other path.
+- **Limits (user, 2026-11-09):** a plan is the **user's**, not the workspace's: one allowance per lawyer across all
+  their workspaces (each user has one hidden workspace today; seats for firms come later as `user_plans` rows with
+  `source = workspace:<id>`, so the check does not change). Workspaces stay as they are, no new features on them until
+  a firm asks. Two kinds of metric (`services/src/limits/rules.ts`, `METRICS`): **counters** from `usage_events`
+  (which outlive deleted chats and cases, so deleting gives nothing back), reset at Sri Lanka midnight or on the 1st:
+  `messages` (a new `action` event `chat.message` per message sent, idem `chat.message:<id>`), `tokens` and
+  `tokens_month` (chat model input + output, the `llm` events), `searches` (Zilliz calls in a chat turn: inside a chat
+  every vector call is a search); **caps** from the tables, what exists now: `case_files` (files in a case, checked
+  against the case author's plan) and `storage` (bytes of the files a user owns, pending uploads at their declared
+  size). No message or upload data is recorded twice. Config: `plans` (one `is_default`), `plan_limits` (no row =
+  no limit), `user_plans` (from/until, note, set by; the active row with the latest start wins, else the default),
+  `user_limits` (a user's own max in place of the plan's until it expires; null = unlimited); migration 0008 seeds
+  **Free**: 10 messages, 300k tokens a day, 4M tokens a month, 300 searches a day, 20 files per case, 1 GB. Checked
+  before a chat turn (`checkChat`: a turn that starts under a counter may end over it; two sent at once can both
+  pass) and before a case upload (`checkCaseUpload`); `LimitReached` is a 429 from the chat route and
+  `TOO_MANY_REQUESTS` from tRPC, its message for the user ("You have sent today's 10 messages on the Free plan...").
+  Platform staff are not limited. Plans are cached a minute per instance. UI: `/usage` (context today and this month
+  as bars with the limit marked, context per day this month with the daily limit as a line, the other limits), a
+  hint above the chat box from 80%, `/admin/plans` (edit each plan's limits, default, new plan) and on
+  `/admin/users/<id>` the user's plan (give with an end date, end), own limits and usage against each. Not done:
+  payments, seats, ad hoc attachments (a counter on `usage_events` when they exist).
 - **Drafting:** later. v1 documents are markdown.
 - **Users:** reach lawyers once a working base exists.
 

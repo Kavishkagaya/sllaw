@@ -69,6 +69,8 @@ usage: imported by ai, search, extract, services (it imports nothing of ours)
   middleware, embed, Zilliz, OCR), `withUsage(scope, fn)` in services around a chat turn or a file step (who it is
   for), `flushUsage()` before the function ends, and the sink services sets (`services/src/usage.ts` ->
   `usage_events`). The one package every other may import. Only usage that costs money or is priced; no analytics.
+  Kind `action` is a user action a plan limits (a message sent); the limits themselves are `services/src/limits`
+  (docs/APP.md, Limits).
 - **`api`**: tRPC routers, thin: input validation (zod), auth, one service call. No logic, no queries, no ai.
   Procedures by role: `signedUser`, `superAdmin`, `workspaceUser`, `workspaceAdmin`, `caseViewer`,
   `caseEditor`, `caseAuthor`, `chatViewer`, `chatOwner` (docs/APP.md, Access).

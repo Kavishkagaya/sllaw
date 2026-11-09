@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Breakdown, PeriodRange, PeriodTabs, periodParam, Section, Stat, Table } from "@/components/admin/parts";
+import { UserLimits } from "@/components/admin/user-limits";
 import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
 import { fmtDate, fmtNum, fmtSize, fmtUsd } from "@/lib/format";
@@ -45,6 +46,8 @@ export default async function AdminUserPage({
             <Stat label="Model calls" value={fmtNum(sum("llmCalls"))} />
             <Stat label="Files processed" value={fmtNum(sum("files"))} />
           </div>
+
+          <UserLimits userId={id} />
 
           <Section title="Workspaces" hint="Their role in each, and what they used there.">
             <Table

@@ -4,6 +4,7 @@ import { flushUsage, withUsage } from "@sllaw/usage";
 import type { Account } from "./accounts";
 import { agentCtx, caseFilesOf } from "./agent";
 import { caseOf } from "./cases";
+import { checkChat, meterMessage } from "./limits";
 import "./usage"; // metered usage goes to the database
 
 type Signed = Account & { workspace: NonNullable<Account["workspace"]> };
@@ -62,6 +63,7 @@ export async function sendMessage(
   const effective = stored ? stored.caseId : caseId;
   const theCase = effective ? await caseOf(a, effective) : null;
   if (effective && !theCase) return null;
+  await checkChat(a); // LimitReached: a daily or monthly counter is used up (the api answers 429)
   const title = message.parts
     .map((p) => p.text)
     .join(" ")
@@ -71,6 +73,7 @@ export async function sendMessage(
   if (chat.userId !== a.user.id || chat.workspaceId !== a.workspace.id || chat.caseId !== effective) return null;
   const history = await messagesOf(chatId);
   await saveMessages(chatId, [message]);
+  meterMessage(a, chatId, message.id); // written with the turn's other usage (flushUsage in onFinish)
   const ctx = agentCtx({
     workspaceId: a.workspace.id,
     userId: a.user.id,
