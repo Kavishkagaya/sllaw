@@ -36,6 +36,21 @@ CREATE INDEX IF NOT EXISTS kb_links_src_idx ON kb.links (src_doc);
 CREATE INDEX IF NOT EXISTS kb_links_src_chunk_idx ON kb.links (src_chunk);
 CREATE INDEX IF NOT EXISTS kb_links_dst_idx ON kb.links (dst_doc, dst_label);
 CREATE INDEX IF NOT EXISTS kb_links_dst_chunk_idx ON kb.links (dst_chunk);
+-- docs/LINKS.md (2026-11-09): kb.links holds resolved links only (one source, one destination); the citation each
+-- comes from is in kb.mentions (every citation as read, resolved or not, with why not)
+ALTER TABLE kb.links ADD COLUMN IF NOT EXISTS mention_id BIGINT, ADD COLUMN IF NOT EXISTS relation TEXT,
+    ADD COLUMN IF NOT EXISTS scope TEXT, ADD COLUMN IF NOT EXISTS law_form TEXT, ADD COLUMN IF NOT EXISTS confidence TEXT,
+    ADD COLUMN IF NOT EXISTS in_quote BOOLEAN, ADD COLUMN IF NOT EXISTS span TEXT, ADD COLUMN IF NOT EXISTS span_start INT,
+    ADD COLUMN IF NOT EXISTS span_end INT, ADD COLUMN IF NOT EXISTS sub TEXT, ADD COLUMN IF NOT EXISTS dst_type TEXT,
+    ADD COLUMN IF NOT EXISTS part TEXT, ADD COLUMN IF NOT EXISTS via_alias BOOLEAN;
+CREATE INDEX IF NOT EXISTS kb_links_mention_idx ON kb.links (mention_id);
+CREATE TABLE IF NOT EXISTS kb.mentions (id BIGINT PRIMARY KEY, src_doc TEXT NOT NULL REFERENCES kb.docs(key) ON DELETE CASCADE,
+    src_chunk BIGINT, kind TEXT NOT NULL, relation TEXT, scope TEXT, law_form TEXT, law_text TEXT, dst_type TEXT,
+    dst_doc TEXT, dst_name TEXT, unit TEXT, labels TEXT[], sub TEXT, in_quote BOOLEAN, confidence TEXT, via TEXT,
+    span TEXT, span_start INT, span_end INT, status TEXT, unresolved TEXT[], date DATE, context TEXT, ops JSONB);
+CREATE INDEX IF NOT EXISTS kb_mentions_src_idx ON kb.mentions (src_doc);
+CREATE INDEX IF NOT EXISTS kb_mentions_src_chunk_idx ON kb.mentions (src_chunk);
+CREATE INDEX IF NOT EXISTS kb_mentions_dst_idx ON kb.mentions (dst_doc);
 """
 
 
@@ -49,15 +64,15 @@ def date_sql(expr):
 
 
 def doc_state(cur):
-    """{key: fingerprint to publish}: the build fingerprint plus a hash of its links (so a relink republishes)."""
-    cur.execute("""SELECT d.key, coalesce(d.fingerprint, '') || '|' || coalesce(md5(string_agg(
-                     concat_ws(',', m.kind, coalesce(l.dst_doc, m.dst_doc), m.dst_label, l.dst_chunk::text, l.status), ';'
-                     ORDER BY m.id)), '')
-                   FROM docs d LEFT JOIN mentions m ON m.src_doc = d.key LEFT JOIN links l ON l.mention_id = m.id
-                   GROUP BY d.key, d.fingerprint""")
+    """{key: fingerprint to publish}: the build fingerprint plus a hash of its mentions and links (a relink
+    republishes only the documents whose citations or resolved targets changed)."""
+    cur.execute("""SELECT d.key, coalesce(d.fingerprint, '') || '|' || coalesce(md5(string_agg(concat_ws(',', m.kind,
+                     m.dst_doc, m.dst_name, array_to_string(m.labels, ' '), m.status, m.start_at, m.end_at, m.law_form,
+                     m.confidence, m.src_chunk::text), ';' ORDER BY m.src_chunk, m.start_at, m.kind, m.dst_doc, m.id)), '')
+                   FROM docs d LEFT JOIN mentions m ON m.src_doc = d.key GROUP BY d.key, d.fingerprint""")
     now = dict(cur.fetchall())
-    cur.execute("""SELECT m.src_doc, md5(string_agg(p.dst_chunk::text, ',' ORDER BY p.mention_id, p.dst_chunk))
-                   FROM part_links p JOIN mentions m ON m.id = p.mention_id GROUP BY 1""")
+    cur.execute("""SELECT src_doc, md5(string_agg(concat_ws(',', src_chunk::text, kind, dst_doc, dst_label, dst_chunk::text, part),
+                     ';' ORDER BY src_chunk, kind, dst_doc, dst_label, dst_chunk, part)) FROM links GROUP BY 1""")
     for k, h in cur.fetchall():
         now[k] = now.get(k, "") + "|" + h
     return now
@@ -124,20 +139,27 @@ def publish(state, apply=False):
         c.execute(f"""INSERT INTO kb.chunks (id, uuid, doc_key, address, seq, label, kind, path, part, text_hash)
                       SELECT {vid_sql("c.id")}, c.id, c.doc_key, c.address, c.seq, c.label, c.kind, c.crumb, c.part, c.text_hash
                       FROM chunks c JOIN pub ON pub.key = c.doc_key""")
-        c.execute(f"""INSERT INTO kb.links (src_doc, src_chunk, kind, dst_doc, dst_label, dst_chunk, status, date, context, detail)
-                      SELECT m.src_doc, {vid_sql("m.src_chunk")}, m.kind, coalesce(l.dst_doc, m.dst_doc), m.dst_label,
-                             {vid_sql("l.dst_chunk")}, l.status, k.commenced, m.context, m.detail
-                      FROM mentions m JOIN pub ON pub.key = m.src_doc JOIN kb.docs k ON k.key = m.src_doc
-                      LEFT JOIN links l ON l.mention_id = m.id
-                      WHERE coalesce(l.dst_doc, m.dst_doc) IS NOT NULL   -- a target law never identified: nothing to show
-                      UNION ALL   -- a repealed Part or Chapter: a link to each section under it
-                      SELECT m.src_doc, {vid_sql("m.src_chunk")}, m.kind, p.dst_doc, p.dst_label, {vid_sql("p.dst_chunk")},
+        c.execute(f"""INSERT INTO kb.mentions (id, src_doc, src_chunk, kind, relation, scope, law_form, law_text, dst_type,
+                                             dst_doc, dst_name, unit, labels, sub, in_quote, confidence, via, span,
+                                             span_start, span_end, status, unresolved, date, context, ops)
+                      SELECT m.id, m.src_doc, {vid_sql("m.src_chunk")}, m.kind, m.relation, m.scope, m.law_form, m.law_text,
+                             m.dst_type, m.dst_doc, m.dst_name, m.unit, m.labels, m.sub, m.in_quote, m.confidence, m.via,
+                             m.span, m.start_at, m.end_at, m.status, m.unresolved, k.commenced, m.context, m.ops
+                      FROM mentions m JOIN pub ON pub.key = m.src_doc JOIN kb.docs k ON k.key = m.src_doc""")
+        c.execute(f"""INSERT INTO kb.links (src_doc, src_chunk, kind, dst_doc, dst_label, dst_chunk, status, date, context, detail,
+                                          mention_id, relation, scope, law_form, confidence, in_quote, span, span_start,
+                                          span_end, sub, dst_type, part, via_alias)
+                      SELECT l.src_doc, {vid_sql("l.src_chunk")}, l.kind, l.dst_doc, l.dst_label, {vid_sql("l.dst_chunk")},
                              'resolved', k.commenced, m.context,
-                             coalesce(m.detail, '{{}}'::jsonb) || jsonb_build_object('part', m.dst_label)
-                      FROM part_links p JOIN mentions m ON m.id = p.mention_id JOIN pub ON pub.key = m.src_doc
-                      JOIN kb.docs k ON k.key = m.src_doc
+                             coalesce(m.detail, '{{}}'::jsonb) || CASE WHEN l.part IS NULL THEN '{{}}'::jsonb
+                                                                       ELSE jsonb_build_object('part', l.part) END,
+                             m.id, m.relation, m.scope, m.law_form, m.confidence, m.in_quote, m.span, m.start_at, m.end_at,
+                             m.sub, m.dst_type, l.part, l.via_alias
+                      FROM links l JOIN mentions m ON m.id = l.mention_id JOIN pub ON pub.key = l.src_doc
+                      JOIN kb.docs k ON k.key = l.src_doc
                       UNION ALL   -- editions and old laws that are the same law (etl.graph link), as v1 published them
-                      SELECT s.a, NULL, 'same_as', s.b, NULL, NULL, 'resolved', NULL, NULL, NULL
+                      SELECT s.a, NULL, 'same_as', s.b, NULL, NULL, 'resolved', NULL, NULL, NULL,
+                             NULL, 'same_as', 'whole_law', NULL, 'high', NULL, NULL, NULL, NULL, NULL, 'law', NULL, NULL
                       FROM same_as s JOIN pub ON pub.key = s.a""")
         c.execute("""INSERT INTO published (key, fingerprint) SELECT key, fingerprint FROM pub
                      ON CONFLICT (key) DO UPDATE SET fingerprint = EXCLUDED.fingerprint, at = NOW()""")

@@ -373,6 +373,11 @@ unchanged. All 7,336 documents built in memory in 276 s (16 workers), 0 failed, 
 
 ## Stage 6: links
 
+- **2026-11-09: mentions + resolved links (docs/LINKS.md).** The links stage reads `etl/mentions.py` (one mention per
+  citation: span, relation, scope, law form, provisions, confidence); `links` holds resolved edges only (one source
+  chunk -> one destination; `part_links` folded in); `kb.mentions` is new. Links 89,841 -> 128,670 resolved (33,210
+  same-law), gold 210/210. The text below describes the shape before this change.
+
 - How it works today (read 2026-11-07, `etl/refs.py`, `etl/docs.py`): per document, `refs.links()` runs regexes over
   each chunk's text in order and resolves the target law at once: a number ("Act, No. 5 of 1990") and a chapter
   ("(Chapter 26)") from the text alone, "the principal enactment" from the document's own "hereinafter referred to

@@ -80,35 +80,64 @@ CREATE TABLE IF NOT EXISTS chunks (
 CREATE INDEX IF NOT EXISTS chunks_doc_idx ON chunks (doc_key, seq);
 CREATE INDEX IF NOT EXISTS chunks_label_idx ON chunks (doc_key, label);
 
--- Stage 6: mentions read once per document (outward); links are mentions resolved inside the database
+-- Stage 6 (docs/LINKS.md): mentions = every citation as read, one row per span of text (etl/mentions.py), resolved or
+-- not; links = resolved edges only, one source chunk -> one destination (a chunk, or the law for a whole-law
+-- citation), built from mentions by `resolve`. A repealed Part gives one link per section under it (`part`).
 CREATE TABLE IF NOT EXISTS mentions (
     id            BIGSERIAL PRIMARY KEY,
     src_doc       TEXT NOT NULL REFERENCES docs(key) ON DELETE CASCADE,
     src_chunk     UUID REFERENCES chunks(id) ON DELETE CASCADE,
-    kind          TEXT NOT NULL,                 -- amends | inserts | replaces | repeals | cites | ...
-    dst_doc       TEXT,                          -- the target law's key when the text names its number
-    dst_name      TEXT,                          -- or its name, resolved in the database
-    dst_label     TEXT,
+    kind          TEXT NOT NULL,                 -- relation, plus _act for a whole law (amends_act, repeals_act)
+    dst_doc       TEXT,                          -- the law cited (null: not identified, see dst_name)
+    dst_name      TEXT,
+    dst_label     TEXT,                          -- the provision when there is exactly one (else see labels)
     context       TEXT,
     detail        JSONB
 );
+ALTER TABLE mentions
+    ADD COLUMN IF NOT EXISTS start_at     INT,            -- character offsets in the chunk text (R2)
+    ADD COLUMN IF NOT EXISTS end_at       INT,
+    ADD COLUMN IF NOT EXISTS span         TEXT,           -- the text at those offsets
+    ADD COLUMN IF NOT EXISTS relation     TEXT,           -- amends|inserts|replaces|repeals|rescinds|made_under|consolidates|cites
+    ADD COLUMN IF NOT EXISTS scope        TEXT,           -- provision|part|schedule|title|whole_law
+    ADD COLUMN IF NOT EXISTS law_form     TEXT,           -- number|chapter|name|principal|defined|anaphora|this_law|constitution|amendment|gazette|statute
+    ADD COLUMN IF NOT EXISTS law_text     TEXT,
+    ADD COLUMN IF NOT EXISTS dst_type     TEXT,           -- law|constitution|amendment|gazette|statute|self
+    ADD COLUMN IF NOT EXISTS unit         TEXT,           -- section|article|schedule|part|chapter|title
+    ADD COLUMN IF NOT EXISTS labels       TEXT[],         -- every provision named, ranges expanded
+    ADD COLUMN IF NOT EXISTS sub          TEXT,           -- "(2)(a)"
+    ADD COLUMN IF NOT EXISTS in_quote     BOOLEAN,        -- inside quoted text an amendment inserts
+    ADD COLUMN IF NOT EXISTS confidence   TEXT,           -- high|medium|low, by rule
+    ADD COLUMN IF NOT EXISTS via          TEXT,           -- the pattern that read it
+    ADD COLUMN IF NOT EXISTS ops          JSONB,          -- the edits of a change
+    ADD COLUMN IF NOT EXISTS status       TEXT,           -- resolve: resolved|partial|inserted|label_not_found|not_held|unidentified
+    ADD COLUMN IF NOT EXISTS unresolved   TEXT[],         -- resolve: the labels that gave no link
+    ADD COLUMN IF NOT EXISTS refs_version TEXT;
 CREATE INDEX IF NOT EXISTS mentions_dst_idx ON mentions (dst_doc, dst_label);
 CREATE INDEX IF NOT EXISTS mentions_src_idx ON mentions (src_doc);
+-- the links table before 2026-11-09 was one row per mention with a status (unresolved ones too): replaced
+DO $$ BEGIN
+    IF EXISTS (SELECT 1 FROM information_schema.columns
+               WHERE table_schema = current_schema() AND table_name = 'links' AND column_name = 'status') THEN
+        DROP TABLE links;
+    END IF;
+END $$;
+DROP TABLE IF EXISTS part_links;
 CREATE TABLE IF NOT EXISTS links (
-    mention_id    BIGINT PRIMARY KEY REFERENCES mentions(id) ON DELETE CASCADE,
-    dst_doc       TEXT,
-    dst_chunk     UUID,
-    status        TEXT NOT NULL                  -- resolved | label_not_found | target_not_held
-);
-
--- a repealed Part or Chapter: one row per section under it (resolve fills it; issue #9, as etl.docs did)
-CREATE TABLE IF NOT EXISTS part_links (
+    id            BIGSERIAL PRIMARY KEY,
     mention_id    BIGINT NOT NULL REFERENCES mentions(id) ON DELETE CASCADE,
-    dst_doc       TEXT NOT NULL,
-    dst_label     TEXT NOT NULL,
-    dst_chunk     UUID NOT NULL,
-    PRIMARY KEY (mention_id, dst_chunk)
+    src_doc       TEXT NOT NULL,
+    src_chunk     UUID,                          -- null: the long title
+    kind          TEXT NOT NULL,
+    dst_doc       TEXT NOT NULL,                 -- the document reached (the law cited, or its same_as twin)
+    dst_label     TEXT,                          -- null: the whole law
+    dst_chunk     UUID,                          -- null only for a whole law
+    part          TEXT,                          -- from a repealed Part / Chapter: the Part named
+    via_alias     BOOLEAN NOT NULL DEFAULT false
 );
+CREATE INDEX IF NOT EXISTS links_src_idx ON links (src_doc);
+CREATE INDEX IF NOT EXISTS links_mention_idx ON links (mention_id);
+CREATE INDEX IF NOT EXISTS links_dst_idx ON links (dst_doc, dst_label);
 
 -- the builder's own feedback, per document and stage (etl/v2/checks.py)
 CREATE TABLE IF NOT EXISTS issues (

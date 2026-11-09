@@ -260,7 +260,11 @@ def load_names(cur):
 
 
 def refs_version():
-    return hashlib.sha1(open(os.path.join(HERE, "..", "refs.py"), "rb").read()).hexdigest()[:12]
+    """The link readers' code: etl/refs.py (patterns) and etl/mentions.py (mentions); a change relinks everything."""
+    h = hashlib.sha1()
+    for f in ("refs.py", "mentions.py"):
+        h.update(open(os.path.join(HERE, "..", f), "rb").read())
+    return h.hexdigest()[:12]
 
 
 def plan_links(keys=None):
@@ -274,9 +278,9 @@ def plan_links(keys=None):
 
 
 def do_links(c, key, fp=None):
-    """A document's mentions, read once from its chunk text (etl.refs), replacing the ones it had. A law named
-    without a number that no held title matches stays a mention by name (dst_name): `resolve` tries it again."""
-    from etl import refs
+    """A document's mentions (etl/mentions.py, docs/LINKS.md): every citation in its chunk text, one row per span,
+    replacing the ones it had. Which chunk each provision is, is `resolve`'s job."""
+    from etl import mentions as M
     with c.cursor() as cur:
         cur.execute("SELECT parts, meta->>'long_title' FROM docs WHERE key = %s", (key,))
         parts, lt = cur.fetchone()
@@ -284,26 +288,34 @@ def do_links(c, key, fp=None):
     for p in parts or []:
         for ch in B.get_json(p)["chunks"]:
             text[ch["id"]] = ch["text"]
+    rv = refs_version()
     with c.cursor() as cur:
         cur.execute("SELECT id::text FROM chunks WHERE doc_key = %s ORDER BY seq", (key,))
         ids = [r[0] for r in cur.fetchall()]
         texts = [text.get(i, "") for i in ids]
-        unresolved = []
-        rows = [(key, None if i is None else ids[i], kind, dst, None, label, (ctx or "")[:300] or None, Json(det))
-                for i, kind, dst, label, ctx, det in refs.links(key, lt, texts, unresolved)]
-        rows += [(key, None, "cites", None, phrase[:300], None, phrase[:300], Json({"keys_tried": tried}))
-                 for phrase, tried in unresolved]
+        rows = []
+        for r in M.mentions(key, lt, texts):
+            labs = r["labels"] or []
+            rows.append((key, None if r["i"] is None else ids[r["i"]], M.kind_of(r), r["dst_doc"], r["dst_name"],
+                         labs[0] if len(labs) == 1 else None, (r["context"] or "")[:300] or None,
+                         Json({"via": r["via"], **({"ops": r["ops"]} if r["ops"] else {})}),
+                         r["start"], r["end"], (r["span"] or "")[:300], r["relation"], r["scope"], r["law_form"],
+                         (r["law_text"] or "")[:200] or None, r["dst_type"], r["unit"], labs, r["sub"], r["in_quote"],
+                         r["confidence"], r["via"], Json(r["ops"]) if r["ops"] else None, rv))
         cur.execute("DELETE FROM mentions WHERE src_doc = %s", (key,))
         if rows:
-            execute_values(cur, """INSERT INTO mentions (src_doc, src_chunk, kind, dst_doc, dst_name, dst_label, context, detail)
-                                   VALUES %s""", rows, page_size=1000)
+            execute_values(cur, """INSERT INTO mentions (src_doc, src_chunk, kind, dst_doc, dst_name, dst_label, context, detail,
+                                   start_at, end_at, span, relation, scope, law_form, law_text, dst_type, unit, labels, sub,
+                                   in_quote, confidence, via, ops, refs_version) VALUES %s""", rows, page_size=1000)
     c.commit()
-    return {"mentions": len(rows), "by_name_unresolved": len(unresolved)}
+    return {"mentions": len(rows), "unidentified": sum(1 for r in rows if r[3] is None)}
 
 
 def resolve():
-    """Mentions -> links, in the database: the target document (or a same_as twin) and its first chunk with the
-    label. One worker at a time (a lease row); everything is recomputed in SQL, which is cheap (no text read)."""
+    """Mentions -> links (resolved edges only), in the database: each provision a mention names -> the first chunk
+    with that label in the cited law or a same_as twin; a whole-law citation -> the law; a repealed Part/Chapter -> one
+    link per section under it. Then each mention's status says what did not resolve. One worker at a time (a lease
+    row); everything is recomputed in SQL (no text read)."""
     with db() as c:
         if not W.singleton(c, "resolve"):
             print("another worker is resolving")
@@ -311,39 +323,76 @@ def resolve():
         with c.cursor() as cur:
             cur.execute("TRUNCATE links")
             cur.execute("""CREATE TEMP TABLE alias AS SELECT a, b FROM same_as UNION SELECT b, a FROM same_as""")
-            cur.execute("""INSERT INTO links (mention_id, dst_doc, dst_chunk, status)
-                           SELECT m.id, coalesce(t.doc, m.dst_doc), t.chunk,
-                             CASE WHEN t.chunk IS NOT NULL THEN 'resolved'
-                                  WHEN m.dst_doc IS NULL THEN 'target_not_held'
-                                  WHEN EXISTS (SELECT 1 FROM docs d WHERE d.key = m.dst_doc)
-                                    OR EXISTS (SELECT 1 FROM alias x JOIN docs d ON d.key = x.b WHERE x.a = m.dst_doc)
-                                  THEN (CASE WHEN m.dst_label IS NULL THEN 'resolved' ELSE 'label_not_found' END)
-                                  ELSE 'target_not_held' END
-                           FROM mentions m
-                           LEFT JOIN LATERAL (
-                             SELECT c.doc_key doc, c.id chunk FROM chunks c
-                             WHERE m.dst_label IS NOT NULL AND c.label = m.dst_label
-                               AND (c.doc_key = m.dst_doc OR c.doc_key IN (SELECT b FROM alias WHERE a = m.dst_doc))
-                             ORDER BY c.doc_key <> m.dst_doc, c.seq LIMIT 1) t ON TRUE""")
-            # a repealed Part or Chapter: one row per section under it, from the target, else the first same_as twin
+            cur.execute("CREATE INDEX ON alias (a)")
+            # one row per provision named (a whole-law citation: one row, label null)
+            cur.execute("""CREATE TEMP TABLE tg AS
+                           SELECT m.id, m.src_doc, m.src_chunk, m.kind, m.dst_doc, t.label
+                           FROM mentions m CROSS JOIN LATERAL unnest(CASE WHEN cardinality(m.labels) > 0 THEN m.labels
+                                                                         ELSE ARRAY[NULL::text] END) t(label)
+                           WHERE m.dst_doc IS NOT NULL""")
+            # the documents each one may be in: the law cited first, then its same_as twins (joins, not an OR, so
+            # the (doc_key, label) index is used: the OR form ran over 6 minutes, 2026-11-09)
+            cur.execute("""CREATE TEMP TABLE cand AS
+                           SELECT tg.id, tg.label, tg.dst_doc doc, 0 pref FROM tg
+                           UNION ALL SELECT tg.id, tg.label, x.b, 1 FROM tg JOIN alias x ON x.a = tg.dst_doc""")
+            cur.execute("ANALYZE tg; ANALYZE cand")
+            cur.execute("""INSERT INTO links (mention_id, src_doc, src_chunk, kind, dst_doc, dst_label, dst_chunk, via_alias)
+                           SELECT DISTINCT ON (tg.id, tg.label) tg.id, tg.src_doc, tg.src_chunk, tg.kind, c.doc_key,
+                                  tg.label, c.id, c.doc_key <> tg.dst_doc
+                           FROM tg JOIN cand k ON k.id = tg.id AND k.label = tg.label
+                           JOIN chunks c ON c.doc_key = k.doc AND c.label = tg.label
+                           WHERE tg.label IS NOT NULL
+                           ORDER BY tg.id, tg.label, k.pref, c.seq""")
+            cur.execute("""INSERT INTO links (mention_id, src_doc, src_chunk, kind, dst_doc, dst_label, dst_chunk, via_alias)
+                           SELECT DISTINCT ON (tg.id) tg.id, tg.src_doc, tg.src_chunk, tg.kind, d.key, NULL, NULL, d.key <> tg.dst_doc
+                           FROM tg JOIN cand k ON k.id = tg.id AND k.label IS NULL JOIN docs d ON d.key = k.doc
+                           WHERE tg.label IS NULL
+                           ORDER BY tg.id, k.pref, d.key""")
+            # a repealed Part or Chapter: one link per section under it, from the target, else the first same_as twin
             # that has that Part (addresses are key/scope/label/..., so the scope is in the address)
-            cur.execute("TRUNCATE part_links")
-            cur.execute("""INSERT INTO part_links (mention_id, dst_doc, dst_label, dst_chunk)
-                           WITH m AS (SELECT id, dst_doc, dst_label FROM mentions
-                                      WHERE kind = 'repeals' AND dst_doc IS NOT NULL
-                                        AND dst_label ~ '^(Part|Chapter) [IVXL]+[A-Z]?$'),
+            cur.execute("""INSERT INTO links (mention_id, src_doc, src_chunk, kind, dst_doc, dst_label, dst_chunk, part, via_alias)
+                           WITH m AS (SELECT id, src_doc, src_chunk, kind, dst_doc, label FROM tg
+                                      WHERE kind = 'repeals' AND label ~ '^(Part|Chapter) [IVXL]+[A-Z]?$'),
                            hit AS (SELECT m.id, x.doc, x.pref, c.label, c.id chunk, c.seq FROM m
                                    CROSS JOIN LATERAL (SELECT m.dst_doc doc, 0 pref UNION ALL
                                                        SELECT b, 1 FROM alias WHERE a = m.dst_doc) x
                                    JOIN chunks c ON c.doc_key = x.doc AND c.label IS NOT NULL AND c.kind = 'unit'
-                                                AND c.address LIKE x.doc || '/' || m.dst_label || '/%'),
-                           best AS (SELECT DISTINCT ON (id) id, doc FROM hit ORDER BY id, pref, doc)
-                           SELECT DISTINCT ON (h.id, h.label) h.id, h.doc, h.label, h.chunk
-                           FROM best b JOIN hit h ON h.id = b.id AND h.doc = b.doc ORDER BY h.id, h.label, h.seq""")
-            cur.execute("SELECT status, count(*) FROM links GROUP BY 1 ORDER BY 2 DESC")
+                                                AND c.address LIKE x.doc || '/' || m.label || '/%%'),
+                           best AS (SELECT DISTINCT ON (id) id, doc FROM hit ORDER BY id, pref, doc),
+                           one AS (SELECT DISTINCT ON (h.id, h.label) h.id, h.doc, h.label, h.chunk
+                                   FROM best b JOIN hit h ON h.id = b.id AND h.doc = b.doc ORDER BY h.id, h.label, h.seq)
+                           SELECT DISTINCT ON (one.id, one.label) one.id, m.src_doc, m.src_chunk, m.kind, one.doc, one.label,
+                                  one.chunk, m.label, one.doc <> m.dst_doc
+                           FROM one JOIN m ON m.id = one.id ORDER BY one.id, one.label""")
+            # each mention: what resolved, what did not and why
+            cur.execute("""CREATE TEMP TABLE lk AS SELECT DISTINCT mention_id, coalesce(part, dst_label) lab FROM links""")
+            cur.execute("""CREATE TEMP TABLE ins AS SELECT DISTINCT k.doc, k.label lab FROM tg JOIN cand k ON k.id = tg.id
+                           AND k.label IS NOT DISTINCT FROM tg.label WHERE tg.kind = 'inserts' AND tg.label IS NOT NULL""")
+            cur.execute("""CREATE TEMP TABLE heldk AS SELECT DISTINCT tg.dst_doc doc FROM tg JOIN cand k ON k.id = tg.id
+                           JOIN docs d ON d.key = k.doc""")
+            cur.execute("""CREATE INDEX ON lk (mention_id); CREATE INDEX ON ins (doc, lab); CREATE INDEX ON heldk (doc);
+                           ANALYZE lk; ANALYZE ins; ANALYZE heldk""")
+            cur.execute("""WITH per AS (SELECT m.id, m.dst_doc, count(*) n, count(lk.mention_id) ok,
+                                          array_agg(t.lab) FILTER (WHERE lk.mention_id IS NULL AND t.lab IS NOT NULL) unres,
+                                          bool_and(lk.mention_id IS NOT NULL OR EXISTS (SELECT 1 FROM ins
+                                                   WHERE ins.doc = m.dst_doc AND ins.lab = t.lab)) all_ins
+                                   FROM mentions m CROSS JOIN LATERAL unnest(CASE WHEN cardinality(m.labels) > 0 THEN m.labels
+                                                                                 ELSE ARRAY[NULL::text] END) t(lab)
+                                   LEFT JOIN lk ON lk.mention_id = m.id AND lk.lab IS NOT DISTINCT FROM t.lab
+                                   GROUP BY m.id, m.dst_doc)
+                           UPDATE mentions m SET
+                             status = CASE WHEN p.dst_doc IS NULL THEN 'unidentified'
+                                           WHEN p.ok = p.n THEN 'resolved'
+                                           WHEN NOT EXISTS (SELECT 1 FROM heldk h WHERE h.doc = p.dst_doc) THEN 'not_held'
+                                           WHEN p.ok > 0 THEN 'partial'
+                                           WHEN p.all_ins THEN 'inserted'
+                                           ELSE 'label_not_found' END,
+                             unresolved = CASE WHEN p.ok = p.n THEN NULL ELSE p.unres END
+                           FROM per p WHERE p.id = m.id""")
+            cur.execute("SELECT status, count(*) FROM mentions GROUP BY 1 ORDER BY 2 DESC")
             st = cur.fetchall()
-            cur.execute("SELECT count(*), count(DISTINCT mention_id) FROM part_links")
-            print("links:", st, "| sections under repealed Parts/Chapters: %d from %d mentions" % cur.fetchone())
+            cur.execute("SELECT count(*), count(*) FILTER (WHERE part IS NOT NULL), count(*) FILTER (WHERE dst_doc = src_doc) FROM links")
+            print("mentions:", st, "| links: %d (from repealed Parts/Chapters %d, same-law %d)" % cur.fetchone())
         c.commit()
         W.release(c, "resolve")
 
@@ -354,21 +403,31 @@ def gold_links():
     g = json.load(open(os.path.join(HERE, "..", "gold_links.json")))
     n, bad = {}, []
     with db() as c, c.cursor() as cur:
+        def has(src, kind, dst, label):
+            """A mention of src (of that kind, or any kind when None) citing one of dst at label (None: whole law)."""
+            lab = [label] if label else []
+            cur.execute("""SELECT 1 FROM mentions WHERE src_doc = %s AND (%s IS NULL OR kind = %s) AND dst_doc = ANY(%s)
+                           AND labels @> %s::text[] AND (%s OR cardinality(labels) = 0)
+                           UNION ALL SELECT 1 FROM links WHERE src_doc = %s AND (%s IS NULL OR kind = %s)
+                           AND dst_doc = ANY(%s) AND dst_label = %s AND part IS NOT NULL""",
+                        (src, kind, kind, dst, lab, bool(lab), src, kind, kind, dst, label))
+            return cur.fetchone() is not None
+
         for x in g:
             if x["kind"] == "same_as":
                 cur.execute("SELECT 1 FROM same_as WHERE (a = %s AND b = ANY(%s)) OR (b = %s AND a = ANY(%s))",
                             (x["src"], x["dst"], x["src"], x["dst"]))
+                ok = cur.fetchone() is not None
             else:
-                cur.execute("""SELECT 1 FROM mentions WHERE src_doc = %s AND kind = %s AND dst_doc = ANY(%s)
-                               AND dst_label IS NOT DISTINCT FROM %s
-                               UNION ALL SELECT 1 FROM part_links p JOIN mentions m ON m.id = p.mention_id
-                               WHERE m.src_doc = %s AND m.kind = %s AND p.dst_doc = ANY(%s) AND p.dst_label = %s""",
-                            (x["src"], x["kind"], x["dst"], x["label"]) * 2)
-            ok = cur.fetchone() is not None
-            if ok and x.get("was") and x["kind"] != "same_as":
-                cur.execute("""SELECT 1 FROM mentions WHERE src_doc = %s AND kind = %s AND dst_doc = %s
-                               AND dst_label IS NOT DISTINCT FROM %s""", (x["src"], x["kind"], *x["was"]))
-                ok = cur.fetchone() is None
+                ok = has(x["src"], x["kind"], x["dst"], x["label"])
+                # a "cites" the old reader wrote beside the change link of the same provision is that one mention now;
+                # a whole-law "cites" beside a provision of that law ("Article 79 of the Constitution") is that provision's
+                if not ok and x["kind"] == "cites":
+                    cur.execute("SELECT 1 FROM mentions WHERE src_doc = %s AND dst_doc = ANY(%s) AND (%s OR labels @> %s::text[])",
+                                (x["src"], x["dst"], x["label"] is None, [x["label"]] if x["label"] else []))
+                    ok = cur.fetchone() is not None
+                if ok and x.get("was"):
+                    ok = not has(x["src"], x["kind"], [x["was"][0]], x["was"][1])
             t = n.setdefault(x["kind"], [0, 0])
             t[0] += ok
             t[1] += 1
