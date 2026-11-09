@@ -1,4 +1,4 @@
-import { aliasedTable, and, asc, eq, ilike, inArray, like, sql } from "drizzle-orm";
+import { aliasedTable, and, asc, eq, ilike, inArray, like, ne, sql } from "drizzle-orm";
 import { db } from "./client";
 import { chunks, docs, links } from "./schema";
 import { partTexts } from "./text";
@@ -98,7 +98,8 @@ export async function linksOf(
         : eq(links.srcDoc, docKey)
       : chunkId != null
         ? eq(links.dstChunk, chunkId)
-        : eq(links.dstDoc, docKey);
+        : // what refers to a law from outside it: its own "under section 12" links (docs/LINKS.md) stay out
+          and(eq(links.dstDoc, docKey), ne(links.srcDoc, docKey));
   return db
     .select()
     .from(links)
