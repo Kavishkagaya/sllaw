@@ -28,6 +28,7 @@ apps/web → api → services → db
                           → extract
                           → ai  (ports: services fills them in ctx when it runs an agent)
 usage: imported by ai, search, extract, services (it imports nothing of ours)
+office: imported by db, ai, services, api, apps/web (pure: the case office's schema and operations; imports nothing of ours)
 ```
 
 - **`db`**: the app's own database (`DATABASE_URL`: database `app` in Neon sllaw-app, beside the corpus in `neondb`):
@@ -71,6 +72,11 @@ usage: imported by ai, search, extract, services (it imports nothing of ours)
   `usage_events`). The one package every other may import. Only usage that costs money or is priced; no analytics.
   Kind `action` is a user action a plan limits (a message sent); the limits themselves are `services/src/limits`
   (docs/APP.md, Limits).
+- **`office`**: the case office (docs/APP.md, Case office): the zod schema of a case's office document (header,
+  people, dates, tasks, widgets from the fixed catalog), the operations the page and the agent apply (`apply`), the
+  item-level diff and `restore` (undo), and date helpers (next date, waiting outcomes, Colombo today). Pure, like
+  `usage`: every layer may import it; the web app imports it for types and date logic only (data still goes through
+  `api`).
 - **`api`**: tRPC routers, thin: input validation (zod), auth, one service call. No logic, no queries, no ai.
   Procedures by role: `signedUser`, `superAdmin`, `workspaceUser`, `workspaceAdmin`, `caseViewer`,
   `caseEditor`, `caseAuthor`, `chatViewer`, `chatOwner` (docs/APP.md, Access).

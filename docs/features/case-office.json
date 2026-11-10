@@ -113,6 +113,7 @@
   ],
   "progress": [
     {"date": "2026-11-10", "note": "Scoped with the user in 3 rounds; agreed; issue #43; worktree ../sllaw-case-office on app/case-office; Neon branch agent/case-office."},
-    {"date": "2026-11-10", "note": "Built d1-d9: office package, tables (migration 0009 on the agent branch), services, api, agent tools, dashboard UI, Home diary, chat change card. Headed browser: s1, s2 (phone), s3 (agent table + task, undo) pass; agent leaking file handles (f4) into widgets found and fixed in the prompt. Next: s5 (prompt injection from a file), s4 with several cases, d10 docs, then /validate."}
+    {"date": "2026-11-10", "note": "Built d1-d9: office package, tables (migration 0009 on the agent branch), services, api, agent tools, dashboard UI, Home diary, chat change card. Headed browser: s1, s2 (phone), s3 (agent table + task, undo) pass; agent leaking file handles (f4) into widgets found and fixed in the prompt. Next: s5 (prompt injection from a file), s4 with several cases, d10 docs, then /validate."},
+    {"date": "2026-11-10", "note": "UI polished (user, frontend-design skill); question box floats at the page foot (user). New case briefed only in chat: the agent filled header, date and 10 tasks; fixed its jargon ('case office', 'header') and a guessed 'partition'. s5: a letter telling the assistant to delete tasks and the next date was refused and flagged, nothing changed. s4: Home shows today's and Thursday's dates across cases and the overdue task. d10: APP.md and app/CLAUDE.md. Next: /validate."}
   ]
 }
