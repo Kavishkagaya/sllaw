@@ -499,3 +499,54 @@ Share of the 890 parsed Acts whose chunk text contains each element. These are *
 | Savings / transitional | 13.5% | TABLE, Division, Sub-Part | ≤0.1% each |
 
 No APPENDIX or ANNEX headings were found in the parsed Acts. The variety is real but long-tailed: a handful of element types cover nearly everything, and the rest are rare.
+
+## v1 operations (moved from CLAUDE.md 2026-11-10; v1 retired by Pipeline v2 on 2026-11-08)
+
+Kept as it was written, for history. The current map is CLAUDE.md; v2 runs from docs/PIPELINE_V2.md.
+
+### Setup (ada or local)
+
+```bash
+git clone https://github.com/Kavishkagaya/sllaw.git && cd sllaw
+python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
+cp .env.example .env                     # fill DATABASE_URL and R2_*
+.venv/bin/python3 etl/migrate.py         # apply pending migrations (--status to list)
+.venv/bin/python3 -m etl.fetch acts --limit 20   # pilot: 20 files into R2
+.venv/bin/python3 -m etl.fetch acts              # everything; re-run to resume or retry
+
+# step 2 on ada (see below): docling for text layers; scans go to a LightOn vLLM server (etl/ocr_ada.sh)
+.venv/bin/python3 -m etl.extract --no-ocr --limit 20                          # text-layer files only
+.venv/bin/python3 -m etl.extract --limit 50 --ocr-api http://localhost:8013/v1   # scans too
+```
+
+Fetching and extraction run on **ada**, never locally: no source files on this machine. Use the `/ada-ssh` skill.
+
+**ada (10.40.18.12) was down 2026-10-18 to ~10-30; back up on 2026-11-01** (up 2 days, 64 threads, 503 GB, 3 GPUs; `/var/tmp/e19309` intact: venvs, models, and the pre-10-18 `pgdata`, which is stale: the current DB is on ampere). **ada does the heavy work, ampere keeps the DB** (2026-11-01): tmux `adalink` on ampere holds `ssh -N -R 5433:localhost:5433 e19309@10.40.18.12` (password login, no keys), so `DB_LOCAL_URL` on ada reaches ampere's Postgres; never start ada's own stale Postgres. If ampere reboots or `adalink` dies, restart it by hand on ampere. `etl.fetch acts --limit 5` from ada worked (2 new files). **The work
+host is now ampere** (10.40.18.10, DNS `ibm`; `ssh ampere`, ProxyJump tesla; same LDAP login): 32 threads, 125 GB, 2× RTX
+A6000 48 GB, shared and busy. Same paths: `/var/tmp/e19309` is per host, `~/sllaw` is the shared NFS home. No pip there:
+`/var/tmp/e19309/bin/uv` (0.8.0) built `etl_venv` (boto3, psycopg2, dotenv, pgserver: fetch, structure, graph, docs,
+publish); `gpu_venv` (torch 2.6, bge-m3 for `EMBED_LOCAL=1`) and `lighton_venv` (vLLM 0.31.0+cu129, `etl/lighton_setup.sh`, 2026-10-20) are built. Other hosts: turing .3 (RTX 3090 Ti), tesla .7 (no GPU), kepler .9
+(K40c, too old). Everything below that says ada now means the work host.
+
+- ada: 3× NVIDIA RTX 6000 Ada (49 GB each), **shared with other users**: check `nvidia-smi` and pick the idle card. Project dir `~/sllaw/`. There is no conda env and no sudo.
+- **`/var/tmp/e19309` survives reboots; `/tmp` does not** (wiped 2026-10-05 and 2026-10-09). Everything lives there: `sllaw_venv` (docling, extract), `lighton_venv` (vllm 0.31, torch, boto3, psycopg2: ocr, graph, fetch), `models/LightOnOCR-3-{0.8B,4B}`, `hf`, `pip_cache`, `cache/`; `~/.cache/{torch,docling,vllm,flashinfer,triton}` link there. `bash ~/sllaw/etl/ada_setup.sh` builds `sllaw_venv` if missing and starts 3 extraction workers.
+- **Run Python on ada from `/var/tmp/e19309/{sllaw,lighton}_venv/bin/python`, not `~/sllaw/.venv`.** The home directory is NFS (`/new-home`, 8 KB reads; under 3 MB/s bulk): loading docling/torch from it took over 25 minutes on 2026-10-05, against 27 seconds from local disk. Extraction workers exit when the queue is empty: start them after a fetch, not before.
+- Store nothing else on ada: jobs stream R2 → memory → R2/Neon. Logs go to `~/sllaw/logs/`.
+
+### Database
+
+**Since 2026-10-10 the working database is Postgres on the work host (ada, ampere since 2026-10-19: rebuilt from R2 there;
+`documents` restored from `backups/documents_20261010_1354.csv.gz` + the 6 Constitution rows refetched)** (`etl/db_ada.sh`: Postgres 16 + pgvector from the
+pgserver wheel, data in `/var/tmp/e19309/pgdata`, `localhost:5433`, URL `DB_LOCAL_URL` in ada's `~/sllaw/.env`;
+from here: `ssh -L 5433:localhost:5433 ada`). Neon's free transfer quota (5 GB egress/month) was hit; Neon keeps
+the old copy. **The app reads from a new Neon project (decision 2026-10-15)**, filled push-only from ada by `python -m etl.publish` (`APP_DATABASE_URL` in ada's .env; issue #12);
+never bulk-read from it in ETL. Backups: `python -m etl.backup <table>` -> `backups/<table>_<time>.csv.gz` in R2
+(`documents`, the one table nothing rebuilds: 6,496 rows on 2026-10-10).
+
+Neon Postgres (until 2026-10-10). Tables: `docs`, `chunks`, `links` (migration 003, the current model); `acts` (the list of laws), `edges` (same_as pairs; 002; `sections` there is no longer written, 2026-10-16); `documents`, the file inventory: one row per source file (listing record verbatim in `meta`, `sha256`, `r2_key`). Schema: `etl/migrations/001_documents.sql`.
+
+```bash
+.venv/bin/python3 etl/migrate.py           # apply pending
+.venv/bin/python3 etl/migrate.py --status  # show applied / pending
+```
+

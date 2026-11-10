@@ -1,0 +1,9 @@
+{
+  "_about": "The app database agents must not test on, and where their own branches come from (CLAUDE.md, Rules: agent databases). Read by .claude/hooks/guard.py and session_start.py.",
+  "neon_project": "sllaw-app",
+  "project_id": "round-breeze-91541651",
+  "main_branch_id": "br-fancy-pond-b7nwgfa7",
+  "main_endpoint": "ep-misty-brook-b7l8tv9y",
+  "database": "app",
+  "branch_prefix": "agent/"
+}

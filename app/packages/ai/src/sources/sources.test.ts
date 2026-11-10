@@ -202,17 +202,17 @@ describe("realStream", () => {
 describe("labels", () => {
   it("names a law with its number when its title has none", async () => {
     const { lawLabel } = await import("./specs");
-    expect(lawLabel({ docKey: "act:7/1972", title: "Rent", path: "section 22 — Proceedings for ejectment.", label: "22" })).toBe(
-      "s. 22, Rent (Act No. 7 of 1972)",
-    );
-    expect(lawLabel({ docKey: "cap:576", title: "MUNICIPAL COUNCILS", path: "Part XII › section 266 — X. (cont.)" })).toBe(
-      "s. 266, Municipal Councils (Cap. 576)",
-    );
+    expect(
+      lawLabel({ docKey: "act:7/1972", title: "Rent", path: "section 22 — Proceedings for ejectment.", label: "22" }),
+    ).toBe("s. 22, Rent (Act No. 7 of 1972)");
+    expect(
+      lawLabel({ docKey: "cap:576", title: "MUNICIPAL COUNCILS", path: "Part XII › section 266 — X. (cont.)" }),
+    ).toBe("s. 266, Municipal Councils (Cap. 576)");
     expect(lawLabel({ docKey: "act:26/2002", title: "RENT (AMENDMENT) ACT, No. 26 OF 2002", label: "8" })).toBe(
       "s. 8, Rent (Amendment) Act, No. 26 of 2002",
     );
-    expect(lawLabel({ docKey: "constitution:21", title: "Constitution", path: "Chapter III › Article 12 — Equality." })).toBe(
-      "Art. 12, Constitution",
-    );
+    expect(
+      lawLabel({ docKey: "constitution:21", title: "Constitution", path: "Chapter III › Article 12 — Equality." }),
+    ).toBe("Art. 12, Constitution");
   });
 });

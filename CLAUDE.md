@@ -1,122 +1,152 @@
-# sllaw — Sri Lanka Law Document Processing
+# sllaw — Sri Lanka Law
 
-## What this project is
+A corpus of Sri Lankan law (Constitution, Acts, Laws, Revised Editions, gazettes; judgments next) and an app that
+answers lawyers from it. This file is the map of how things are **now**. History lives in `docs/` and git.
 
-A corpus of Sri Lankan law: Constitution, Acts, consolidated statutes and regulations first, then judgments. The pipeline fetches every source file once into R2, extracts it once (docling for text-layer PDFs and HTML, LightOnOCR-3 for scans), and keeps the raw output unchanged. Everything after (documents, chunks, links) is rebuilt from that raw output.
+## How we work: the garden
 
-## Layout
+The user is the farmer: they say **what to grow** (the goal) and set **the environment** (limits, costs, rules,
+taste). The agent grows it: it chooses **how**, does the work, and shows it has grown.
+
+Every piece of work runs one loop. The user is in the first step; the rest runs without them, while they are here
+(no auto triggers, user 2026-11-10). GitHub issues and PRs are the trail.
+
+1. **`/scope` — together.** Scope with the user before any code (user, 2026-11-10): they learn the scope while you
+   talk, so it's an interview in rounds (who it's for, what they must see, what's out, what "done" looks like),
+   with options and a recommendation, until they have nothing to change. Size it to the work: a bug fix is one
+   done-check, not sixteen. It ends in a brief, `docs/features/<slug>.json` (shape in its README), agreed on a
+   permission prompt, and a GitHub issue. *Guarded: code under `app/` and `etl/` can't be edited without an agreed
+   brief for the branch, and an agreed scope is frozen.*
+2. **`/build` — alone.** The how is yours: choose the method, say which and why in one line, go. Each session starts
+   by reading the brief's `progress` and `git log` and running the checks; work one done-check at a time, commit on
+   the brief's branch, append a `progress` line. If the brief turns out wrong, stop and reopen it with the user.
+3. **`/validate` — two fresh agents** on the head commit, because code tests prove the code runs, not that the
+   feature is right: `semantic-validator` (the brief's done-checks and scenarios, used as a lawyer would, citations
+   read for substance) and `security-validator` (access, secrets, prompt injection, cost). Both must PASS; the
+   builder never writes their reports. At most 3 rounds, then stop and report.
+4. **Ship.** PR (brief, verdicts, "Closes #N"), then rebase-merge: the user allows merging validated work
+   (2026-11-10). Brief to `merged`, a few lines to the user: what shipped, the link, what was flagged.
+
+- **The environment is code before prose.** A rule a machine can check is a guard (`.claude/hooks/guard.py`) or a
+  test, not a sentence. Prose rules (below) are for what no machine can check.
+
+### When something goes wrong
+
+A correction from the user is a change to the environment, so it never happens twice. In the same turn:
+1. Fix what went wrong.
+2. Close the loop: a guard in `.claude/hooks/guard.py` (with a case in `test_guard.py`) if a machine can check it,
+   else one dated line under **Rules** below. Update a rule that is already there instead of adding a second one.
+3. Tell the user in one line what changed ("added a guard: `gh pr merge` without `--rebase` is refused").
+
+The same goes for a mistake the agent finds itself: a failed run, a wrong number, a stale line in this file. Fix the
+map when it is wrong; a stale map is how agents go wrong here. Personal facts and secrets (logins, people) go in the
+agent's private memory, never here.
+
+## Rules
+
+Each came from a correction or a costly mistake. Guarded = `.claude/hooks/guard.py` refuses it or asks first.
+
+- **No downloads to this machine**, not even samples (2026-10-04); heavy work runs on ampere. **No model, weights or
+  package download anywhere without the user's yes**, saying size and time (2026-10-09). *Guarded (asks).*
+- **Shared hosts store nothing:** stream R2 → memory → R2/Neon, pipe probe scripts over ssh, delete temp files
+  (2026-10-05). `/var/tmp/e19309` holds only infrastructure (venvs, models, Dagster home).
+- **GPU work takes the freest card**, checked with `nvidia-smi` at start, never hard-coded (2026-10-06).
+- **Neon egress is metered** (quota hit 2026-10-10): never bulk-read doc or chunk text out of Neon (text is in R2
+  anyway); joins stay inside the database; small rows only. ETL inspection never touches the app's database
+  (2026-10-16). *Guarded (asks on Neon SQL).*
+- **Full rebuilds cost money** (2026-10-10): test a rule change in memory first, read the result, then build only
+  what changed. Say up front when a step needs a full rebuild.
+- **Production writes need a yes:** `etl.v2.run ... --apply` (kb, Zilliz, R2), app migrations on the main database
+  (dev and production are one database, 2026-11-03), force pushes. *Guarded (asks).*
+- **Agents test on their own database** (2026-11-10): each app brief gets a Neon branch `agent/<slug>` of
+  `sllaw-app` (ids in `.claude/agent-db.json`), its worktree's `.env.local` points at it, and it is deleted at merge
+  or drop. A brief worktree pointing at production can't run the app, evals or migrations. *Guarded.*
+- **Branches** (2026-10-06, 2026-10-26): ETL work commits on `main`; app features on their brief's branch off
+  `origin/main`, in a worktree. Commits on the brief's branch are part of /build; outside the loop, commit only when
+  asked (2026-11-10).
+- **PRs merge with `gh pr merge <n> --rebase`**, never a merge commit or squash (2026-10-26). *Guarded.*
+- **A commit passes the checks:** app (biome on staged files, typecheck, unit tests), etl (the four local test
+  suites). *Guarded: a failing commit is refused with the output.*
+- **Release gate** (2026-11-10): `gh pr create`, `gh pr merge` (with `--match-head-commit <sha>`), `git push` to
+  main and `vercel --prod` need `VERDICT: PASS` from both validators for that exact commit, in
+  `<git-common-dir>/validation/<sha>/`; changes only to `docs/` or `*.md` pass. *Guarded.*
+- **Browser tests run headed** (`agent-browser --headed`); the user watches (2026-10-27). *Guarded.*
+- **Unrelated work during a task goes to a subagent**, so the main thread stays on the task (2026-10-10).
+- **Never repeat an investigation:** read `docs/SOURCES.md` before probing a site, `docs/PIPELINE_V2.md` before
+  changing the pipeline. Findings get written down in the same session (see "Writing things down").
+
+## The map (2026-11-10)
 
 ```
-CLAUDE.md          this guide
-requirements.txt   pinned Python deps
-.env.example       DATABASE_URL (Neon) + R2_* (Cloudflare)
-docs/
-  SOURCES.md       scope, every source site, coverage, blockers, open datasets, prior art
-  PIPELINE.md      decisions (extract once, router, engines), validation rules, measurements
-  LAYOUT.md        how Act PDFs are laid out (columns, marginal notes, page types)
-  APP.md           the app: who it is for, case-first product, decisions
-app/               the app: Turborepo (pnpm) — apps/web Next.js; api → services → db, etl_db, ai (ai has ports, services fills them); app/CLAUDE.md
-etl/               the pipeline, in run order
-  fetch.py         1: list sources → files into R2 → `documents` rows; spiders/ = one listing per site
-  spiders/acts.py  documents.gov.lk listing (Next.js Server Action)
-  spiders/lankalaw.py  lankalaw.net Acts by year 1956– (fills gaps; PDF and HTML)
-  spiders/le1980.py    lankalaw.net Legislative Enactments 1980 (pre-1980 chapters; cap:N)
-  spiders/le1956.py    lankalaw.net Legislative Enactments 1956 (HTML chapters; cap1956:N)
-  spiders/commonlii.py CommonLII numbered Acts via the Wayback Machine (only laws we hold no file for)
-  spiders/parliament.py parliament.lk Acts listing: official English PDFs 1956– (preferred over lankalaw)
-  (fetch.py constitution) parliament.lk 1978 Constitution + consolidations up to the 17th–21st Amendments
-  extract.py       2: docling (text layer, HTML) → raw JSON into R2; --ocr-api sends scans to LightOn in the same pass
-  ocr.py           2b: LightOnOCR-3-0.8B on scanned pages → raw/lighton/ in R2 (files extracted without --ocr-api)
-  structure.py     3: raw → blocks (`blocks()`, also what docs.py reads) → Act JSON; `build` = the `acts` rows:
-                   each law's key, title, dates and chosen file (the list etl.docs builds)
-  graph.py         4: `build` = change edges from acts.doc, then `link` = same_as between old laws, chapters and
-                   editions (`edges`); docs.py uses only the same_as pairs and the name lookups
-  docs.py          5: text (LightOn / HTML / docling) → docs + chunks + links (the current model)
-  refs.py          links read from the text alone (no marginal notes); `etl.docs relink` reruns it on stored chunks
-  publish.py       6: ada → the app's Neon (sllaw-app): docs, chunks, links replaced in one transaction, push-only
-  embed.py         7: chunks → bge-m3 (Workers AI) → Zilliz `chunks` (vector + BM25); only changed text is embedded
-  backup.py        tables → gzipped CSV in R2 (backups/), read back and counted
-  migrate.py       applies etl/migrations/*.sql in order
-  test_structure.py, test_refs.py   assert-based checks: `python -m etl.test_structure`
-  *_ada.sh         on ada: ada_setup (venv + extract workers), ocr_ada (vLLM + OCR workers),
-                   docs_ada (OCR → docs build → relink), db_ada (the project Postgres)
+sources ──► Pipeline v2 (etl/v2, Dagster on ampere, daily 02:00 Colombo)
+            state: Neon sllaw-etl (db/role etl)   bytes: R2 bucket sllaw (files, raw, tree/, app/law/ text parts)
+            publish ─► schema kb in sllaw-etl ◄── the app reads it (role app_reader, read-only; text from R2)
+            embed   ─► Zilliz `chunks` (bge-m3, run locally on ampere's freest GPU)
+app (app/, Vercel) ─► its own database `app` in Neon sllaw-app (dev and production are the same database)
 ```
 
-Structuring is code-based and English-only (decision 2026-10-04); Sinhala/Tamil go to an agent with the whole Act when needed. Scanned pages before 2000 are read by LightOnOCR-3-0.8B (`etl/ocr.py`, decision 2026-10-09). Pre-1980 law is in (lankalaw 1956–79 Acts, 1956 and 1980 Revised Editions) and `etl.graph link` ties old laws, chapters and editions together: parliament.lk's official PDFs (1956 on) replace lankalaw's copies (2026-10-10); 99.36% of change edges reach their target (78 left: laws with no file anywhere we can reach); CommonLII is the last resort (32 laws no official source has). Laws are keyed `law:`, Acts `act:`. Current model (2026-10-10): `etl/docs.py`, documents → chunks → links between documents (PIPELINE.md, "Documents, chunks and links"); Neon's transfer quota was hit, so never bulk-read doc or chunk text out of Neon. The Constitution is in (2026-10-11): 1978 text + consolidations, 90% of Article links reach their Article. Link precision is measured (2026-10-20): a 210-link hand-labelled gold set (`etl/gold_links.json`, `python -m etl.docs gold`), 210/210 after five refs.py fixes. Next: schedules split into items, a judge model for more cites. **Pipeline v2 runs the corpus since 2026-11-08** (`etl/v2/`, Dagster on ampere, state in Neon `sllaw-etl`, daily at 02:00; docs/PIPELINE_V2.md): the app reads schema `kb` there (chunk text in R2), so `etl/publish.py` and the app's Neon copy of the corpus are retired. Search is in (2026-10-17): chunks embedded with bge-m3 into Zilliz (`etl/embed.py`), dense-only by default (recall@5 93% English, 60-73% Sinhala/Tamil; BM25 only on demand), contents pages dropped and a breadcrumb per chunk (`chunks.path`). See PIPELINE.md.
+- `etl/v2/`: the pipeline. `run.py` (listing / plan / work / resolve / status / publish / embed), `gate.py` (the
+  quality gate), `pipeline.py` (Dagster
+  assets), `all.sh` (the whole chain with no engine), `schema.sql`, `test_v2.py`. Plan and decisions:
+  `docs/PIPELINE_V2.md`; links model: `docs/LINKS.md`.
+- `etl/*.py`: v1 modules v2 still imports (`structure.blocks()`, spiders, `refs`, `mentions`, `extract`).
+  `publish.py`, `embed.py`, `docs.py` builds and ampere's local Postgres are **retired** (2026-11-08).
+- `etl/overrides.json`: human fixes the gate reads (accepted issues, rejected files). `etl/gold_links.json` (210
+  hand-labelled links), `etl/eval_*.json`: the evals.
+- `app/`: Turborepo, Next.js + tRPC + packages. Its own map: `app/CLAUDE.md`. Product: `docs/APP.md`.
+- `docs/`: `SOURCES.md` (every site, coverage, blockers), `PIPELINE_V2.md` (now), `PIPELINE.md` (v1 decisions and
+  measurements, v1 operations at the end), `LINKS.md`, `LAYOUT.md` (how Act PDFs are laid out), `APP.md`.
 
-## Setup (ada or local)
+Keys: Acts `act:N/YYYY`, Laws `law:N/YYYY`, chapters `cap:N` (1980) and `cap1956:N`, `constitution`, `amendment:N`,
+`gazette:NNNN/NN`. Structuring is code-based and English-only; Sinhala and Tamil go to an agent with the whole Act.
+
+### Hosts
+
+Department servers, LDAP user `e19309`, reached through tesla (`ssh -J tesla e19309@<ip>`; `ssh ampere` is set
+up). `~/sllaw` is the shared NFS home (slow: run Python from `/var/tmp/e19309/*_venv`, never `~/sllaw/.venv`);
+`/var/tmp/e19309` is per host and survives reboots, `/tmp` does not. Skill: `/ada-ssh`.
+
+- **ampere** 10.40.18.10: the work host. 2× RTX A6000 48 GB, shared and busy. Venvs `etl_venv`, `sllaw_venv`
+  (docling), `gpu_venv` (bge-m3), `lighton_venv` (vLLM), `dagster_venv`; env in `/var/tmp/e19309/{neon,v2}.env`.
+  Dagster UI: `ssh -L 3070:localhost:3070 ampere`. After a reboot: `bash ~/sllaw/etl/v2/dagster.sh`.
+- **ada** 10.40.18.12: 3× RTX 6000 Ada, extra GPUs when ampere is full (has no bge-m3 or gpu_venv). Its `pgdata`
+  is stale: never start it.
+- turing .3 (RTX 3090 Ti, crowded), tesla .7 (jump host, no GPU), kepler .9 (K40c, too old).
+
+## Checks
 
 ```bash
-git clone https://github.com/Kavishkagaya/sllaw.git && cd sllaw
-python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
-cp .env.example .env                     # fill DATABASE_URL and R2_*
-.venv/bin/python3 etl/migrate.py         # apply pending migrations (--status to list)
-.venv/bin/python3 -m etl.fetch acts --limit 20   # pilot: 20 files into R2
-.venv/bin/python3 -m etl.fetch acts              # everything; re-run to resume or retry
-
-# step 2 on ada (see below): docling for text layers; scans go to a LightOn vLLM server (etl/ocr_ada.sh)
-.venv/bin/python3 -m etl.extract --no-ocr --limit 20                          # text-layer files only
-.venv/bin/python3 -m etl.extract --limit 50 --ocr-api http://localhost:8013/v1   # scans too
+cd app && pnpm check && pnpm typecheck && pnpm test           # app: biome, tsc, vitest (in memory, ~15 s)
+.venv/bin/python3 -m etl.test_structure                       # also etl.test_refs, etl.test_mentions, etl.v2.test_v2
+python3 .claude/hooks/test_guard.py                           # the guards (47 cases)
 ```
 
-Fetching and extraction run on **ada**, never locally: no source files on this machine. Use the `/ada-ssh` skill.
+On ampere, against real data (on purpose, they cost): `python -m etl.v2.gate --workers 8` (quality gate),
+`python -m etl.v2.run gold-links` (210/210); in `app/`: `pnpm --filter @sllaw/services eval-chat` / `eval-agent`,
+`pnpm --filter @sllaw/search eval`.
 
-**ada (10.40.18.12) was down 2026-10-18 to ~10-30; back up on 2026-11-01** (up 2 days, 64 threads, 503 GB, 3 GPUs; `/var/tmp/e19309` intact: venvs, models, and the pre-10-18 `pgdata`, which is stale: the current DB is on ampere). **ada does the heavy work, ampere keeps the DB** (2026-11-01): tmux `adalink` on ampere holds `ssh -N -R 5433:localhost:5433 e19309@10.40.18.12` (password login, no keys), so `DB_LOCAL_URL` on ada reaches ampere's Postgres; never start ada's own stale Postgres. If ampere reboots or `adalink` dies, restart it by hand on ampere. `etl.fetch acts --limit 5` from ada worked (2 new files). **The work
-host is now ampere** (10.40.18.10, DNS `ibm`; `ssh ampere`, ProxyJump tesla; same LDAP login): 32 threads, 125 GB, 2× RTX
-A6000 48 GB, shared and busy. Same paths: `/var/tmp/e19309` is per host, `~/sllaw` is the shared NFS home. No pip there:
-`/var/tmp/e19309/bin/uv` (0.8.0) built `etl_venv` (boto3, psycopg2, dotenv, pgserver: fetch, structure, graph, docs,
-publish); `gpu_venv` (torch 2.6, bge-m3 for `EMBED_LOCAL=1`) and `lighton_venv` (vLLM 0.31.0+cu129, `etl/lighton_setup.sh`, 2026-10-20) are built. Other hosts: turing .3 (RTX 3090 Ti), tesla .7 (no GPU), kepler .9
-(K40c, too old). Everything below that says ada now means the work host.
+## Writing things down
 
-- ada: 3× NVIDIA RTX 6000 Ada (49 GB each), **shared with other users**: check `nvidia-smi` and pick the idle card. Project dir `~/sllaw/`. There is no conda env and no sudo.
-- **`/var/tmp/e19309` survives reboots; `/tmp` does not** (wiped 2026-10-05 and 2026-10-09). Everything lives there: `sllaw_venv` (docling, extract), `lighton_venv` (vllm 0.31, torch, boto3, psycopg2: ocr, graph, fetch), `models/LightOnOCR-3-{0.8B,4B}`, `hf`, `pip_cache`, `cache/`; `~/.cache/{torch,docling,vllm,flashinfer,triton}` link there. `bash ~/sllaw/etl/ada_setup.sh` builds `sllaw_venv` if missing and starts 3 extraction workers.
-- **Run Python on ada from `/var/tmp/e19309/{sllaw,lighton}_venv/bin/python`, not `~/sllaw/.venv`.** The home directory is NFS (`/new-home`, 8 KB reads; under 3 MB/s bulk): loading docling/torch from it took over 25 minutes on 2026-10-05, against 27 seconds from local disk. Extraction workers exit when the queue is empty: start them after a fetch, not before.
-- Store nothing else on ada: jobs stream R2 → memory → R2/Neon. Logs go to `~/sllaw/logs/`.
-
-## Sources, scope and decisions
-
-Read [`docs/SOURCES.md`](docs/SOURCES.md) before probing any website or re-checking coverage, and [`docs/PIPELINE.md`](docs/PIPELINE.md) before changing how extraction works. If the answer is there, use it and don't test again.
-
-## Documenting findings and decisions
-
-Investigations are expensive, so never run the same one twice. Whenever a session finds out or decides something that isn't obvious from the code, write it down in the same session:
-
-- **Findings about sources** (an endpoint, record counts, a year range, a file format, a login wall, Cloudflare, a dead site) go in `docs/SOURCES.md`, in the row or table for that source.
-- **Scope decisions** (what we collect, which text is authoritative) go in the Scope or Authority section of `docs/SOURCES.md`, along with the reason.
-- **Pipeline decisions and measurements** (engines, routing, storage, validation results) go in `docs/PIPELINE.md`.
-- **PDF layout facts** go in `docs/LAYOUT.md`.
-- **Fixes for known issues** go in "Known issues" below.
-
-Rules:
-- Date every finding (`Surveyed YYYY-MM-DD`) and give numbers, not adjectives ("301 PDFs in 2024", not "many").
-- If a site has changed, update the existing row rather than adding a contradicting one, and note the date.
-- Record dead ends and blockers too ("403", "subscription only", "do not bypass"). They're what stops the next person searching again.
-- Record what was *not* checked, so a gap doesn't read as "no data".
-
-## Database
-
-**Since 2026-10-10 the working database is Postgres on the work host (ada, ampere since 2026-10-19: rebuilt from R2 there;
-`documents` restored from `backups/documents_20261010_1354.csv.gz` + the 6 Constitution rows refetched)** (`etl/db_ada.sh`: Postgres 16 + pgvector from the
-pgserver wheel, data in `/var/tmp/e19309/pgdata`, `localhost:5433`, URL `DB_LOCAL_URL` in ada's `~/sllaw/.env`;
-from here: `ssh -L 5433:localhost:5433 ada`). Neon's free transfer quota (5 GB egress/month) was hit; Neon keeps
-the old copy. **The app reads from a new Neon project (decision 2026-10-15)**, filled push-only from ada by `python -m etl.publish` (`APP_DATABASE_URL` in ada's .env; issue #12);
-never bulk-read from it in ETL. Backups: `python -m etl.backup <table>` -> `backups/<table>_<time>.csv.gz` in R2
-(`documents`, the one table nothing rebuilds: 6,496 rows on 2026-10-10).
-
-Neon Postgres (until 2026-10-10). Tables: `docs`, `chunks`, `links` (migration 003, the current model); `acts` (the list of laws), `edges` (same_as pairs; 002; `sections` there is no longer written, 2026-10-16); `documents`, the file inventory: one row per source file (listing record verbatim in `meta`, `sha256`, `r2_key`). Schema: `etl/migrations/001_documents.sql`.
-
-```bash
-.venv/bin/python3 etl/migrate.py           # apply pending
-.venv/bin/python3 etl/migrate.py --status  # show applied / pending
-```
+Investigations are expensive; never run one twice. Whatever a session finds or decides that is not obvious from
+the code goes in the same session to: sources → `docs/SOURCES.md` (in that source's row); scope → its Scope
+section with the reason; pipeline decisions and measurements → `docs/PIPELINE_V2.md`; PDF layout → `docs/LAYOUT.md`;
+app decisions → `docs/APP.md`; a fix for a known issue → "Known issues" below.
+Date every finding (`2026-11-10`), give numbers not adjectives, update a row instead of adding a contradicting
+one, and record dead ends and what was *not* checked.
 
 ## Known issues
 
-- **docling `max_num_pages` marks PDF invalid**: use `page_range=(1, N)` instead of `max_num_pages=N`.
-- **docling default backend (docling_parse) once failed on gazette PDFs** (older docling). With 2.104 it works on Acts and keeps word cells and fonts, which pypdfium doesn't. `etl/extract.py` uses it and falls back to pypdfium per file.
-- **transformers 5.x breaks surya**: `SuryaDecoderConfig` is missing `pad_token_id`. Downgrade to 4.57.6 and add `kwargs.setdefault("pad_token_id", 2)` before `super().__init__()` in `surya/common/surya/decoder/config.py`.
-- **Surya on CPU gives 1 box/page**: always run it on ada.
-- **ada's DNS sometimes fails to resolve the database host** for a minute or so (three times on 2026-10-10; once it killed all four OCR workers at start): connect with `etl.fetch.pg_connect()`, which retries for ~5 minutes.
-- **vLLM (LightOn) won't start on ampere** (2026-10-29): torchcodec is a CUDA 13 build (uninstall it); `~/.cache/*` link into `/var/tmp/e19309/cache`, which must exist on each host; FlashInfer's sampler compiles with the system nvcc 12.3 and fails on `--compress-mode`: set `VLLM_USE_FLASHINFER_SAMPLER=0` on the `vllm serve` line (inside the tmux command; tmux doesn't pass the caller's environment). `etl/lighton_setup.sh` and `etl/ocr_ada.sh` do all three.
-- **docling `PARTIAL_SUCCESS` drops pages** when Surya fails on some of them (15/1991 kept 1 of 7). `etl/extract.py` raises on it so the row stays queued; never store a partial raw.
-- **The work host's Postgres does not start after a reboot** (ampere rebooted 2026-10-30 09:04; found down 2026-11-01, "Connection refused" on 5433): `bash ~/sllaw/etl/db_ada.sh` starts it; crash recovery is automatic, and the data was intact (7,336 docs, 164,853 chunks, 96,344 links, equal to the last publish).
+- **docling `max_num_pages` marks a PDF invalid**: use `page_range=(1, N)`.
+- **docling `PARTIAL_SUCCESS` drops pages** (15/1991 kept 1 of 7): `etl/extract.py` raises so the row stays
+  queued; never store a partial raw.
+- **docling's default backend** keeps word cells and fonts (2.104); `etl/extract.py` falls back to pypdfium per file.
+- **transformers 5.x breaks surya** (`SuryaDecoderConfig` lacks `pad_token_id`): pin 4.57.6 and add
+  `kwargs.setdefault("pad_token_id", 2)` before `super().__init__()` in `surya/common/surya/decoder/config.py`.
+  Surya on CPU gives 1 box a page: GPU only.
+- **vLLM (LightOn) on ampere**: uninstall torchcodec (CUDA 13 build); `/var/tmp/e19309/cache` must exist on each
+  host; set `VLLM_USE_FLASHINFER_SAMPLER=0` inside the tmux command. `etl/lighton_setup.sh` and `etl/ocr_ada.sh` do
+  all three.
+- **DNS on the department hosts drops for a minute or so**: connect with `etl.fetch.pg_connect()`, which retries.
+- **Neon closes a connection left idle for hours** (embed's mark, 2026-11-08): open a fresh one after a long step.
+- **Tmux sessions and Dagster do not survive a reboot**: rerun `etl/v2/dagster.sh` on ampere.
+- **Legacy-font Sinhala listed as English** (act:54/2007, act:7/2006): nothing flags it yet.

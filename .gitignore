@@ -23,4 +23,8 @@ legacy/pipeline/out/
 legacy/pipeline/chunks_out/
 pilot/
 !etl/eval_questions.json
+!.claude/settings.json
+!etl/overrides.json
+!docs/features/*.json
+!.claude/agent-db.json
 .turbo/

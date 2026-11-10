@@ -1,0 +1,160 @@
+{
+  "_about": "Human fixes (docs/PIPELINE_V2.md, stage 2 and the gate). accept: a reviewed gate issue that is right as it is; where '*' = every issue of that check in the document. pin / reject / rekey: the fetch stage's file choice (not used yet). reject: this listing's file is not the document it is listed as (today's documents.meta.wrong_file, moved here).",
+  "accept": [
+    {
+      "key": "act:23/1980",
+      "check": "label_lost",
+      "where": "act:23/1980 5",
+      "reason": "the replacement section 5 quoted after 'Section 5 of the principal enactment is hereby repealed and the following section substituted' (s4), not the Act's own",
+      "by": "claude (gate review)",
+      "at": "2026-11-07"
+    },
+    {
+      "key": "law:24/1974",
+      "check": "label_lost",
+      "where": "law:24/1974 6",
+      "reason": "one of the sections 5, 6 and 7 substituted by s3, quoted",
+      "by": "claude (gate review)",
+      "at": "2026-11-07"
+    },
+    {
+      "key": "law:37/1974",
+      "check": "label_lost",
+      "where": "law:37/1974 8",
+      "reason": "the new section 8 substituted by s2, quoted",
+      "by": "claude (gate review)",
+      "at": "2026-11-07"
+    },
+    {
+      "key": "law:40/1973",
+      "check": "label_lost",
+      "where": "law:40/1973 5",
+      "reason": "the new section 5 substituted by s4, quoted",
+      "by": "claude (gate review)",
+      "at": "2026-11-07"
+    },
+    {
+      "key": "gazette:2317/57",
+      "check": "label_lost",
+      "where": "*",
+      "reason": "01-11 are the monuments listed in the SCHEDULE (the heading today's build dropped), not regulations",
+      "by": "claude (gate review)",
+      "at": "2026-11-07"
+    },
+    {
+      "key": "act:24/2018",
+      "check": "label_lost",
+      "where": "act:24/2018 4A",
+      "reason": "section 4A is text the amending Act inserts (it follows the inserted section 4's subsections), quoted; the old assembler had it as a section",
+      "by": "claude (gate review)",
+      "at": "2026-11-07"
+    },
+    {
+      "key": "act:27/1981",
+      "check": "label_lost",
+      "where": "act:27/1981 9",
+      "reason": "section 9 ('Scheme and diagram to be prepared by Government Agent') is part of the quoted replacement text, after the inserted section 8's items (n), (o)",
+      "by": "claude (gate review)",
+      "at": "2026-11-07"
+    }
+  ],
+  "pin": [],
+  "reject": [
+    {
+      "listing": "https://www.parliament.lk/uploads/acts/gbills/english/3159.pdf",
+      "reason": "prints Turnover Tax (Amendment) Act, No. 39 of 1983",
+      "by": "v1 meta.wrong_file (checked 2026-10-10/20)",
+      "at": "2026-11-07"
+    },
+    {
+      "listing": "https://www.parliament.lk/uploads/acts/gbills/english/6284.pdf",
+      "reason": "prints Appropriation (Amendment) Act, No. 42 of 2022: listed under the wrong year (documents.gov.lk lists the same Act as 42/2022)",
+      "by": "v1 meta.wrong_file (checked 2026-10-10/20)",
+      "at": "2026-11-07"
+    },
+    {
+      "listing": "https://www.parliament.lk/uploads/acts/pbills/english/906.pdf",
+      "reason": "prints Board of Investment of Sri Lanka (Amendment) Act, No. 3 of 2012",
+      "by": "v1 meta.wrong_file (checked 2026-10-10/20)",
+      "at": "2026-11-07"
+    },
+    {
+      "listing": "https://www.parliament.lk/uploads/acts/gbills/english/3507.pdf",
+      "reason": "prints Sri Lanka Telecommunications Act, No. 25 of 1991",
+      "by": "v1 meta.wrong_file (checked 2026-10-10/20)",
+      "at": "2026-11-07"
+    },
+    {
+      "listing": "https://www.parliament.lk/uploads/acts/gbills/english/3505.pdf",
+      "reason": "prints Judicature (Amendment) Act, No. 16 of 1989",
+      "by": "v1 meta.wrong_file (checked 2026-10-10/20)",
+      "at": "2026-11-07"
+    },
+    {
+      "listing": "https://www.parliament.lk/uploads/acts/gbills/english/3311.pdf",
+      "reason": "prints Civil Procedure Code (Amendment) Act, No. 79 of 1988",
+      "by": "v1 meta.wrong_file (checked 2026-10-10/20)",
+      "at": "2026-11-07"
+    },
+    {
+      "listing": "https://www.parliament.lk/uploads/acts/gbills/english/3049.pdf",
+      "reason": "prints Irrigation (Amendment) Act, No. 32 of 1990",
+      "by": "v1 meta.wrong_file (checked 2026-10-10/20)",
+      "at": "2026-11-07"
+    },
+    {
+      "listing": "https://www.parliament.lk/uploads/acts/gbills/english/3037.pdf",
+      "reason": "prints Provincial Councils Elections (Amendment) Act, No. 29 of 1990",
+      "by": "v1 meta.wrong_file (checked 2026-10-10/20)",
+      "at": "2026-11-07"
+    },
+    {
+      "listing": "https://www.parliament.lk/uploads/acts/gbills/english/3001.pdf",
+      "reason": "prints Natural Resources, Energy and Science Authority of Sri Lanka Act, No. 78 of 1981",
+      "by": "v1 meta.wrong_file (checked 2026-10-10/20)",
+      "at": "2026-11-07"
+    },
+    {
+      "listing": "https://www.parliament.lk/uploads/acts/gbills/english/5761.pdf",
+      "reason": "prints Capital Levy (Amendment) Law, No. 16 of 1972",
+      "by": "v1 meta.wrong_file (checked 2026-10-10/20)",
+      "at": "2026-11-07"
+    },
+    {
+      "listing": "https://www.parliament.lk/uploads/acts/gbills/english/5684.pdf",
+      "reason": "prints Fugitive Persons Act, No. 29 of 1969 (the same file as 29/1969)",
+      "by": "v1 meta.wrong_file (checked 2026-10-10/20)",
+      "at": "2026-11-07"
+    }
+  ],
+  "rekey": [
+    {
+      "listing": "https://lankalaw.net/wp-content/uploads/2024/03/ma235242.pdf",
+      "key": "cap:235@5648",
+      "reason": "a second chapter numbered 235 in lankalaw's listing (Masters Attendant beside Customs); keyed by document id, as today",
+      "by": "v1 etl.structure (2026-10-07)",
+      "at": "2026-11-07"
+    },
+    {
+      "listing": "https://lankalaw.net/wp-content/uploads/2024/03/t522212.pdf",
+      "key": "cap:522",
+      "reason": "the PDF prints Chapter 522 (Telecommunications); lankalaw lists it as 521",
+      "by": "v1 etl.structure (the number the PDF prints)",
+      "at": "2026-11-07"
+    },
+    {
+      "listing": "https://lankalaw.net/wp-content/uploads/2024/03/sadosp628579.pdf",
+      "key": "cap:628",
+      "reason": "the PDF prints Chapter 628 (Special Areas (Colombo) Development); lankalaw lists it as 604",
+      "by": "v1 etl.structure (the number the PDF prints)",
+      "at": "2026-11-07"
+    },
+    {
+      "listing": "https://lankalaw.net/wp-content/uploads/2025/02/1976Y0V0C29A.html",
+      "key": "law:29/1978",
+      "reason": "a National State Assembly Law of 1978 (its title says Law), listed by lankalaw as an Act",
+      "by": "v1 etl.structure act_key (1972/1978: the title decides)",
+      "at": "2026-11-07"
+    }
+  ]
+}
