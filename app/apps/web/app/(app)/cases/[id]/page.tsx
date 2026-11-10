@@ -1,18 +1,21 @@
-import { ChevronRight, FileText, MessageSquare, MessageSquarePlus, Pencil, Upload } from "lucide-react";
+import { ChevronRight, MessageSquarePlus, Pencil, Upload } from "lucide-react";
 import Link from "next/link";
 import { StartChat } from "@/components/chat/start-chat";
+import { CaseDashboard } from "@/components/office/dashboard";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { fmtDate } from "@/lib/format";
 import { orNotFound, serverApi } from "@/trpc/server";
 
-// /cases/<id>: the case's overview. Its facts, a question box that starts a case chat, its latest chats and what
-// its files are. Later the case dashboard (tasks, dates) grows here.
+// /cases/<id>: the case's office. Its dashboard (docs/APP.md, Case office: details, next date, tasks, journal,
+// people and the widgets the lawyer or the AI added), a question box that starts a case chat, the facts, its latest
+// chats and what its files are.
 export default async function CaseOverview({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const api = await serverApi();
-  const [c, chats, files] = await Promise.all([
+  const [c, office, chats, files] = await Promise.all([
     orNotFound(api.case.open({ caseId: id })),
+    orNotFound(api.office.open({ caseId: id })),
     orNotFound(api.chat.list({ caseId: id, limit: 5 })),
     orNotFound(api.case.files({ caseId: id })),
   ]);
@@ -28,89 +31,93 @@ export default async function CaseOverview({ params }: { params: Promise<{ id: s
         </Button>
       </PageHeader>
       <main className="flex-1 overflow-y-auto">
-        <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6">
-          <h1 className="font-serif text-3xl font-semibold tracking-tight">{c.title}</h1>
-          {c.facts ? (
-            <p className="mt-3 max-w-3xl text-sm leading-relaxed whitespace-pre-wrap text-muted-foreground line-clamp-6">
-              {c.facts}
-            </p>
-          ) : (
-            <p className="mt-3 text-sm text-muted-foreground">
-              No facts yet: the AI answers this case's questions from them.{" "}
-              <Link href={`${base}/settings`} className="text-primary underline underline-offset-2">
-                Add them
-              </Link>
-            </p>
-          )}
+        <div className="mx-auto max-w-6xl px-4 py-4 sm:px-6 sm:py-6">
+          <CaseDashboard caseId={c.id} title={c.title} initial={office} />
 
-          <div className="mt-8">
-            <StartChat caseId={c.id} placeholder="Ask about this case…" />
-          </div>
-
-          <div className="mt-10 grid gap-6 md:grid-cols-2">
-            <section className="rounded-xl border bg-card shadow-xs">
-              <div className="flex items-center justify-between border-b px-4 py-3">
-                <h2 className="text-sm font-medium">Chats</h2>
-                <Button asChild size="sm" variant="ghost">
-                  <Link href={`${base}/chats`}>
-                    <MessageSquarePlus /> New chat
+          <div className="mt-10 grid grid-cols-1 gap-10 lg:grid-cols-[minmax(0,1fr)_19rem] lg:gap-x-8">
+            <div className="min-w-0 space-y-10">
+              <StartChat caseId={c.id} placeholder="Ask about this case…" />
+              <section>
+                <div className="flex items-baseline justify-between gap-2 border-b border-foreground/15 pb-1.5">
+                  <h2 className="font-serif text-[1.05rem] font-semibold tracking-tight">Facts</h2>
+                  <Link href={`${base}/settings`} className="text-xs text-muted-foreground hover:text-foreground">
+                    Edit
                   </Link>
-                </Button>
-              </div>
-              {chats.length === 0 ? (
-                <p className="px-4 py-8 text-center text-sm text-muted-foreground">
-                  No chats yet. Ask a question above.
-                </p>
-              ) : (
-                <ul className="divide-y">
-                  {chats.map((ch) => (
-                    <li key={ch.id}>
-                      <Link
-                        href={`${base}/chats/${ch.id}`}
-                        className="flex items-center gap-3 px-4 py-2.5 text-sm transition-colors hover:bg-accent/40"
-                      >
-                        <MessageSquare className="size-4 shrink-0 text-muted-foreground" />
-                        <span className="min-w-0 flex-1 truncate">{ch.title}</span>
-                        <span className="shrink-0 text-xs text-muted-foreground">{fmtDate(ch.updatedAt)}</span>
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </section>
+                </div>
+                {c.facts ? (
+                  <p className="mt-3 max-w-prose font-serif text-[0.95rem] leading-relaxed whitespace-pre-wrap text-foreground/80 line-clamp-8">
+                    {c.facts}
+                  </p>
+                ) : (
+                  <p className="mt-3 text-sm text-muted-foreground">
+                    No facts yet. The AI reads every question in this case against them.{" "}
+                    <Link href={`${base}/settings`} className="text-primary underline underline-offset-2">
+                      Write the facts
+                    </Link>
+                  </p>
+                )}
+              </section>
+            </div>
 
-            <section className="rounded-xl border bg-card shadow-xs">
-              <div className="flex items-center justify-between border-b px-4 py-3">
-                <h2 className="text-sm font-medium">
-                  Files{files.length > 0 && <span className="ml-1.5 text-muted-foreground">{files.length}</span>}
-                </h2>
-                <Button asChild size="sm" variant="ghost">
-                  <Link href={`${base}/files`}>
-                    {files.length ? "Open" : <Upload />} {files.length ? <ChevronRight /> : "Add files"}
+            <div className="min-w-0 space-y-8">
+              <section>
+                <div className="flex items-center justify-between gap-2 border-b border-foreground/15 pb-1">
+                  <h2 className="font-serif text-[1.05rem] font-semibold tracking-tight">Chats</h2>
+                  <Button asChild size="icon-sm" variant="ghost" aria-label="New chat">
+                    <Link href={`${base}/chats`}>
+                      <MessageSquarePlus />
+                    </Link>
+                  </Button>
+                </div>
+                {chats.length === 0 ? (
+                  <p className="py-2 text-sm text-muted-foreground">No chats yet. Ask a question to start one.</p>
+                ) : (
+                  <ul>
+                    {chats.map((ch) => (
+                      <li key={ch.id} className="border-b border-border/70">
+                        <Link href={`${base}/chats/${ch.id}`} className="group flex items-baseline gap-3 py-2 text-sm">
+                          <span className="min-w-0 flex-1 truncate group-hover:underline">{ch.title}</span>
+                          <span className="shrink-0 text-xs text-muted-foreground">{fmtDate(ch.updatedAt)}</span>
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </section>
+
+              <section>
+                <div className="flex items-center justify-between gap-2 border-b border-foreground/15 pb-1">
+                  <h2 className="flex items-baseline gap-2 font-serif text-[1.05rem] font-semibold tracking-tight">
+                    Files
+                    {files.length > 0 && (
+                      <span className="font-sans text-xs font-normal text-muted-foreground">{files.length}</span>
+                    )}
+                  </h2>
+                  <Button asChild size="icon-sm" variant="ghost" aria-label={files.length ? "Open files" : "Add files"}>
+                    <Link href={`${base}/files`}>{files.length ? <ChevronRight /> : <Upload />}</Link>
+                  </Button>
+                </div>
+                {files.length === 0 ? (
+                  <Link
+                    href={`${base}/files`}
+                    className="block py-2 text-sm text-muted-foreground hover:text-foreground"
+                  >
+                    Add plaints, affidavits, judgments: each is read and sorted by kind.
                   </Link>
-                </Button>
-              </div>
-              {files.length === 0 ? (
-                <p className="px-4 py-8 text-center text-sm text-muted-foreground">
-                  Plaints, affidavits, judgments: each is read and sorted by kind.
-                </p>
-              ) : (
-                <ul className="divide-y">
-                  {groups.map((g) => (
-                    <li key={g.group}>
-                      <Link
-                        href={`${base}/files`}
-                        className="flex items-center gap-3 px-4 py-2.5 text-sm transition-colors hover:bg-accent/40"
-                      >
-                        <FileText className="size-4 shrink-0 text-muted-foreground" />
-                        <span className="min-w-0 flex-1 truncate">{g.group}</span>
-                        <span className="shrink-0 text-xs text-muted-foreground tabular-nums">{g.n}</span>
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </section>
+                ) : (
+                  <ul>
+                    {groups.map((g) => (
+                      <li key={g.group} className="border-b border-border/70">
+                        <Link href={`${base}/files`} className="group flex items-baseline gap-3 py-2 text-sm">
+                          <span className="min-w-0 flex-1 truncate group-hover:underline">{g.group}</span>
+                          <span className="shrink-0 text-xs text-muted-foreground tabular-nums">{g.n}</span>
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </section>
+            </div>
           </div>
         </div>
       </main>

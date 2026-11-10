@@ -1,5 +1,5 @@
 import { auth } from "@clerk/nextjs/server";
-import { accountOf, LimitReached } from "@sllaw/services";
+import { accountOf, LimitReached, OfficeError } from "@sllaw/services";
 import { initTRPC, TRPCError } from "@trpc/server";
 import superjson from "superjson";
 
@@ -13,11 +13,15 @@ type Context = Awaited<ReturnType<typeof createContext>>;
 const t = initTRPC.context<Context>().create({ transformer: superjson });
 export const router = t.router;
 
-/** A plan limit reached in a service (LimitReached) is TOO_MANY_REQUESTS (429), its message for the user. */
+/** A plan limit reached in a service (LimitReached) is TOO_MANY_REQUESTS (429), an OfficeError BAD_REQUEST (400),
+ *  each with its message for the user. */
 const base = t.procedure.use(async ({ next }) => {
   const r = await next();
   if (!r.ok && r.error.cause instanceof LimitReached)
     throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: r.error.cause.message, cause: r.error.cause });
+  // a case office change that cannot be made (a pinned widget, an item gone, bad data): its message for the user
+  if (!r.ok && r.error.cause instanceof OfficeError)
+    throw new TRPCError({ code: "BAD_REQUEST", message: r.error.cause.message, cause: r.error.cause });
   return r;
 });
 export const publicProcedure = base;

@@ -8,6 +8,7 @@ const config = {
     "@sllaw/api",
     "@sllaw/ai",
     "@sllaw/usage",
+    "@sllaw/office",
     "@sllaw/services",
     "@sllaw/db",
     "@sllaw/etl_db",

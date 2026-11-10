@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.2.0",
+    "@sllaw/office": "workspace:*",
     "drizzle-orm": "^0.45.4"
   },
   "devDependencies": {

@@ -1,13 +1,16 @@
 import { Briefcase, FileText, Plus } from "lucide-react";
 import Link from "next/link";
 import { StartChat } from "@/components/chat/start-chat";
+import { HomeDiary } from "@/components/office/home-diary";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { fmtDate } from "@/lib/format";
 import { serverApi } from "@/trpc/server";
 
-// Home: case first. The cases last worked on, a new one, and a box for a quick question outside any case.
+// Home: case first. This week's court dates and tasks across the cases, the cases last worked on, a new one, and a
+// box for a quick question outside any case.
 export default async function Home() {
-  const cases = await (await serverApi()).case.list();
+  const api = await serverApi();
+  const [cases, diary] = await Promise.all([api.case.list(), api.office.diary()]);
   return (
     <div className="flex h-full flex-col">
       <header className="flex h-12 shrink-0 items-center px-3">
@@ -15,6 +18,11 @@ export default async function Home() {
       </header>
       <main className="flex-1 overflow-y-auto">
         <div className="mx-auto max-w-4xl px-4 pt-6 pb-12 sm:px-6 sm:pt-12">
+          {cases.length > 0 && (
+            <div className="mb-14">
+              <HomeDiary diary={diary} />
+            </div>
+          )}
           <section>
             <div className="flex items-end justify-between gap-4">
               <div>

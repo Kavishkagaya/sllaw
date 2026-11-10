@@ -24,6 +24,7 @@
     "@sllaw/db": "workspace:*",
     "@sllaw/etl_db": "workspace:*",
     "@sllaw/extract": "workspace:*",
+    "@sllaw/office": "workspace:*",
     "@sllaw/search": "workspace:*",
     "@sllaw/storage": "workspace:*",
     "@sllaw/usage": "workspace:*",

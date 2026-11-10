@@ -1,9 +1,11 @@
 import type { AsOf, CaseFile, Change, Chunk, Ctx, Status } from "@sllaw/ai";
 import { filesOfCase } from "@sllaw/db";
 import { changeStatus, changesInto, chunksById, linksOf, sectionsOf } from "@sllaw/etl_db";
+import { emptyOffice, type Office } from "@sllaw/office";
 import { type FileIndex, fileIndex, searchLaw } from "@sllaw/search";
 import { type BlobStore, blobStore } from "@sllaw/storage";
 import { caseFilesFrom, chunksReader, summaryReader } from "./case-files";
+import { OfficeError, readOffice, writeOffice } from "./office";
 
 const asChunk = (c: {
   id: number;
@@ -27,6 +29,8 @@ type Who = {
   caseId?: string | null;
   caseBrief?: { title: string; facts: string } | null;
   caseFiles?: CaseFile[];
+  caseOffice?: Office | null;
+  chatId?: string | null; // the chat a turn runs in: the agent's office changes are recorded with it
   asOfDate?: string;
 };
 
@@ -80,7 +84,16 @@ export const today = () => new Date().toLocaleDateString("en-CA", { timeZone: "A
  * the files in caseFiles (caseFilesOf). `files` swaps the store and index (tests).
  */
 export function agentCtx(
-  { workspaceId, userId, caseId = null, caseBrief = null, caseFiles = [], asOfDate = today() }: Who,
+  {
+    workspaceId,
+    userId,
+    caseId = null,
+    caseBrief = null,
+    caseFiles = [],
+    caseOffice = null,
+    chatId = null,
+    asOfDate = today(),
+  }: Who,
   files: { store?: BlobStore; index?: FileIndex } = {},
 ): Ctx {
   const scopes = [`user:${userId}`, ...(caseId ? [`case:${caseId}`] : [])];
@@ -90,9 +103,22 @@ export function agentCtx(
     caseId,
     caseBrief,
     caseFiles,
+    caseOffice,
+    today: today(),
     asOfDate,
     scopes,
     ports: {
+      officeRead: async () => (caseId ? (await readOffice(caseId)).office : emptyOffice()),
+      officeChange: async (ops, summary) => {
+        if (!caseId || !caseOffice) return { ok: false, error: "Not a case chat." };
+        try {
+          const r = await writeOffice(caseId, ops, { by: "ai", userId, chatId, summary });
+          return { ok: true, changeId: r.changeId, summary: r.summary, office: r.office };
+        } catch (e) {
+          if (e instanceof OfficeError) return { ok: false, error: e.message };
+          throw e;
+        }
+      },
       fileSearch: async (query, { fileIds, mode, limit }) =>
         caseId
           ? (files.index ?? fileIndex()).search(query, {

@@ -1,5 +1,7 @@
 // The app tables (drizzle-kit migrations). Every row is keyed by our own ids (uuid); Clerk ids (user_..., org_...)
 // live only in users.clerk_id and workspaces.clerk_id, filled by the Clerk webhook (services/accounts.ts).
+
+import type { Item, Office } from "@sllaw/office";
 import { sql } from "drizzle-orm";
 import {
   bigint,
@@ -129,6 +131,39 @@ export const cases = pgTable("cases", {
   createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }), // null once the user is deleted
   createdAt,
 });
+
+// A case's office (docs/APP.md, Case office): its header, people, court dates, tasks and dashboard widgets as one
+// document checked by @sllaw/office's schema. No row until the first change: the case then has the empty office.
+// `version` goes up by one per change; a write names the version it read (two tabs never overwrite each other).
+export const caseOffices = pgTable("case_offices", {
+  caseId: uuid("case_id")
+    .primaryKey()
+    .references(() => cases.id, { onDelete: "cascade" }),
+  doc: jsonb().$type<Office>().notNull(),
+  version: integer().notNull().default(0),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+// Every change to a case office, the lawyer's and the agent's: what each item was before and after, so one change can
+// be undone exactly (office's restore) whatever came after it. chat_id: the chat the agent made it from.
+export const caseChanges = pgTable(
+  "case_changes",
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    caseId: uuid("case_id")
+      .notNull()
+      .references(() => cases.id, { onDelete: "cascade" }),
+    by: text().notNull(), // lawyer | ai
+    userId: uuid("user_id").references(() => users.id, { onDelete: "set null" }),
+    chatId: uuid("chat_id").references(() => chats.id, { onDelete: "set null" }),
+    summary: text().notNull(),
+    items: jsonb().$type<Item[]>().notNull(),
+    undoes: uuid(), // this change undid that one
+    undoneBy: uuid("undone_by"), // the change that undid this one
+    createdAt,
+  },
+  (t) => [index().on(t.caseId, t.createdAt)],
+);
 
 // A chat is its creator's (docs/APP.md, Chats): the client mints the id, the first message creates the row.
 export const chats = pgTable(
