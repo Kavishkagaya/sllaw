@@ -1,3 +1,5 @@
+import type { Office, Op } from "@sllaw/office";
+
 // What agents get from outside: `ctx`, the one thing passed to an agent and its tools. Its ports are functions
 // services fills (search, read, links, as_of live in services; importing them here would be a cycle), already
 // scoped to the request, so a tool can only reach what this user may see.
@@ -72,7 +74,17 @@ export type FilePassage = { fileId: string; n: number; page: number; text: strin
 /** One of a file's chunks, as the index cut them (chunks.json): its id is `<fileId>:<n>`. */
 export type FileChunk = { n: number; page: number; text: string };
 
+/** What the agent's change to the case office came to: its line in the history, and the office after it; or why it
+ *  could not be made (nothing changed). */
+export type OfficeChanged =
+  | { ok: true; changeId: string; summary: string; office: Office }
+  | { ok: false; error: string };
+
 export interface Ports {
+  /** The case's office as it is now (case chat only). */
+  officeRead(): Promise<Office>;
+  /** Changes the case's office as the agent, recorded with this chat and undoable by the lawyer. */
+  officeChange(ops: Op[], summary: string): Promise<OfficeChanged>;
   search(query: string, opts: { mode?: Mode; filters?: Filters; limit?: number }): Promise<Hit[]>;
   /** The case's files only (services scopes it to case:<id>); fileIds narrows further. */
   fileSearch(
@@ -100,6 +112,9 @@ export type Ctx = {
   caseBrief: { title: string; facts: string } | null; // that case's title and facts, always in the instructions
   caseFiles: CaseFile[]; // that case's files, oldest first, for the file tools (only counted in the instructions); []
   // in plain chat
+  caseOffice: Office | null; // that case's office at the start of the turn (header, dates, tasks, widgets); null in
+  // plain chat
+  today: string; // YYYY-MM-DD in Colombo: what "next date" and "overdue" are measured from
   asOfDate: string; // YYYY-MM-DD: the law as it stood on this date, set by the lawyer (default today)
   scopes: string[]; // user:<id>, case:<id>: what user-file search may reach (#19)
   ports: Ports;

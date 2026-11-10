@@ -5,6 +5,7 @@ import type { Account } from "./accounts";
 import { agentCtx, caseFilesOf } from "./agent";
 import { caseOf } from "./cases";
 import { checkChat, meterMessage } from "./limits";
+import { readOffice } from "./office";
 import "./usage"; // metered usage goes to the database
 
 type Signed = Account & { workspace: NonNullable<Account["workspace"]> };
@@ -80,6 +81,8 @@ export async function sendMessage(
     caseId: effective,
     caseBrief: theCase && { title: theCase.title, facts: theCase.facts },
     caseFiles: theCase ? await caseFilesOf(theCase.id) : [],
+    caseOffice: theCase ? (await readOffice(theCase.id)).office : null,
+    chatId,
   });
   // every model call and search of the turn is metered for this user and chat; their writes end with the turn's
   return withUsage({ workspaceId: a.workspace.id, userId: a.user.id, task: "chat", ref: `chat:${chatId}` }, () =>

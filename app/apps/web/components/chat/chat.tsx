@@ -22,6 +22,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Streamdown } from "streamdown";
 import { Composer } from "@/components/composer";
+import { SafeImg } from "@/components/safe-img";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -39,6 +40,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { cn } from "@/lib/utils";
 import { useChatStore } from "@/stores/chat-store";
 import { useTRPC } from "@/trpc/client";
+import { CaseChange } from "./case-change";
 import { FileSource, LawSource, lawName, shortPin, TONE, type Tone } from "./source-view";
 import { splitAnswer, Trail } from "./trail";
 
@@ -172,6 +174,7 @@ export function Chat({
 
   const components = useMemo(
     () => ({
+      img: SafeImg,
       a: ({ href, children }: { href?: string; children?: React.ReactNode }) => {
         if (!href?.startsWith("#cite:"))
           return (
@@ -319,7 +322,12 @@ export function Chat({
                       </motion.div>
                     ) : (
                       <motion.div key={m.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-                        <Answer parts={m.parts} live={busy && m.id === messages.at(-1)?.id} components={components} />
+                        <Answer
+                          parts={m.parts}
+                          live={busy && m.id === messages.at(-1)?.id}
+                          components={components}
+                          caseId={caseId}
+                        />
                       </motion.div>
                     ),
                   )}
@@ -460,12 +468,20 @@ function Answer({
   parts,
   live,
   components,
+  caseId,
 }: {
   parts: ChatMessage["parts"];
   live: boolean;
   components: Record<string, unknown>;
+  caseId?: string;
 }) {
   const { trail, answer } = splitAnswer(parts);
+  // the agent's changes to the case office, each with Undo (docs/APP.md, Case office)
+  const changes = parts.flatMap((p) =>
+    p.type === "tool-caseUpdate" && p.state === "output-available" && typeof p.output === "object" && p.output.changeId
+      ? [p.output]
+      : [],
+  );
   return (
     <div className="flex flex-col gap-3">
       <Trail parts={trail} live={live && !answer.some((p) => p.type === "text" && p.text)} />
@@ -477,6 +493,8 @@ function Answer({
             </Streamdown>
           ),
       )}
+      {caseId &&
+        changes.map((c) => <CaseChange key={c.changeId} caseId={caseId} changeId={c.changeId} summary={c.summary} />)}
     </div>
   );
 }

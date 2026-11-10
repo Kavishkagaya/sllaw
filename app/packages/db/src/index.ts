@@ -6,4 +6,5 @@ export * from "./chats";
 export { db } from "./client";
 export * from "./files";
 export * from "./limits";
+export * from "./office";
 export * from "./usage";

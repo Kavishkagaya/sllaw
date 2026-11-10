@@ -11,6 +11,7 @@ import {
   FileText,
   FolderOpen,
   GitCompareArrows,
+  LayoutDashboard,
   Link2,
   Loader2,
   Search,
@@ -306,6 +307,28 @@ function Step({ p, name, active }: { p: Part; name: (key: string) => string; act
           ) : o ? (
             "Read a case file"
           ) : null}
+        </p>
+      </Row>
+    );
+  }
+  if (p.type === "tool-caseRead")
+    return (
+      <Row icon={running ? Loader2 : LayoutDashboard} spin={running}>
+        <p>Read the case page</p>
+      </Row>
+    );
+  if (p.type === "tool-caseUpdate") {
+    const out = p.state === "output-available" ? p.output : null;
+    return (
+      <Row icon={running ? Loader2 : LayoutDashboard} spin={running}>
+        <p>
+          {running
+            ? "Updating the case…"
+            : typeof out === "string"
+              ? out
+              : failed
+                ? "Saving to the case page failed"
+                : `Saved to the case page: ${out?.summary ?? p.input?.summary}`}
         </p>
       </Row>
     );

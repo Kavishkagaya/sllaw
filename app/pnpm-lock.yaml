@@ -32,6 +32,9 @@ importers:
       '@sllaw/api':
         specifier: workspace:*
         version: link:../../packages/api
+      '@sllaw/office':
+        specifier: workspace:*
+        version: link:../../packages/office
       '@tailwindcss/postcss':
         specifier: ^4.3.3
         version: 4.3.3
@@ -117,6 +120,9 @@ importers:
 
   packages/ai:
     dependencies:
+      '@sllaw/office':
+        specifier: workspace:*
+        version: link:../office
       '@sllaw/usage':
         specifier: workspace:*
         version: link:../usage
@@ -142,6 +148,9 @@ importers:
       '@clerk/nextjs':
         specifier: ^7.9.17
         version: 7.9.17(next@16.4.2(@types/node@26.6.5)(react-dom@19.3.1(react@19.3.1))(react@19.3.1))(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
+      '@sllaw/office':
+        specifier: workspace:*
+        version: link:../office
       '@sllaw/services':
         specifier: workspace:*
         version: link:../services
@@ -167,6 +176,9 @@ importers:
       '@neondatabase/serverless':
         specifier: ^1.2.0
         version: 1.2.0
+      '@sllaw/office':
+        specifier: workspace:*
+        version: link:../office
       drizzle-orm:
         specifier: ^0.45.4
         version: 0.45.4(@neondatabase/serverless@1.2.0)
@@ -219,6 +231,19 @@ importers:
         specifier: ^7.0.2
         version: 7.0.2
 
+  packages/office:
+    dependencies:
+      zod:
+        specifier: ^4.6.7
+        version: 4.6.7
+    devDependencies:
+      '@types/node':
+        specifier: ^26.6.5
+        version: 26.6.5
+      typescript:
+        specifier: ^7.0.2
+        version: 7.0.2
+
   packages/search:
     dependencies:
       '@sllaw/usage':
@@ -249,6 +274,9 @@ importers:
       '@sllaw/extract':
         specifier: workspace:*
         version: link:../extract
+      '@sllaw/office':
+        specifier: workspace:*
+        version: link:../office
       '@sllaw/search':
         specifier: workspace:*
         version: link:../search
