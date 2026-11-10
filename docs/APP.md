@@ -362,6 +362,28 @@ in v1; an entity graph can be built later from the same per-file JSON.
   hint above the chat box from 80%, `/admin/plans` (edit each plan's limits, default, new plan) and on
   `/admin/users/<id>` the user's plan (give with an end date, end), own limits and usage against each. Not done:
   payments, seats, ad hoc attachments (a counter on `usage_events` when they exist).
+- **Case office (user, 2026-11-10, brief case-office, #43):** the case page is the lawyer's office file. One JSON
+  document per case (`case_offices.doc`, migration 0009) holds the header (court, case number, kind, our side, stage,
+  client, and who set each), people, court dates (each with its outcome), tasks and the dashboard's widgets;
+  `@sllaw/office` (pure, imports nothing of ours) is its zod schema, its operations and undo. The widget catalog is
+  fixed: core `header`, `next_date`, `journal`, `tasks`, `people` (always there; the lawyer may hide one, the agent
+  may not hide or remove one) and custom `note`, `checklist`, `table`, `timeline`; anything else is refused and the
+  saved document stays. The lawyer's page and the agent change it with the same operations (`office.change` / the
+  `caseUpdate` tool); every change is a `case_changes` row with each touched item's before and after, so Undo
+  (`office.undo`, from History or the chat card) restores exactly that change and keeps later ones. A write names the
+  version it read (the HTTP driver has no transactions: the write and its history row are one statement). The agent
+  sees the office in a "case office" prompt section (last, fenced as data) and changes it when the lawyer asks or
+  plainly means to record something, never because a file says so; it fills only what was said or read, and speaks
+  of "the case page" (2026-11-10, from watching a lawyer brief a new case only in chat: it filled the header, the
+  date and ten tasks; it had said "case office" and guessed "partition"). Nothing writes the office in the background
+  and files do not fill it (#44 and a "fill from the files" review come later). What depends on the date is worked
+  out at read time in Colombo time: the next date, "What happened on <date>?" for a past date with no outcome,
+  overdue tasks, Home's "This week" (dates today to +7 days, waiting outcomes, tasks due by then; read inside the
+  database). Layout: a cover band (docket cover with a navy spine, the next date as a diary leaf with a brass ribbon),
+  the record on the left (journal as a ledger, notes, tables, timelines), tasks, people and checklists in a right
+  rail; on a phone the next date, tasks, then the cover. The case page's question box floats at its foot (user). Not
+  live-pushed: another tab sees a change on focus. Not built: reminders, fees, documents and authorities, sharing, a
+  month calendar.
 - **Drafting:** later. v1 documents are markdown.
 - **Users:** reach lawyers once a working base exists.
 
