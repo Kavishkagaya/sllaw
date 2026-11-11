@@ -188,3 +188,21 @@ Both are WordPress. The yearly listing pages contain direct PDF links. Cloudflar
 | documents.gov.lk Sinhala, ~2000+ | Text layer in the legacy FM font (`YS% ,xld` = ශ්‍රී ලංකා) | Convert FM to Unicode, no OCR |
 | documents.gov.lk English, 2006+ | Text PDF | docling (current pipeline) |
 | Court judgment PDFs | Not checked | — |
+
+## Case-file documents for a gold set (#44, 2026-11-11)
+
+Searched for public Sri Lankan case-file documents to label (web search, one round; nothing downloaded):
+- **Public and real:** judgments and orders (supremecourt.lk and courtofappeal.lk PDFs, which search engines index
+  even though supremecourt.lk challenges bots; the HF judgment datasets above; Sri L.R. PDFs on lankalaw.net), gazettes and
+  legislation (our corpus).
+- **Not public:** no plaint, answer, affidavit, journal entry, deed, lease, letter of demand or charge sheet found as a
+  document. Judgments quote them in part (e.g. a plaint marked as an exhibit; journal entries discussed in Sri L.R.).
+  Statutory forms: the Civil Procedure Code's schedule of forms and Acts such as Small Claims Courts' Procedure Act
+  No. 33 of 2022 (plaint with affidavit) say what they must hold. Not checked: legal-aid or court-practice guides,
+  Judicial Service Commission forms.
+- The app's dev database holds only test uploads, not real case files (user, 2026-11-11).
+- **courtofappeal.lk/judgements/?case_year=2024 and 2025 return 404 (2026-11-11)**: the listing has moved or gone. lankalaw.net
+  hosts Court of Appeal judgments and orders as PDFs: `/court-of-appeal-judgements-<year>/` lists them,
+  `/wp-content/uploads/ca_judgements/<year>/ca-<kind>-<n>-<year>[-order].pdf` (e.g. ca-writ-01-2025-order). Used
+  for the #46 gold set (3 PDFs fetched into memory, a one-off exception the user allowed). Not checked: whether
+  courtofappeal.lk has a new listing path.

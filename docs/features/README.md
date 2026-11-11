@@ -35,9 +35,9 @@ reopening to `scoping`); code under `app/` and `etl/` can be edited only on the 
 `decisions` and `progress` are append-only by convention: one dated line per session or choice.
 
 **`neon_branch`** (app work): the brief's own branch of the app database (Neon `sllaw-app`, from `main`), made in
-/scope, deleted at merge or drop and set back to `null`; a session start lists any left over. The worktree's
-`app/apps/web/.env.local` points `DATABASE_URL` at it; the guard refuses running the app, evals or migrations
-from a brief worktree that points at production. ETL work has none (`null`).
+/scope, deleted at merge or drop and set back to `null`; a session start lists any left over. While the brief's
+branch is checked out, `app/apps/web/.env.local` points `DATABASE_URL` at it (production's is kept as `.env.main`);
+the guard refuses running the app, evals or migrations on a brief's branch that points at production. ETL work has none (`null`).
 
 **Size it to the work** (Fowler on spec tools: a bug fix turned into 16 acceptance criteria is overkill). A bug fix
 is one done-check and one scenario; a feature has a few of each. ETL work uses `"branch": "main"`.

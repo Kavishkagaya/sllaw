@@ -9,7 +9,7 @@ The scope is agreed and frozen; your job is the how. Don't ask the user about me
 out to be wrong or impossible: then stop, explain, and reopen it with them (/scope), never work around it.
 
 **Session start** (every time, also when continuing):
-1. `cd` into the brief's worktree (or main for ETL); read the brief, its `progress`, `git log --oneline -15`.
+1. In `~/sllaw` (no worktree), `git checkout` the brief's branch (main for ETL); read the brief, its `progress`, `git log --oneline -15`.
 2. Run the checks (`pnpm check && pnpm typecheck && pnpm test` in `app/`; etl tests). If they fail, fix that first.
 3. For app work, `pnpm dev` in the background and one quick look at the core path (sign in, open a case), so you
    don't build on something already broken.
@@ -26,7 +26,7 @@ out to be wrong or impossible: then stop, explain, and reopen it with them (/sco
 2. A FAIL: fix, commit, validate again. **At most 3 validation rounds**; after the third FAIL, stop and report to
    the user what keeps failing (bounded like Stripe's two CI rounds: past that, more tries rarely help).
 3. **Schema change?** Migrations ran freely on the brief's Neon branch. Before the merge, run the same migration
-   on production from the main checkout (`pnpm --filter @sllaw/db migrate`): the guard asks the user, and their yes
+   on production (on main, with `.env.main` put back as `.env.local`: `pnpm --filter @sllaw/db migrate`): the guard asks the user, and their yes
    is required (production is the app's one database and the merge deploys at once). A no: the PR waits; say so.
 4. Both PASS: `git push -u origin <branch>`, `gh pr create` (body: the brief summary, both reports' verdicts and
    findings, "Closes #<issue>"), then `gh pr merge <n> --rebase --match-head-commit <sha>` (the user allows merging
@@ -34,5 +34,5 @@ out to be wrong or impossible: then stop, explain, and reopen it with them (/sco
 5. Delete the brief's Neon branch (`delete_branch` with `neon_branch.id`; the user allows deleting agent branches,
    2026-11-10), set `neon_branch` to null. Same when a brief is dropped.
 6. On main: set the brief's `status` to `merged` with a last `progress` line, commit, push (docs-only, no gate).
-   Remove the worktree. Tell the user in a few lines: what shipped, the PR link, what the validators flagged,
+   Move `app/apps/web/.env.main` back to `.env.local` (production). Tell the user in a few lines: what shipped, the PR link, what the validators flagged,
    anything not checked.

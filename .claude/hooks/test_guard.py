@@ -13,6 +13,8 @@ def bash(cmd):
 
 
 CASES = [
+    ("git worktree add -b app/x ../sllaw-x origin/main", "deny"),
+    ("git worktree list", None),
     ("gh pr merge 41", "deny"),
     ("agent-browser open http://localhost:3000", "deny"),
     ("agent-browser --headed open http://localhost:3000", None),
@@ -201,6 +203,12 @@ with tempfile.TemporaryDirectory() as d:
               ("sql on agent branch", nb("mcp__claude_ai_Neon__run_sql", project_id=cfg["project_id"],
                                          branch_id="br-agent-1"), None),
               ("sql on main", nb("mcp__claude_ai_Neon__run_sql", project_id=cfg["project_id"]), "ask")]
+    ag = lambda **kw: (lambda r: r[0] if r else None)(decide({"tool_name": "Agent", "tool_input": kw}))  # noqa: E731
+    cases += [("agent without model", ag(subagent_type="Explore", prompt="x"), "deny"),
+              ("agent default type without model", ag(prompt="x"), "deny"),
+              ("agent with model", ag(subagent_type="Explore", prompt="x", model="haiku"), None),
+              ("validator without model", ag(subagent_type="semantic-validator", prompt="x"), "deny"),
+              ("fork", ag(subagent_type="fork", prompt="x"), None)]
     for name, got, want in cases:
         n += 1
         if got != want:

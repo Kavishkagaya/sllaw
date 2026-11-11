@@ -15,7 +15,8 @@ deploys until both reports for the exact head commit say `VERDICT: PASS`.
    there is none, stop: scope it with the user first. A validator can only check what was agreed.
 3. **App work: the dev server runs** from this worktree (`pnpm dev` in `app/`, in the background; wait for :3000).
 4. **Run both validators in parallel**, each a fresh agent (`subagent_type: semantic-validator` and
-   `security-validator`), each given: the brief path, `base` = `git merge-base origin/main HEAD`, `head` = full
+   `security-validator`), each on the cheapest model the change needs (`model`: sonnet for most; opus for auth,
+   access, money or a large diff; CLAUDE.md Rules), each given: the brief path, `base` = `git merge-base origin/main HEAD`, `head` = full
    `git rev-parse HEAD`, the worktree path, the dev URL, and its report path
    `$(git rev-parse --git-common-dir)/validation/<head>/{semantic,security}.md` (absolute; mkdir it first). Give them
    no opinion about whether it works.
