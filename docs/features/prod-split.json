@@ -1,0 +1,89 @@
+{
+  "title": "Separate production from staging",
+  "slug": "prod-split",
+  "status": "dropped",
+  "branch": "app/prod-split",
+  "issue": null,
+  "neon_branch": null,
+  "goal": "Step 1 of #38: production gets its own app database, files bucket, file index and Cloudflare token, so a lawyer's case files never sit beside test data and a migration on dev is not live in production. Two app databases (user: 'separating now is good, 2 dbs, branch-based scoping in Neon'); the rest as planned in #38.",
+  "for_whom": "The first practising lawyers who sign up (their confidential case files), and us building and testing without touching their data.",
+  "done_check": [
+    {
+      "id": "d1",
+      "check": "A new Neon project sllaw-prod in Singapore (aws-ap-southeast-1) with database `app`; every migration applied; its schema matches staging's (Neon compare_database_schema shows no difference)."
+    },
+    {
+      "id": "d2",
+      "check": "A private R2 bucket for production files (unsigned GET refused), CORS allowing PUT from https://sllaw.vercel.app only; a production Cloudflare token scoped to that bucket and Workers AI. The staging bucket sllaw-files no longer allows sllaw.vercel.app."
+    },
+    {
+      "id": "d3",
+      "check": "A Zilliz collection for production files with the same schema and indexes as `files`; the collection name comes from an env variable (default `files`), so staging is unchanged."
+    },
+    {
+      "id": "d4",
+      "check": "Vercel Production variables point at the production database, bucket, collection and token; Development and Preview still point at staging. The law corpus (ETL_DATABASE_URL, law bucket, Zilliz `chunks`) stays shared and read-only."
+    },
+    {
+      "id": "d5",
+      "check": "Clerk (one shared instance) has a webhook endpoint for each environment: production at sllaw.vercel.app, staging at a fixed address (the `staging` branch's preview alias, through Vercel's automation bypass). A new sign-up appears as a user and workspace in both databases within a minute."
+    },
+    {
+      "id": "d6",
+      "check": "In a headed browser on sllaw.vercel.app: sign in, create a case, upload a text PDF (Ready), ask a question; the answer cites a law section and the file. The rows are in sllaw-prod only (staging's counts unchanged), the file in the production bucket, its vectors in the production collection. The same steps on local dev land in staging only."
+    },
+    {
+      "id": "d7",
+      "check": "Guards and map: `.claude/agent-db.json` names sllaw-prod; the guard asks before SQL or migrations against sllaw-prod and refuses running the app, evals or migrations from a brief worktree pointing at it, with cases in test_guard.py. CLAUDE.md map and rules, app/CLAUDE.md (env), docs/APP.md and .env.example say how it is now; #38 step 1 ticked."
+    }
+  ],
+  "scenarios": [
+    {
+      "id": "s1",
+      "steps": "A lawyer signs up on sllaw.vercel.app, creates a case, uploads a lease agreement and asks whether the landlord can evict without notice.",
+      "expect": "The file reads Ready, the answer cites the Act's section and the lease page; everything they made lives only in the production database, bucket and collection."
+    },
+    {
+      "id": "s2",
+      "steps": "We upload a test file and chat on local dev (or a preview).",
+      "expect": "Nothing appears in production: a search in a production case never finds the test file, and production's file and chat counts don't change."
+    },
+    {
+      "id": "s3",
+      "steps": "An agent runs a new migration on its agent/<slug> branch and on staging.",
+      "expect": "Production's schema is unchanged until the migration is run against sllaw-prod, and the guard asks first."
+    }
+  ],
+  "out_of_scope": [
+    "A Clerk production instance and a custom domain (no domain bought yet; Clerk stays shared).",
+    "Corpus releases with stable chunk ids (#38 step 2) and pgvector replacing Zilliz (#38 step 3).",
+    "A Neon branch per PR preview (user: no).",
+    "Moving staging out of us-east-1.",
+    "Nightly backups to R2 (Neon's own restore window only).",
+    "Copying today's test users, cases or chats into production: it starts empty.",
+    "A separate AI Gateway key for production (it signs in through the Vercel project; usage_events records spend per environment)."
+  ],
+  "decisions": [
+    {
+      "date": "2026-11-10",
+      "note": "Production is a new Neon project sllaw-prod in Singapore; today's sllaw-app becomes staging and stays in us-east-1; agent/<slug> branches stay off staging (user)."
+    },
+    {
+      "date": "2026-11-10",
+      "note": "Only the app database splits; the corpus (sllaw-etl, kb) is already separate and stays shared, read-only (user)."
+    },
+    {
+      "date": "2026-11-10",
+      "note": "No domain yet (neethi.ai is registered by someone else; neethilaw.com / neethiai.com are $12/yr, not bought). Clerk stays one shared instance, with a webhook endpoint per environment (user)."
+    },
+    {
+      "date": "2026-11-10",
+      "note": "Previews use staging, no branch per PR (user). Production gets its own Cloudflare token; AI Gateway as is (user)."
+    },
+    {
+      "date": "2026-11-10",
+      "note": "Parked (user): split production from dev later, once there is a solid product to release. Reopen from this brief and #38."
+    }
+  ],
+  "progress": []
+}

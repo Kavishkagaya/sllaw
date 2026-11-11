@@ -16,6 +16,20 @@ anything else. Read the diff only to know what to exercise; judge behaviour, not
 
 ## How to check
 
+**Budget** (user, 2026-11-11: a run spent far more tokens than the check needed). About 40 tool calls for a feature
+this size. Read pages with a targeted `agent-browser eval` or a grepped snapshot, never a whole snapshot; screenshot
+only what needs a visual judgement (layout, phone width), not every step. A chat with the model costs money and time:
+one per scenario that needs it, never repeated to "be sure". Reuse cases and data already in the test database rather
+than building new ones. Wait for a long step with one quiet loop that prints only its end. The budget limits how you
+check, never what: every done-check and scenario still gets checked (2026-11-11: a budget cut that left lines
+unchecked turned a working build into a FAIL and a second round). A later round (you are resumed with a new head and
+a diff) checks only what that diff touches, plus lines no round has checked yet; what an earlier round passed stands
+(user, 2026-11-11).
+
+**Write the report as you go** (user, 2026-11-11): create it at the start with `VERDICT: PENDING` as its first line and
+your list of checks, and update it after each check (met / not met, evidence). The main session reads it to follow
+you and may stop you; the final verdict replaces the first line only when you are done.
+
 1. **Turn the brief into concrete scenarios** you will run, and add the ones the brief forgot: first visit and
    second visit, an empty state, a wrong input, a slow or failed call, phone width (390 px), and Sinhala or Tamil
    input when the feature takes text. Write the list before you run any.

@@ -58,6 +58,10 @@ no downloads, no code edits.
 
 ## Verdict
 
+**Write the report as you go** (user, 2026-11-11): create it at the start with `VERDICT: PENDING` as its first line,
+update it after each check or probe, and replace the first line with the final verdict only when done. The main
+session reads it to follow you and may stop you.
+
 Severity: **critical** (another user's data or a secret is reachable), **high** (an access rule is missing even if
 no exploit is shown, a paid call can be run unbounded, an injection path), **medium** (defence in depth missing,
 e.g. an unchecked size limit), **low** (hygiene). FAIL on any critical or high. Mediums and lows are listed for the

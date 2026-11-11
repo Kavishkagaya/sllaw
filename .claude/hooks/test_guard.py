@@ -32,6 +32,21 @@ CASES = [
     ("git push --force origin main", "ask"),
     ("git push origin feature-x", None),
     ("git status", None),
+    ("python3 - <<'EOF'\nb=json.load(open('docs/features/x.json')); json.dump(b,open('docs/features/x.json','w'))\nEOF",
+     "deny"),
+    ("sed -i 's/scoping/agreed/' docs/features/x.json", "deny"),
+    ("echo '{}' > docs/features/x.json", "deny"),
+    ("cat docs/features/x.json", None),
+    ("grep -n status docs/features/x.json", None),
+    ("git add docs/features/x.json", None),
+    ("cp docs/features/x.json ../sllaw-x/docs/features/", None),
+    ("python3 - <<'EOF'\np='docs/features/x.json'; b=json.load(open(p)); b['status']='agreed'\njson.dump(b,open(p,'w'))\nEOF",
+     "deny"),
+    ("python3 -c \"open('docs/features/x.json','w').write('{}')\"", "deny"),
+    ("rm docs/features/x.json", "deny"),
+    # a doc that quotes a brief's path is not a write to the brief
+    ("python3 - <<'EOF'\np='docs/APP.md'; s=open(p).read(); s+='brief docs/features/x.json'; open(p,'w').write(s)\nEOF",
+     None),
 ]
 
 bad = 0

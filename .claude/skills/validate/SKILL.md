@@ -19,7 +19,11 @@ deploys until both reports for the exact head commit say `VERDICT: PASS`.
    `git rev-parse HEAD`, the worktree path, the dev URL, and its report path
    `$(git rev-parse --git-common-dir)/validation/<head>/{semantic,security}.md` (absolute; mkdir it first). Give them
    no opinion about whether it works.
-5. **Read both reports.** On FAIL: fix, commit, go back to 1 (the new commit has no reports). Never edit a report or
+5. **Read both reports.** On FAIL: fix, commit, go back to 1 (the new commit has no reports). A later round resumes
+   the same two validators (SendMessage: the new head, `git diff <old> <new>`, the new report path) rather than
+   spawning fresh ones: they keep what they checked and re-check what the diff touches (tokens, user 2026-11-11).
+   A later round checks only what the new commits change (user, 2026-11-11): lines an earlier round passed stand
+   unless the diff touches them; lines no round has checked yet are still checked once. Never edit a report or
    write one yourself; never argue a validator into a PASS. If a finding is wrong, say why to the user and let them
    decide.
 6. **Tell the user** in a few lines: both verdicts, the problems found and fixed, what was not checked. Put the two

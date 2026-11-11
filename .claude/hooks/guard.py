@@ -232,7 +232,40 @@ def neon_sql(tool, inp):
                        "the database; ETL inspection reads the ETL state DB, never the app's database.")
 
 
-BASH_RULES = [merge_rebase, headed_browser, downloads, production_writes, force_push]
+BRIEF_PATH = r"docs/features/[^/\s'\"]+\.json"
+Q = r"['\"]"
+
+
+def brief_targets(cmd):
+    """Does the command write to a brief? The brief must be the target of the write, not merely mentioned (a doc may
+    quote a brief's path)."""
+    direct = [
+        r"open\(\s*" + Q + r"[^'\"]*" + BRIEF_PATH + Q + r"[^)]*" + Q + r"[wa]\+?" + Q,  # open('docs/features/x.json', 'w')
+        r"\bsed\s+(-\S+\s+)*-i\b[^|;&]*" + BRIEF_PATH,
+        r"\btee\b[^|;&]*" + BRIEF_PATH,
+        r">>?\s*" + Q + r"?\S*" + BRIEF_PATH,
+        r"\b(rm|mv|truncate)\b[^|;&]*" + BRIEF_PATH,
+        r"Path\(\s*" + Q + r"[^'\"]*" + BRIEF_PATH + Q + r"\s*\)\.write_text",
+    ]
+    if any(has(cmd, p) for p in direct):
+        return True
+    # p = 'docs/features/x.json' ... open(p, 'w')
+    for var in re.findall(r"\b(\w+)\s*=\s*" + Q + r"[^'\"]*" + BRIEF_PATH + Q, cmd):
+        if has(cmd, r"open\(\s*" + re.escape(var) + r"\s*,\s*" + Q + r"[wa]\+?" + Q):
+            return True
+    return False
+
+
+def brief_shell(cmd):
+    # 2026-11-10 (agent's own slip): a brief set to "agreed" by a python one-liner skipped the user's sign-off,
+    # because the brief rules watch only Edit/Write. Reading a brief in the shell is fine; changing it is not.
+    # Refined the same day: a docs edit that only quoted a brief's path was refused; now only a write to one is.
+    if brief_targets(cmd):
+        return "deny", ("Change a brief (docs/features/*.json) with Edit or Write, not the shell, so the guard can ask "
+                        "the user for sign-off and keep an agreed scope frozen.")
+
+
+BASH_RULES = [merge_rebase, headed_browser, downloads, production_writes, force_push, brief_shell]
 
 
 # ---- Scope rules (file edits) -----------------------------------------------------------------------------------

@@ -65,6 +65,9 @@ Each came from a correction or a costly mistake. Guarded = `.claude/hooks/guard.
   `origin/main`, in a worktree. Commits on the brief's branch are part of /build; outside the loop, commit only when
   asked (2026-11-10).
 - **PRs merge with `gh pr merge <n> --rebase`**, never a merge commit or squash (2026-10-26). *Guarded.*
+- **A fix goes into the commit it fixes** (user, 2026-11-11): `git commit --fixup=<sha>` then
+  `git rebase -i --autosquash`, never a separate "fix" commit; the brief's branch is then force-pushed with
+  `--force-with-lease` (never `main`).
 - **A commit passes the checks:** app (biome on staged files, typecheck, unit tests), etl (the four local test
   suites). *Guarded: a failing commit is refused with the output.*
 - **Release gate** (2026-11-10): `gh pr create`, `gh pr merge` (with `--match-head-commit <sha>`), `git push` to
@@ -72,6 +75,10 @@ Each came from a correction or a costly mistake. Guarded = `.claude/hooks/guard.
   `<git-common-dir>/validation/<sha>/`; changes only to `docs/` or `*.md` pass. *Guarded.*
 - **Browser tests run headed** (`agent-browser --headed`); the user watches (2026-10-27). *Guarded.*
 - **Unrelated work during a task goes to a subagent**, so the main thread stays on the task (2026-10-10).
+- **Spend Claude Code tokens like money** (user, 2026-11-11, after a session hit its 5-hour limit): read a page with a
+  targeted `agent-browser eval` or a grepped snapshot, never a whole snapshot; screenshot only to judge a design;
+  wait with one quiet loop that prints only the end state; a later validation round resumes the same validators
+  (SendMessage with the new head and the diff) instead of spawning fresh ones; demos and repeat runs only when asked.
 - **Never repeat an investigation:** read `docs/SOURCES.md` before probing a site, `docs/PIPELINE_V2.md` before
   changing the pipeline. Findings get written down in the same session (see "Writing things down").
 
@@ -118,7 +125,7 @@ up). `~/sllaw` is the shared NFS home (slow: run Python from `/var/tmp/e19309/*_
 ```bash
 cd app && pnpm check && pnpm typecheck && pnpm test           # app: biome, tsc, vitest (in memory, ~15 s)
 .venv/bin/python3 -m etl.test_structure                       # also etl.test_refs, etl.test_mentions, etl.v2.test_v2
-python3 .claude/hooks/test_guard.py                           # the guards (47 cases)
+python3 .claude/hooks/test_guard.py                           # the guards (69 cases)
 ```
 
 On ampere, against real data (on purpose, they cost): `python -m etl.v2.gate --workers 8` (quality gate),
