@@ -12,6 +12,7 @@
     "check-files": "tsx --env-file=../../apps/web/.env.local scripts/check-files.ts",
     "eval-chat": "tsx --env-file=../../apps/web/.env.local scripts/eval-chat.ts",
     "eval-agent": "tsx --env-file=../../apps/web/.env.local scripts/eval-agent.ts",
+    "gold-files": "tsx --env-file=../../apps/web/.env.local scripts/gold-files.ts",
     "tool": "tsx --env-file=../../apps/web/.env.local scripts/tool.ts"
   },
   "devDependencies": {
@@ -28,6 +29,8 @@
     "@sllaw/search": "workspace:*",
     "@sllaw/storage": "workspace:*",
     "@sllaw/usage": "workspace:*",
-    "workflow": "5.2.1"
+    "ai": "^7.0.143",
+    "workflow": "5.2.1",
+    "zod": "^4.6.7"
   }
 }

@@ -35,6 +35,7 @@
     {"date": "2026-11-11", "note": "Every file goes through a page-reading agent capped at about 10 steps, not one call with the whole text (user). Kept: the Clairic change was dropped the same day."},
     {"date": "2026-11-11", "note": "Files that fit Clairic's window (@cf/cloudflare/clairic, preview since 2026-10-19, 64k tokens, ~$0.10/M input, no output charge, per third-party write-ups) are read by Clairic in one call; longer ones by the DeepSeek page agent; the gold set decides (user). Not on Vercel AI Gateway (checked 2026-11-11): called on Workers AI with the app's Cloudflare account and token, like bge-m3."},
     {"date": "2026-11-11", "note": "Clairic dropped for now (user): its text answers are spans of the document, so it cannot write the summary, title or English descriptive fields; a small file would still need DeepSeek, saving ~$0.001 a file for a second provider and a preview model. Retest it on the gold set when it leaves preview."},
+    {"date": "2026-11-11", "note": "Public judgments and orders are not in the corpus (#7): the user allowed a one-off exception to 'no downloads here': the gold-set script fetches 3 Court of Appeal PDFs into memory each run, never saved. Acts and gazettes come from the corpus; 14 files are written by google/gemini-3-flash (not the DeepSeek reader)."},
     {"date": "2026-11-11", "note": "Jev's bar is 90% right types with fallback (user)."},
     {"date": "2026-11-11", "note": "Gold set written by the app's agent, since these documents are not public (docs/SOURCES.md, 2026-11-11); a writer model different from the reader (user + agent)."},
     {"date": "2026-11-11", "note": "The card is editable by the lawyer and by the agent, any field and the type (user)."},
@@ -42,6 +43,8 @@
     {"date": "2026-11-11", "note": "No history and no undo anywhere, cards or case page: it is not an editor, lawyers won't use it, and it can come back later if wanted. The case office's History and undo go (user)."}
   ],
   "progress": [
+    {"date": "2026-11-11", "note": "Built: the reader in ai (categorize.ts: classify with Jev, falls back below 0.6; read: 10-step agent with readPages; doc-types.ts: 8 types' fields) and the pipeline passing pages (categorize 240 s). Next: gold set and eval."},
+    {"date": "2026-11-11", "note": "Gold set built (20 files) and scored: types 20/20 with Jev, fields 51/55, max $0.0024 a file, 300-page file in 7 steps (numbers in docs/APP.md). The reader now submits its card through a tool. Next: the user checks the 20 labels; then the card page, editing, the agent's card edits, the case page's history removal."},
     {"date": "2026-11-11", "note": "Scoped with the user in 6 rounds; issue #46 (follows #44)."}
   ]
 }

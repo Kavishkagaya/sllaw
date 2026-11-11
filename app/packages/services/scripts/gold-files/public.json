@@ -1,0 +1,83 @@
+[
+  {
+    "id": "act-9-2021",
+    "docType": "legislation",
+    "language": "en",
+    "source": "act:9/2021",
+    "fields": {}
+  },
+  {
+    "id": "act-8-2024",
+    "docType": "legislation",
+    "language": "en",
+    "source": "act:8/2024",
+    "fields": {}
+  },
+  {
+    "id": "gazette-2289-40",
+    "docType": "gazette",
+    "language": "en",
+    "source": "gazette:2289/40",
+    "fields": {}
+  },
+  {
+    "id": "ca-dc-480-2000",
+    "docType": "judgment",
+    "language": "en",
+    "source": "https://lankalaw.net/wp-content/uploads/ca_judgements/2000/ca-dc-480-2000-f.pdf",
+    "fields": {
+      "holding": "The Court held that the Defendant failed to establish a tenancy because there was no proof of rent payments for the period 1971-1981, and the subsequent deposit of rent into a local council from 1985 onwards did not create a contract of tenancy as there was no agreement (meeting of minds) between the parties. Since the Plaintiff's title to the property was admitted, the burden of proof shifted to the Defendant to show a lawful right of occupation; having failed to do so, the Defendant was considered a licensee whose license was lawfully terminated, entitling the Plaintiff to the relief of ejectment.",
+      "orders": ["Appeal is dismissed without cost."],
+      "authorities": [
+        "section 754 of the Civil Procedure Code",
+        "Rent Act No.7 of 1972",
+        "Section 10 of the Rent Act",
+        "Section 10(1) of the Rent Act",
+        "Section 33 of the Rent Act",
+        "Section 33(2) of the Act",
+        "Sirisena v. Perera 1999(3)SLR,295",
+        "section 21",
+        "Swami Sivagnananda V The Bishop of Kandy (1953) 55 NLR 130",
+        "Neminum sibi ipsum causam possessions mutare posse",
+        "Wijetunga v.Thangarajah 1999(1) SLR 53",
+        "Candappa nee Bastien v. Ponnambalampillai 1993(1) SLR 124 at 187",
+        "Gunasekara v. Latiff 1999(1) SLR 365"
+      ]
+    }
+  },
+  {
+    "id": "ca-hcc-14-2023",
+    "docType": "judgment",
+    "language": "en",
+    "source": "https://lankalaw.net/wp-content/uploads/ca_judgements/2023/ca-hcc-14-2023.pdf",
+    "fields": {
+      "holding": "The Court of Appeal dismissed the appeal and affirmed the conviction and sentence, determining that the prosecution had proved its case beyond reasonable doubt. The court held that the evidence provided by the police officers (PW1 and PW9) was credible and reliable regarding the recovery of the hand grenade, and that the appellant's own testimony contained significant contradictions. Furthermore, the court ruled that pursuant to Section 134 of the Evidence Ordinance, the testimony of a single credible witness is sufficient for a conviction, and corroboration is not a legal necessity if the witness is found to be trustworthy.",
+      "orders": ["the appeal of the appellant is dismissed.", "We affirm the judgment and the sentence."],
+      "authorities": [
+        "Section 331(1) of the Code of Criminal Procedure Act No. 15 of 1979",
+        "Article 138(1) of the Constitution of the Democratic Socialist Republic of Sri Lanka",
+        "section 2 (1) (d) of the Offensive Weapons Act No. 18 of 1966",
+        "Section 134 of the Evidence Ordinance",
+        "Kumar De Silva and two others vs, Attorney General [2010] 2 Sri LR 169",
+        "Dharmasiri vs. Republic [2010] 2 Sri LR 241",
+        "Attorney General vs.Devundarage Nihal SC/Appeal 154/2010",
+        "Sir John Woodruff and Syed Amir Ali (Law of Evidence1st edition, Vol. I page 601 – 603)",
+        "prevention of Corruption Act 1947",
+        "Vadivelu Thevar Vs. State of Madras SIR S C 614",
+        "IEA 1872"
+      ]
+    }
+  },
+  {
+    "id": "ca-writ-01-2025-order",
+    "docType": "order",
+    "language": "en",
+    "source": "https://lankalaw.net/wp-content/uploads/ca_judgements/2025/ca-writ-01-2025-order.pdf",
+    "fields": {
+      "entryDate": "2025-02-20",
+      "whatHappened": "The Court of Appeal dismissed an application for a Writ of Habeas Corpus filed by P.M. Tharmasuthan challenging an order of the High Court of Colombo dated 23rd January 2025, which allowed a request for her extradition to Australia to face charges of defrauding the Australian Postal Corporation. The Court found no basis to interfere with the High Court's decision, noting that the Petitioner failed to provide evidence to prohibit the committal for extradition.",
+      "nextDate": null,
+      "nextPurpose": null
+    }
+  }
+]
