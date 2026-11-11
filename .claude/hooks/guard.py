@@ -58,6 +58,12 @@ def production_writes(cmd):
         return "ask", "v1 publish/embed writes shared systems and is retired since 2026-11-08 (v2 does it)."
 
 
+def no_worktree(cmd):
+    # user, 2026-11-11: brief branches are checked out in ~/sllaw itself, never a separate worktree.
+    if has(cmd, r"\bgit\s+(-C\s+\S+\s+)?worktree\s+add\b"):
+        return "deny", "No worktrees: `git checkout -b app/<slug> origin/main` here in ~/sllaw (CLAUDE.md, Branches)."
+
+
 def force_push(cmd):
     if has(cmd, r"\bgit\s+push\b") and (has(cmd, r"\s(-f|--force)(\s|$)") or "--force-with-lease" in cmd):
         return "ask", "Force push rewrites shared history. Needs the user's yes."
@@ -220,6 +226,27 @@ def neon_branch_ops(tool, inp):
     return None  # agent branches are deleted at merge or drop (user, 2026-11-10); Neon refuses the default branch
 
 
+# ---- Agent rules ------------------------------------------------------------------------------------------------
+
+def agent_model(tool, inp):
+    """A subagent runs on the cheapest model that can do its job (user, 2026-11-11): every spawn names one, unless
+    its definition in .claude/agents/ already sets it. A fork inherits this session's model by design."""
+    if tool != "Agent" or inp.get("model"):
+        return None
+    kind = inp.get("subagent_type") or "general-purpose"
+    if kind == "fork":
+        return None
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "agents", f"{kind}.md")
+    try:
+        head = open(path).read().split("---")[1]
+        if re.search(r"^model:\s*\S", head, re.M):
+            return None
+    except (OSError, IndexError):
+        pass
+    return "deny", ("Name the cheapest model that can do this job (haiku for search, reading, summaries; sonnet for "
+                    "ordinary code; opus only for hard judgement) in `model`, and say why in one line.")
+
+
 # ---- MCP rules --------------------------------------------------------------------------------------------------
 
 def neon_sql(tool, inp):
@@ -265,7 +292,7 @@ def brief_shell(cmd):
                         "the user for sign-off and keep an agreed scope frozen.")
 
 
-BASH_RULES = [merge_rebase, headed_browser, downloads, production_writes, force_push, brief_shell]
+BASH_RULES = [merge_rebase, no_worktree, headed_browser, downloads, production_writes, force_push, brief_shell]
 
 
 # ---- Scope rules (file edits) -----------------------------------------------------------------------------------
@@ -365,6 +392,8 @@ def decide(event):
                 return r
         cwd = event.get("cwd") or os.getcwd()
         return app_db(cmd, cwd) or commit_checks(cmd, cwd) or release_gate(cmd, cwd)
+    if tool == "Agent":
+        return agent_model(tool, inp)
     return neon_branch_ops(tool, inp) or neon_sql(tool, inp)
 
 

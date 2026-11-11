@@ -2,7 +2,7 @@
   "hooks": {
     "PreToolUse": [
       {
-        "matcher": "Bash|Write|Edit|NotebookEdit|mcp__claude_ai_Neon__(run_sql.*|delete_branch|delete_project|reset_from_parent)",
+        "matcher": "Bash|Write|Edit|NotebookEdit|Agent|mcp__claude_ai_Neon__(run_sql.*|delete_branch|delete_project|reset_from_parent)",
         "hooks": [
           {
             "type": "command",

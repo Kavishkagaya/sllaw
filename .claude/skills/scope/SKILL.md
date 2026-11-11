@@ -26,10 +26,11 @@ agreed (the guard refuses code edits under `app/` and `etl/` without one).
    agreement. A no means another round.
 5. **Issue and branch:** `gh issue create` with the summary (title = brief title, body = goal, done-check,
    scenarios, out of scope, a link to the brief path); put the number in `issue` and a first `progress` line. For app
-   work: `git worktree add -b app/<slug> ../sllaw-<slug> origin/main`, `pnpm install` there; copy the brief in.
-   Then its database (ids in `.claude/agent-db.json`): Neon `create_branch` named `agent/<slug>` in project
+   work: `git checkout -b app/<slug> origin/main` here in the main checkout (no worktree, user 2026-11-11);
+   `pnpm install` if the lockfile changed. Then its database (ids in `.claude/agent-db.json`): Neon `create_branch` named `agent/<slug>` in project
    `sllaw-app` from main (name only: the free plan refuses compute settings, 2026-11-10); `get_connection_string` for that branch,
-   database `app`, the same role as the main URL; write it as `DATABASE_URL` into the worktree's
-   `app/apps/web/.env.local` (copied from the main checkout, every other variable unchanged). Never print the URL.
+   database `app`, the same role as the main URL; copy `app/apps/web/.env.local` to `.env.main`
+   (the production one, put back at merge) and write the branch URL as its `DATABASE_URL`, every other variable
+   unchanged. Never print the URL.
    Record `neon_branch` {name, id} in the brief. ETL work skips this.
 6. Tell the user it's agreed and that `/build` takes it from here.

@@ -59,10 +59,11 @@ Each came from a correction or a costly mistake. Guarded = `.claude/hooks/guard.
 - **Production writes need a yes:** `etl.v2.run ... --apply` (kb, Zilliz, R2), app migrations on the main database
   (dev and production are one database, 2026-11-03), force pushes. *Guarded (asks).*
 - **Agents test on their own database** (2026-11-10): each app brief gets a Neon branch `agent/<slug>` of
-  `sllaw-app` (ids in `.claude/agent-db.json`), its worktree's `.env.local` points at it, and it is deleted at merge
-  or drop. A brief worktree pointing at production can't run the app, evals or migrations. *Guarded.*
+  `sllaw-app` (ids in `.claude/agent-db.json`); while on the brief's branch, `app/apps/web/.env.local` points at it
+  (the production one is kept as `.env.main`, put back at merge), and it is deleted at merge or drop. A checkout on a
+  brief's branch pointing at production can't run the app, evals or migrations. *Guarded.*
 - **Branches** (2026-10-06, 2026-10-26): ETL work commits on `main`; app features on their brief's branch off
-  `origin/main`, in a worktree. Commits on the brief's branch are part of /build; outside the loop, commit only when
+  `origin/main`, checked out here in `~/sllaw`, never a separate worktree (user, 2026-11-11). Commits on the brief's branch are part of /build; outside the loop, commit only when
   asked (2026-11-10).
 - **PRs merge with `gh pr merge <n> --rebase`**, never a merge commit or squash (2026-10-26). *Guarded.*
 - **A fix goes into the commit it fixes** (user, 2026-11-11): `git commit --fixup=<sha>` then
@@ -74,11 +75,18 @@ Each came from a correction or a costly mistake. Guarded = `.claude/hooks/guard.
   main and `vercel --prod` need `VERDICT: PASS` from both validators for that exact commit, in
   `<git-common-dir>/validation/<sha>/`; changes only to `docs/` or `*.md` pass. *Guarded.*
 - **Browser tests run headed** (`agent-browser --headed`); the user watches (2026-10-27). *Guarded.*
-- **Unrelated work during a task goes to a subagent**, so the main thread stays on the task (2026-10-10).
+- **Unrelated work during a task goes to a subagent**, so the main thread stays on the task (2026-10-10); **every subagent runs on the cheapest model that can do its job** (user, 2026-11-11):
+  chosen per spawn for that job (no agent definition pins one): haiku for search, reading and summaries, sonnet for
+  ordinary code and most validation, opus only for hard judgement. *Guarded: every spawn but a fork names `model`.*
 - **Spend Claude Code tokens like money** (user, 2026-11-11, after a session hit its 5-hour limit): read a page with a
   targeted `agent-browser eval` or a grepped snapshot, never a whole snapshot; screenshot only to judge a design;
   wait with one quiet loop that prints only the end state; a later validation round resumes the same validators
   (SendMessage with the new head and the diff) instead of spawning fresh ones; demos and repeat runs only when asked.
+- **Test the app the way a lawyer talks** (user, 2026-11-11): plain questions about the case and its people
+  ("the Perera Traders demand"), never file names, ids or our own terms ("card", "field", "fileEdit"), and no
+  invented facts that contradict the documents just to provoke the agent.
+- **Scope the simplest version** (user, 2026-11-11): only what the user asked for; no undo, history or other
+  "just in case" extras. They come back when a user asks for them.
 - **Never repeat an investigation:** read `docs/SOURCES.md` before probing a site, `docs/PIPELINE_V2.md` before
   changing the pipeline. Findings get written down in the same session (see "Writing things down").
 
@@ -125,7 +133,7 @@ up). `~/sllaw` is the shared NFS home (slow: run Python from `/var/tmp/e19309/*_
 ```bash
 cd app && pnpm check && pnpm typecheck && pnpm test           # app: biome, tsc, vitest (in memory, ~15 s)
 .venv/bin/python3 -m etl.test_structure                       # also etl.test_refs, etl.test_mentions, etl.v2.test_v2
-python3 .claude/hooks/test_guard.py                           # the guards (69 cases)
+python3 .claude/hooks/test_guard.py                           # the guards (76 cases)
 ```
 
 On ampere, against real data (on purpose, they cost): `python -m etl.v2.gate --workers 8` (quality gate),
@@ -156,4 +164,8 @@ one, and record dead ends and what was *not* checked.
 - **DNS on the department hosts drops for a minute or so**: connect with `etl.fetch.pg_connect()`, which retries.
 - **Neon closes a connection left idle for hours** (embed's mark, 2026-11-08): open a fresh one after a long step.
 - **Tmux sessions and Dagster do not survive a reboot**: rerun `etl/v2/dagster.sh` on ampere.
+- **Node can't reach Neon on a slow network** (2026-11-11, this laptop): IPv6 is unreachable and an IPv4 connect
+  takes 1-3 s, past Node's 250 ms per address, so every query is `fetch failed` (AggregateError, ETIMEDOUT) while
+  curl works. `apps/web`'s `dev` script sets `--network-family-autoselection-attempt-timeout=3000`; use the same
+  `NODE_OPTIONS` for scripts.
 - **Legacy-font Sinhala listed as English** (act:54/2007, act:7/2006): nothing flags it yet.
