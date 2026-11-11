@@ -79,6 +79,16 @@ export async function checkChat(a: Signed, now = new Date()) {
   }
 }
 
+/** Before a paid re-read of a file (a new type): the user's daily and monthly model tokens, which re-reads count
+ *  toward. Throws LimitReached. */
+export async function checkTokens(userId: string, now = new Date()) {
+  const [{ plan, maxes }, used] = await Promise.all([limitsOf(userId, now), usedBy(userId, now)]);
+  for (const m of ["tokens", "tokens_month"] as const) {
+    const { max } = maxes[m];
+    if (over(m, used[m], max)) throw new LimitReached(m, used[m], max!, plan?.name ?? "current", resetOf(m, now));
+  }
+}
+
 /** Records a message sent: the messages counter. After the message is stored; idem keeps a retried write single. */
 export const meterMessage = (a: Signed, chatId: string, messageId: string) =>
   meter(

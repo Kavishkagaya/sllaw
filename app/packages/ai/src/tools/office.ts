@@ -1,7 +1,7 @@
 // The case office in the agent (a case chat only): what the prompt shows of it (officeView), and two tools. caseRead
 // gives the office in full, or one widget; caseUpdate changes it with the same operations the lawyer's page uses
-// (@sllaw/office). A change lands at once, marked "by AI", and the lawyer can undo it from the chat card or the
-// history. The rules that matter are in the operations, not here: core widgets cannot be hidden or removed by the
+// (@sllaw/office). A change lands at once, marked "by AI", and the chat shows it as a card.
+// The rules that matter are in the operations, not here: core widgets cannot be hidden or removed by the
 // agent, an item that is not there is an error in words, and the result is checked against the schema.
 import { awaitingOutcome, journal, nextDate, type Office, opsSchema, sortedTasks } from "@sllaw/office";
 import { tool } from "ai";
@@ -93,7 +93,7 @@ export const officeTools = ({ ports, today }: Ctx) => ({
     description:
       "Change the case office: the header, people, court dates (and what happened on one), tasks, and the " +
       "dashboard's widgets (add a note, checklist, table or timeline; update, move, collapse or remove one). " +
-      "Several operations in one call are one change the lawyer can undo at once. Name items by the ids the " +
+      "Several operations in one call are one change. Name items by the ids the " +
       "case office shows; new items get their ids from the result. Dates are YYYY-MM-DD.",
     inputSchema: z.object({
       summary: z
@@ -105,7 +105,7 @@ export const officeTools = ({ ports, today }: Ctx) => ({
     execute: async ({ summary, ops }) => {
       const r = await ports.officeChange(ops, summary);
       if (!r.ok) return `Not changed: ${r.error}`;
-      return { changeId: r.changeId, summary: r.summary, office: officeView(r.office, today) };
+      return { summary: r.summary, office: officeView(r.office, today) };
     },
   }),
 });

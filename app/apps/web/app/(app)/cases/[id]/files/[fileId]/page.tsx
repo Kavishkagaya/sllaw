@@ -3,6 +3,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { docTypeLabel, fmtDate, fmtSize } from "@/lib/format";
 import { orNotFound, serverApi } from "@/trpc/server";
+import { CardEditor } from "./card-editor";
 import { FileActions } from "./file-actions";
 
 // The card the categorizer wrote (meta on the row; the summary from the store).
@@ -15,6 +16,7 @@ type Meta = {
   caseNumbers?: string[];
   lawsCited?: string[];
   tags?: string[];
+  fields?: Record<string, string | string[] | null>;
 };
 
 const LANGUAGE: Record<string, string> = { en: "English", si: "Sinhala", ta: "Tamil", mixed: "Mixed" };
@@ -56,6 +58,29 @@ export default async function CaseFilePage({ params }: { params: Promise<{ id: s
 
           <FileActions caseId={c.id} fileId={f.id} name={f.name} status={v.status} downloadUrl={v.downloadUrl} />
 
+          {f.category && v.summary != null && (
+            <div className="mt-4">
+              <CardEditor
+                caseId={c.id}
+                fileId={f.id}
+                specs={v.specs}
+                docTypes={v.docTypes}
+                card={{
+                  docType: f.category,
+                  title: m.title ?? "",
+                  summary: v.summary,
+                  court: m.court ?? null,
+                  caseNumbers: m.caseNumbers ?? [],
+                  parties: m.parties ?? [],
+                  dates: m.dates ?? [],
+                  lawsCited: m.lawsCited ?? [],
+                  tags: m.tags ?? [],
+                  fields: v.fields,
+                }}
+              />
+            </div>
+          )}
+
           {v.summary && (
             <>
               <Separator className="my-8" />
@@ -66,6 +91,23 @@ export default async function CaseFilePage({ params }: { params: Promise<{ id: s
 
           {f.category && (
             <dl className="mt-8 grid gap-x-8 gap-y-6 sm:grid-cols-2">
+              {v.specs.map((sp) => {
+                const val = v.fields[sp.key];
+                if (val == null || (Array.isArray(val) && !val.length)) return null;
+                return (
+                  <Field key={sp.key} label={sp.label} wide={Array.isArray(val) || val.length > 60}>
+                    {Array.isArray(val) ? (
+                      <ul className="list-disc space-y-0.5 pl-4">
+                        {val.map((x, i) => (
+                          <li key={i}>{x}</li>
+                        ))}
+                      </ul>
+                    ) : (
+                      val
+                    )}
+                  </Field>
+                );
+              })}
               {m.court && <Field label="Court">{m.court}</Field>}
               {!!m.caseNumbers?.length && <Field label="Case numbers">{m.caseNumbers.join(", ")}</Field>}
               {!!m.parties?.length && (

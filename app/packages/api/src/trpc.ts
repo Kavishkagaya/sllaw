@@ -1,5 +1,5 @@
 import { auth } from "@clerk/nextjs/server";
-import { accountOf, LimitReached, OfficeError } from "@sllaw/services";
+import { accountOf, FileBusy, LimitReached, OfficeError } from "@sllaw/services";
 import { initTRPC, TRPCError } from "@trpc/server";
 import superjson from "superjson";
 
@@ -22,6 +22,9 @@ const base = t.procedure.use(async ({ next }) => {
   // a case office change that cannot be made (a pinned widget, an item gone, bad data): its message for the user
   if (!r.ok && r.error.cause instanceof OfficeError)
     throw new TRPCError({ code: "BAD_REQUEST", message: r.error.cause.message, cause: r.error.cause });
+  // a file being read again for a new type: try later
+  if (!r.ok && r.error.cause instanceof FileBusy)
+    throw new TRPCError({ code: "CONFLICT", message: (r.error.cause as FileBusy).message, cause: r.error.cause });
   return r;
 });
 export const publicProcedure = base;

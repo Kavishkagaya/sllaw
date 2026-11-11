@@ -149,6 +149,23 @@ export async function markDeleting(id: string) {
   return rows.length > 0;
 }
 
+/** A re-read for a new type claims the file's categorize step (done -> running) so a second one, a reprocess or a
+ *  delete waits; false when it is not done (being read, or another re-read). endReread puts it back to done. */
+export async function claimReread(id: string) {
+  const rows = await db
+    .update(files)
+    .set({ categorizeState: "running", updatedAt: new Date() })
+    .where(and(eq(files.id, id), eq(files.categorizeState, "done")))
+    .returning({ id: files.id });
+  return rows.length > 0;
+}
+export const endReread = (id: string) =>
+  db.update(files).set({ categorizeState: "done", updatedAt: new Date() }).where(eq(files.id, id));
+
+/** A card edited by the lawyer or the agent: its type and metadata on the row (the summary stays in the store). */
+export const setFileCard = (id: string, category: string, meta: Record<string, unknown>) =>
+  db.update(files).set({ category, meta, updatedAt: new Date() }).where(eq(files.id, id));
+
 /** The last step of a delete, once its vectors and blobs are gone. */
 export const deleteFileRow = (id: string) =>
   db.delete(files).where(and(eq(files.id, id), eq(files.uploadState, "deleting")));

@@ -45,14 +45,15 @@ export const userPlanHistory = (userId: string) =>
 export const userLimitRows = (userId: string) => db.select().from(userLimits).where(eq(userLimits.userId, userId));
 
 /** What a user used since `day` (today's midnight) and since `month` (the 1st), across all their workspaces:
- *  messages sent, chat model tokens (input + output, every step), and searches (Zilliz calls in a chat turn). */
+ *  messages sent, model tokens (input + output, every step) of chats and of re-reading a file for a new type, and
+ *  searches (Zilliz calls in a chat turn). */
 export async function userCounters(userId: string, day: Date, month: Date) {
   const tokens = sql`coalesce((quantity->>'input')::bigint, 0) + coalesce((quantity->>'output')::bigint, 0)`;
   const r = await db.execute<{ messages: number; tokens: number; tokensMonth: number; searches: number }>(sql`
     select
       count(*) filter (where kind = 'action' and task = 'chat.message' and at >= ${day})::int as messages,
-      coalesce(sum(${tokens}) filter (where kind = 'llm' and task = 'chat' and at >= ${day}), 0)::float8 as tokens,
-      coalesce(sum(${tokens}) filter (where kind = 'llm' and task = 'chat'), 0)::float8 as "tokensMonth",
+      coalesce(sum(${tokens}) filter (where kind = 'llm' and task in ('chat', 'file.retype') and at >= ${day}), 0)::float8 as tokens,
+      coalesce(sum(${tokens}) filter (where kind = 'llm' and task in ('chat', 'file.retype')), 0)::float8 as "tokensMonth",
       count(*) filter (where kind = 'vector' and task = 'chat' and at >= ${day})::int as searches
     from usage_events
     where user_id = ${userId} and at >= ${month}`);

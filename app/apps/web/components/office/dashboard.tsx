@@ -3,10 +3,9 @@
 // places. The cover band: the docket cover and the next date. The record (main column): the journal, notes, tables,
 // timelines. The rail: tasks, people, checklists. Within each place the saved order holds. On a phone it is one
 // column: the next date, then tasks, then the cover, then the rest. A slim bar adds a widget, shows hidden ones, resets
-// the layout and opens the history (every change, the AI's marked, each with Undo).
+// the layout.
 import { isCore, type Widget } from "@sllaw/office";
-import { useMutation, useQuery } from "@tanstack/react-query";
-import { Eye, History, Loader2, MoreHorizontal, Plus, RotateCcw, Sparkles, Undo2 } from "lucide-react";
+import { Eye, Loader2, MoreHorizontal, Plus, RotateCcw } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
@@ -17,11 +16,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
-import { fmtDate } from "@/lib/format";
 import { zoneOf } from "@/lib/office";
 import { cn } from "@/lib/utils";
-import { useTRPC } from "@/trpc/client";
 import { type OfficeData, OfficeProvider, useOffice } from "./context";
 import { HeaderWidget, JournalWidget, NextDateWidget, PeopleWidget, TasksWidget } from "./core";
 import { ChecklistWidget, NoteWidget, TableWidget, TimelineWidget } from "./custom";
@@ -103,7 +99,6 @@ function Toolbar() {
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
-      <HistorySheet />
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button size="icon-sm" variant="ghost" aria-label="Dashboard options">
@@ -127,85 +122,13 @@ function Toolbar() {
             <span>
               Reset the layout
               <span className="block text-xs text-muted-foreground">
-                Default widgets and order. Added widgets are removed; undo it from History.
+                Default widgets and order. Added widgets are removed.
               </span>
             </span>
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
     </div>
-  );
-}
-
-export function HistorySheet() {
-  const { caseId, refresh } = useOffice();
-  const trpc = useTRPC();
-  const { data: changes } = useQuery(trpc.office.history.queryOptions({ caseId }));
-  const { setOffice } = useOffice();
-  // the undo answers with the office: show it at once rather than after a refetch
-  const undo = useMutation(
-    trpc.office.undo.mutationOptions({
-      onSuccess: (r) => (setOffice(r.office, r.version), refresh()),
-      onError: refresh,
-    }),
-  );
-  return (
-    <Sheet>
-      <SheetTrigger asChild>
-        <Button size="sm" variant="ghost">
-          <History /> History
-        </Button>
-      </SheetTrigger>
-      <SheetContent className="w-full overflow-y-auto sm:max-w-md">
-        <SheetHeader>
-          <SheetTitle className="font-serif text-lg">History</SheetTitle>
-          <SheetDescription>
-            Every change to this case, newest first. Undo puts back what that change touched and keeps the rest.
-          </SheetDescription>
-        </SheetHeader>
-        <ol className="px-4 pb-6">
-          {changes?.length === 0 && <li className="py-6 text-sm text-muted-foreground">No changes yet.</li>}
-          {changes?.map((c) => (
-            <li key={c.id} className="flex items-start gap-3 border-t py-3">
-              <span
-                className={cn(
-                  "mt-1.5 size-2 shrink-0 rounded-full",
-                  c.by === "ai" ? "bg-primary" : "bg-muted-foreground/40",
-                  c.undoneBy && "opacity-40",
-                )}
-                aria-hidden
-              />
-              <div className="min-w-0 flex-1 text-sm">
-                <div className={cn("leading-snug", c.undoneBy && "text-muted-foreground line-through")}>
-                  {c.summary}
-                </div>
-                <div className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
-                  {c.by === "ai" ? (
-                    <span className="inline-flex items-center gap-1 text-primary">
-                      <Sparkles className="size-3" /> {c.chatId ? "AI, in chat" : "AI"}
-                    </span>
-                  ) : (
-                    <span>You</span>
-                  )}
-                  <span>{fmtDate(c.createdAt)}</span>
-                  {c.undoneBy && <span>Undone</span>}
-                </div>
-              </div>
-              {!c.undoneBy && (
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  disabled={undo.isPending}
-                  onClick={() => undo.mutate({ caseId, changeId: c.id })}
-                >
-                  <Undo2 /> Undo
-                </Button>
-              )}
-            </li>
-          ))}
-        </ol>
-      </SheetContent>
-    </Sheet>
   );
 }
 

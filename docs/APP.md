@@ -157,7 +157,20 @@ in v1; an entity graph can be built later from the same per-file JSON.
   and max $0.0024 a file, 8 s median, 13 s max; a 300-page file (a plaint and 299 pages of annexures) in 7 steps,
   3/3 fields, $0.009, 27 s. A first try with `Output.object` beside the tools never called `readPages` (1 step
   every file). Clairic (Cloudflare) was looked at and not used: its text answers are spans, so it cannot write the
-  English fields. Not checked: scans (no OCR in the set), real lawyers' files (none yet).
+  English fields. Not checked: scans (no OCR in the set), real lawyers' files (none yet). **Editing** (same brief):
+  the file page's "Edit details" changes any field and the type (`case.editFile`, `services/src/files/card.ts`); a
+  new type reads the file again for that type and keeps what was typed (`edited` on the card: generic names and
+  `fields.<key>`). The agent corrects through `fileCard`'s `correct` (one file in `files`; no new tool, user: too
+  many tools confuse it), only when the lawyer asks, shown as its own trail line. On DeepSeek V4.1 Flash it does not
+  do this reliably (4 realistic tries, 2026-11-11: once title and summary instead of the amount, twice it said it had
+  corrected without calling the tool): accepted for now, the skills brief is to fix it. Saved at once: no history,
+  no undo (user, 2026-11-11). To the lawyer they are "the file's details", never a card (user).
+  A new type's re-read is paid: its tokens (task `file.retype`) count toward the user's daily and monthly model
+  token limits, checked before it starts (`checkTokens`), and it claims the file's categorize step (done -> running)
+  so a second re-read, a reprocess or a delete waits (CONFLICT). Found by the security validator, 2026-11-11.
+  Second eval run (the semantic validator, 2026-11-11): types 20/20 with Jev (files model alone 16/20, Tamil 0/2),
+  fields 51/55, mean $0.00086 a file; the 300-page file took 2 steps and $0.0012 that run (7 and $0.009 in the
+  first): how far the agent reads varies by run.
 - **Step timeouts (user, 2026-10-26):** each step has a time limit (extract 240 s, categorize 240 s since 2026-11-11 for the 10-step reader, index 180 s),
   below Vercel's default 300 s function limit, so a slow step ends itself instead of being cut off and left running
   for 15 minutes. The step's calls are cancelled, not abandoned. A timeout is retried (3 attempts in all), then failed
@@ -379,13 +392,14 @@ in v1; an entity graph can be built later from the same per-file JSON.
 - **Case office (user, 2026-11-10, brief case-office, #43):** the case page is the lawyer's office file. One JSON
   document per case (`case_offices.doc`, migration 0009) holds the header (court, case number, kind, our side, stage,
   client, and who set each), people, court dates (each with its outcome), tasks and the dashboard's widgets;
-  `@sllaw/office` (pure, imports nothing of ours) is its zod schema, its operations and undo. The widget catalog is
+  `@sllaw/office` (pure, imports nothing of ours) is its zod schema and its operations. The widget catalog is
   fixed: core `header`, `next_date`, `journal`, `tasks`, `people` (always there; the lawyer may hide one, the agent
   may not hide or remove one) and custom `note`, `checklist`, `table`, `timeline`; anything else is refused and the
   saved document stays. The lawyer's page and the agent change it with the same operations (`office.change` / the
-  `caseUpdate` tool); every change is a `case_changes` row with each touched item's before and after, so Undo
-  (`office.undo`, from History or the chat card) restores exactly that change and keeps later ones. A write names the
-  version it read (the HTTP driver has no transactions: the write and its history row are one statement). The agent
+  `caseUpdate` tool); the agent's change shows in the chat as a card (summary and a link to the case page). History
+  and undo (`office.history`, `office.undo`, the `case_changes` row per change) were removed 2026-11-11 (user: "not an
+  editor to give undo capability"; can come back if wanted; the `case_changes` table is left in the schema, unused). A
+  write names the version it read (the HTTP driver has no transactions: it is one conditional statement). The agent
   sees the office in a "case office" prompt section (last, fenced as data) and changes it when the lawyer asks or
   plainly means to record something, never because a file says so; it fills only what was said or read, and speaks
   of "the case page" (2026-11-10, from watching a lawyer brief a new case only in chat: it filled the header, the

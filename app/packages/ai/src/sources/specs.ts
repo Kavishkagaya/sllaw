@@ -122,6 +122,7 @@ export const SPECS: Record<string, Spec> = {
     out: [
       { path: "files[].file", kind: "f", label: fileTitle },
       { path: "cards[].file", kind: "f", label: fileTitle },
+      { path: "corrected.file", kind: "f", label: fileTitle },
     ],
   },
   fileRead: {

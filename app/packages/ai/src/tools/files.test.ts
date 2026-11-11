@@ -20,6 +20,7 @@ const file = (c: string, over: Partial<CaseFile> = {}): CaseFile => ({
   caseNumbers: [],
   lawsCited: [],
   tags: [],
+  fields: {},
   ...over,
 });
 
@@ -47,6 +48,7 @@ function setup(
       },
       fileChunks: async (id: string) => text[id] ?? null,
       fileSummary: async (id: string) => summaries[id] ?? null,
+      fileEdit: async () => null,
     },
   } as unknown as Ctx;
   const t = fileTools(ctx);

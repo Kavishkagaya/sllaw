@@ -14,6 +14,7 @@ import {
   LayoutDashboard,
   Link2,
   Loader2,
+  Pencil,
   Search,
 } from "lucide-react";
 import { useState } from "react";
@@ -262,6 +263,25 @@ function Step({ p, name, active }: { p: Part; name: (key: string) => string; act
   }
   if (p.type === "tool-fileCard") {
     const o = p.state === "output-available" ? p.output : null;
+    const fixing = !!p.input?.correct;
+    // camelCase keys as words: causeOfAction -> cause of action, docType -> type
+    const words = (k: string) => (k === "docType" ? "type" : k.replace(/([A-Z])/g, " $1").toLowerCase());
+    if (fixing) {
+      const c = o && typeof o === "object" && "corrected" in o ? o.corrected : null;
+      return (
+        <Row icon={running ? Loader2 : Pencil} spin={running}>
+          <p>
+            {running
+              ? "Correcting a file's details…"
+              : failed
+                ? "Correcting a file's details failed"
+                : c
+                  ? `Corrected ${c.title}: ${c.changed.map(words).join(", ")}`
+                  : `Did not correct the file — ${typeof o === "string" ? o : "no change"}`}
+          </p>
+        </Row>
+      );
+    }
     const titles = o && typeof o === "object" && "cards" in o ? (o.cards ?? []).map((c) => c.title) : [];
     const listed = o && typeof o === "object" && "files" in o;
     return (

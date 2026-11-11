@@ -476,9 +476,9 @@ function Answer({
   caseId?: string;
 }) {
   const { trail, answer } = splitAnswer(parts);
-  // the agent's changes to the case office, each with Undo (docs/APP.md, Case office)
+  // the agent's changes to the case office, (docs/APP.md, Case office)
   const changes = parts.flatMap((p) =>
-    p.type === "tool-caseUpdate" && p.state === "output-available" && typeof p.output === "object" && p.output.changeId
+    p.type === "tool-caseUpdate" && p.state === "output-available" && typeof p.output === "object" && p.output.summary
       ? [p.output]
       : [],
   );
@@ -493,8 +493,7 @@ function Answer({
             </Streamdown>
           ),
       )}
-      {caseId &&
-        changes.map((c) => <CaseChange key={c.changeId} caseId={caseId} changeId={c.changeId} summary={c.summary} />)}
+      {caseId && changes.map((c, i) => <CaseChange key={i} caseId={caseId} summary={c.summary} />)}
     </div>
   );
 }

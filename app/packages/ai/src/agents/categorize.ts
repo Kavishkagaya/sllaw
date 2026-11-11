@@ -7,7 +7,7 @@
 import { experimental_decide as decide, gateway, generateText, hasToolCall, Output, stepCountIs, tool } from "ai";
 import { z } from "zod";
 import { CLASSIFY_MODEL, meterDecision, model } from "../models";
-import { data } from "../prompt/guard";
+import { data, inline } from "../prompt/guard";
 import { DOC_TYPE_HINTS, DOC_TYPES, type DocType, FIELDS, type FieldSpec } from "./doc-types";
 
 export { DOC_TYPES, type DocType, FIELDS, type FieldSpec } from "./doc-types";
@@ -142,6 +142,29 @@ export async function classify(input: {
   return { docType: output.docType, typedBy: `files:${process.env.MODEL_FILES || "default"}`, typeConfidence: null };
 }
 
+/** A correction of a card, by the lawyer (case.editFile) or the agent (fileCard's correct): the same bounds both. */
+export const cardPatch = z.object({
+  docType: z.enum(DOC_TYPES).optional(),
+  title: z.string().max(300).optional(),
+  summary: z.string().max(5000).optional(),
+  court: z.string().max(300).nullable().optional(),
+  caseNumbers: z.array(z.string().max(200)).max(50).optional(),
+  parties: z
+    .array(z.object({ name: z.string().max(300), role: z.string().max(100) }))
+    .max(100)
+    .optional(),
+  dates: z
+    .array(z.object({ date: z.string().max(40), what: z.string().max(300) }))
+    .max(100)
+    .optional(),
+  lawsCited: z.array(z.string().max(300)).max(100).optional(),
+  tags: z.array(z.string().max(60)).max(20).optional(),
+  fields: z
+    .record(z.string().max(64), z.union([z.string().max(5000), z.array(z.string().max(1000)).max(100), z.null()]))
+    .optional()
+    .describe("the type's own fields by key"),
+});
+
 // ---- read -------------------------------------------------------------------------------------------------------
 
 const fieldSchema = (s: FieldSpec) =>
@@ -193,7 +216,7 @@ export async function read(input: {
   const r = await generateText({
     model: model("files", workspaceId),
     system: instructions,
-    prompt: `File name: ${filename}\nType: ${docType}${hint ? ` (${hint})` : ""}\nPages: ${last} (${unseen})\n\n${data("document", shown)}`,
+    prompt: `Type: ${docType}${hint ? ` (${hint})` : ""}\nPages: ${last} (${unseen})\n\n${data("document", `File name: ${inline(filename)}\n\n${shown}`)}`,
     tools: { readPages, submit },
     toolChoice: "required",
     stopWhen: [hasToolCall("submit"), stepCountIs(STEPS)],

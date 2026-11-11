@@ -30,7 +30,7 @@ function fake(office: Office) {
       officeChange: async (ops: Op[], summary: string): Promise<OfficeChanged> => {
         try {
           now = apply(now, ops, "ai").office;
-          return { ok: true, changeId: "c1", summary, office: now };
+          return { ok: true, summary, office: now };
         } catch (e) {
           if (e instanceof OfficeError) return { ok: false, error: e.message };
           throw e;
@@ -73,7 +73,7 @@ describe("case office in the agent", () => {
       summary: "Added the plan task",
       ops: [{ op: "task.add", title: "Certified copy of the plan", due: "2026-11-14" }],
     });
-    expect(r.changeId).toBe("c1");
+    expect(r.summary).toBe("Added the plan task");
     expect(r.office.tasks.map((t: { title: string }) => t.title)).toEqual([
       "Certified copy of the plan",
       "List of witnesses",

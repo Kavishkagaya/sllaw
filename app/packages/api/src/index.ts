@@ -16,12 +16,14 @@ import {
   adminUsers,
   adminUserUsage,
   adminWorkspaceUsage,
+  cardPatch,
   caseFileChunks,
   changeOffice,
   createCase,
   deleteCase,
   deleteFile,
   diary,
+  editCaseFile,
   finishUpload,
   getChunk,
   getDoc,
@@ -32,7 +34,6 @@ import {
   MAX_SIZE,
   METRIC_KEYS,
   moveChat,
-  officeHistory,
   openCase,
   openCaseFile,
   openChat,
@@ -43,7 +44,6 @@ import {
   reprocessCaseFile,
   reprocessFile,
   startUpload,
-  undoChange,
   updateCase,
   usageStatus,
   workspaceUsage,
@@ -121,6 +121,18 @@ export const appRouter = router({
     openFile: workspaceUser
       .input(z.object({ caseId: z.uuid(), fileId: z.uuid() }))
       .query(async ({ ctx, input }) => found(await openCaseFile(ctx.account, input.caseId, input.fileId))),
+    // the lawyer corrects the file's card: any field and the type (a new type re-reads the file); no undo
+    editFile: workspaceUser
+      .input(
+        z.object({
+          caseId: z.uuid(),
+          fileId: z.uuid(),
+          patch: cardPatch,
+        }),
+      )
+      .mutation(async ({ ctx, input }) =>
+        found(await editCaseFile(ctx.account, input.caseId, input.fileId, input.patch)),
+      ),
     // the file's text as its chunks, for the citation viewer
     fileChunks: workspaceUser
       .input(z.object({ caseId: z.uuid(), fileId: z.uuid() }))
@@ -135,7 +147,7 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => removed(await removeCaseFile(ctx.account, input.caseId, input.fileId))),
   }),
   // A case's office (docs/APP.md, Case office): header, people, court dates, tasks and dashboard widgets, changed by
-  // operations; every change is in the history and undoable. diary: Home's dates and tasks across the user's cases.
+  // operations. diary: Home's dates and tasks across the user's cases.
   office: router({
     open: workspaceUser
       .input(z.object({ caseId: z.uuid() }))
@@ -143,14 +155,6 @@ export const appRouter = router({
     change: workspaceUser
       .input(z.object({ caseId: z.uuid(), ops: opsSchema }))
       .mutation(async ({ ctx, input }) => found(await changeOffice(ctx.account, input.caseId, input.ops))),
-    history: workspaceUser
-      .input(z.object({ caseId: z.uuid() }))
-      .query(async ({ ctx, input }) => found(await officeHistory(ctx.account, input.caseId))),
-    undo: workspaceUser.input(z.object({ caseId: z.uuid(), changeId: z.uuid() })).mutation(async ({ ctx, input }) => {
-      const r = found(await undoChange(ctx.account, input.caseId, input.changeId));
-      if (r === "done") throw new TRPCError({ code: "CONFLICT", message: "That change was already undone." });
-      return r;
-    }),
     diary: workspaceUser.query(({ ctx }) => diary(ctx.account)),
   }),
   // A user's own files (file service, owner only), and finishing any upload the user started.

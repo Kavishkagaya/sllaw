@@ -48,13 +48,11 @@ export function OfficeProvider({
   const [error, setError] = useState<string | null>(null);
   const refresh = useCallback(() => {
     qc.invalidateQueries({ queryKey: key });
-    qc.invalidateQueries({ queryKey: trpc.office.history.queryKey({ caseId }) });
-  }, [qc, key, trpc, caseId]);
+  }, [qc, key]);
   const change = useMutation(
     trpc.office.change.mutationOptions({
       onSuccess: (r) => {
         qc.setQueryData(key, (old) => old && { ...old, office: r.office, version: r.version });
-        qc.invalidateQueries({ queryKey: trpc.office.history.queryKey({ caseId }) });
         setError(null);
       },
       onError: (e) => setError(e.message),
