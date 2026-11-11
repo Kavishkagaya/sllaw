@@ -47,6 +47,7 @@
     {"date": "2026-11-11", "note": "Built: the reader in ai (categorize.ts: classify with Jev, falls back below 0.6; read: 10-step agent with readPages; doc-types.ts: 8 types' fields) and the pipeline passing pages (categorize 240 s). Next: gold set and eval."},
     {"date": "2026-11-11", "note": "Gold set built (20 files) and scored: types 20/20 with Jev, fields 51/55, max $0.0024 a file, 300-page file in 7 steps (numbers in docs/APP.md). The reader now submits its card through a tool. Next: the user checks the 20 labels; then the card page, editing, the agent's card edits, the case page's history removal."},
     {"date": "2026-11-11", "note": "Built: Edit details on the file page, case.editFile, the agent's correction through fileCard (fileEdit tool merged in), History and undo removed from the case page. Browser: s1 (Sinhala journal: next date 2023-06-20, trial) and s3 (letter -> letter of demand: amount and deadline back, typed title kept) pass; s4's correction is not reliable on the files model (d6 reworded with the user). Dev server: NODE_OPTIONS connect timeout for this network. Next: the user's check of the 20 labels, then /validate."},
+    {"date": "2026-11-11", "note": "The user accepted the 20 gold labels as they are (asked, 'count them checked'); the review page: https://claude.ai/artifact/VRAgKFemDZL7aTTZPuSBh6. Next: /validate."},
     {"date": "2026-11-11", "note": "Scoped with the user in 6 rounds; issue #46 (follows #44)."}
   ]
 }
