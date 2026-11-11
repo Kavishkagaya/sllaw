@@ -44,6 +44,28 @@ function meterCall(task: Task, scope: Scope, modelId: string, usage: ModelUsage,
   );
 }
 
+/** The decision model that names a file's type (MODEL_CLASSIFY): Jev, input billed, output free. A language model id
+ *  here (e.g. "deepseek/...") makes the classifier ask that model instead. */
+export const CLASSIFY_MODEL = process.env.MODEL_CLASSIFY || "typesafe-ai/jev-1.14.0";
+
+/** Meters one decision call (no middleware for decision models): its input tokens and what the gateway billed. */
+export function meterDecision(workspaceId: string, modelId: string, inputTokens: number | undefined, meta: unknown) {
+  const g = ((meta as { gateway?: GatewayMeta } | undefined)?.gateway ?? {}) as GatewayMeta;
+  const billed = g.gatewayCost ?? g.cost;
+  meter(
+    {
+      kind: "llm",
+      task: "classify",
+      model: modelId,
+      quantity: { input: inputTokens ?? 0, cached: 0, output: 0, reasoning: 0 },
+      costUsd: billed == null ? null : Number(billed),
+      idem: g.generationId ? `gateway:${g.generationId}` : null,
+      meta: { provider: g.routing?.finalProvider ?? null, inferenceCost: g.cost == null ? null : Number(g.cost) },
+    },
+    usageScope() ?? { workspaceId },
+  );
+}
+
 /** Meters every call, streamed (the chat: one per step) or not (categorize), for the usage scope the call started
  *  in (a stream's finish part may be read outside it), else for the workspace. A stream cut off before its finish
  *  part (the stop button) reports no usage, so that one step goes unmetered. */

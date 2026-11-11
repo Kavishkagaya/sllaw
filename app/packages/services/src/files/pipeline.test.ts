@@ -90,6 +90,10 @@ const card: Card = {
   caseNumbers: ["DC Colombo 123/L"],
   lawsCited: ["s. 22 of the Rent Act"],
   tags: ["rent"],
+  fields: { reliefs: ["arrears of rent"], causeOfAction: "Unpaid rent", value: "Rs. 250,000" },
+  typedBy: "fake",
+  typeConfidence: 0.9,
+  edited: [],
 };
 
 function setup() {

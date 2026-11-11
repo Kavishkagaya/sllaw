@@ -144,7 +144,7 @@ in v1; an entity graph can be built later from the same per-file JSON.
   (Workers AI Read: bge-m3 embedding; `CLOUDFLARE_API_TOKEN`). Checked 2026-10-26: the R2 token gets 403 on the ETL
   bucket `sllaw`, the AI token 403 on R2. Set in apps/web/.env.local and Vercel Production. The full-access token stays
   in the repo root .env for the ETL only.
-- **Step timeouts (user, 2026-10-26):** each step has a time limit (extract 240 s, categorize 90 s, index 180 s),
+- **Step timeouts (user, 2026-10-26):** each step has a time limit (extract 240 s, categorize 240 s since 2026-11-11 for the 10-step reader, index 180 s),
   below Vercel's default 300 s function limit, so a slow step ends itself instead of being cut off and left running
   for 15 minutes. The step's calls are cancelled, not abandoned. A timeout is retried (3 attempts in all), then failed
   with "Try again": worst case about 12 minutes for extract before the user hears it failed.

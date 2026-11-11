@@ -1,4 +1,17 @@
-export { type Card, type Categorizer, DOC_TYPES, type DocType, llmCategorizer } from "./agents/categorize";
+export {
+  type Card,
+  type Categorizer,
+  classify,
+  DOC_TYPES,
+  type DocType,
+  FIELDS,
+  type FieldSpec,
+  type FieldValue,
+  llmCategorizer,
+  type Page,
+  read,
+  STEPS,
+} from "./agents/categorize";
 export * from "./agents/main";
 export { fileCount, type MainInput, mainSetup } from "./agents/main.setup";
 export * from "./models";
