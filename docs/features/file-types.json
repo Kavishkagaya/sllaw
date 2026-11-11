@@ -13,7 +13,7 @@
     {"id": "d3", "check": "For the 8 types (plaint, answer, affidavit, journal entry/order, judgment, deed/lease, letter of demand, charge sheet), at least 90% of key fields on the gold set match the label, and a field the document does not give stays empty. Names, dates, amounts, case numbers and quoted text stay as written in the document's language; descriptive fields (cause of action, what happened) are in English. A file holding several documents (a plaint with its annexures) is carded as its main document."},
     {"id": "d4", "check": "Every file goes through the page-reading agent and finishes in at most 10 steps, including a 300-page file made by joining gold files; reading costs at most $0.02 per file on average over the gold set; cost and time per file (median and max) are reported and recorded."},
     {"id": "d5", "check": "On the Files page, a file's card shows its type's fields. The lawyer can edit any field and change the type; changing the type re-reads the file for the new type and keeps fields the lawyer typed; edits survive a reload."},
-    {"id": "d6", "check": "The case agent reads the type-specific fields through fileCard, and when the lawyer asks it to correct a card it edits it and the edit shows in the chat; there is no undo and no edit history for cards (the lawyer edits the card by hand). It never edits a card unasked."},
+    {"id": "d6", "check": "The case agent reads the type-specific fields through fileCard and answers from them. It can correct a file's details through fileCard's correct (no new tool), only when the lawyer asks; a correction it makes shows in the chat as its own line, and it never edits unasked. Known limit, accepted by the user: on the files model it does not reliably make the correction (4 tries, 2026-11-11), so the lawyer's way to correct is Edit details on the file page; reliable agent corrections come with the skills brief. No undo, no history."},
     {"id": "d7", "check": "The case page has no History and no undo any more (the History view, the undo tool and the chat card's undo are gone): an edit the agent makes shows in the chat and stays; the lawyer changes it back by hand."}
   ],
   "scenarios": [
@@ -28,6 +28,7 @@
     "Page numbers on card fields, and listing or splitting the documents inside a bundle (user: more work).",
     "Scanned files: no scan support yet, so none in the gold set (user).",
     "Type-specific fields for the other 32 types: they keep the generic card.",
+    "Reliable corrections by the agent: the next brief, a skills system that loads tools by intent (user, 2026-11-11).",
     "Real files from lawyers in the gold set: added when they arrive, and the test rerun."
   ],
   "decisions": [
@@ -45,6 +46,7 @@
   "progress": [
     {"date": "2026-11-11", "note": "Built: the reader in ai (categorize.ts: classify with Jev, falls back below 0.6; read: 10-step agent with readPages; doc-types.ts: 8 types' fields) and the pipeline passing pages (categorize 240 s). Next: gold set and eval."},
     {"date": "2026-11-11", "note": "Gold set built (20 files) and scored: types 20/20 with Jev, fields 51/55, max $0.0024 a file, 300-page file in 7 steps (numbers in docs/APP.md). The reader now submits its card through a tool. Next: the user checks the 20 labels; then the card page, editing, the agent's card edits, the case page's history removal."},
+    {"date": "2026-11-11", "note": "Built: Edit details on the file page, case.editFile, the agent's correction through fileCard (fileEdit tool merged in), History and undo removed from the case page. Browser: s1 (Sinhala journal: next date 2023-06-20, trial) and s3 (letter -> letter of demand: amount and deadline back, typed title kept) pass; s4's correction is not reliable on the files model (d6 reworded with the user). Dev server: NODE_OPTIONS connect timeout for this network. Next: the user's check of the 20 labels, then /validate."},
     {"date": "2026-11-11", "note": "Scoped with the user in 6 rounds; issue #46 (follows #44)."}
   ]
 }

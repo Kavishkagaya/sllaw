@@ -1,6 +1,7 @@
 export {
   type Card,
   type Categorizer,
+  cardPatch,
   classify,
   DOC_TYPES,
   type DocType,

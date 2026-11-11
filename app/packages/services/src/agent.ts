@@ -1,10 +1,11 @@
 import type { AsOf, CaseFile, Change, Chunk, Ctx, Status } from "@sllaw/ai";
-import { filesOfCase } from "@sllaw/db";
+import { fileById, filesOfCase } from "@sllaw/db";
 import { changeStatus, changesInto, chunksById, linksOf, sectionsOf } from "@sllaw/etl_db";
 import { emptyOffice, type Office } from "@sllaw/office";
 import { type FileIndex, fileIndex, searchLaw } from "@sllaw/search";
 import { type BlobStore, blobStore } from "@sllaw/storage";
 import { caseFilesFrom, chunksReader, summaryReader } from "./case-files";
+import { type CardPatch, editCard } from "./files/card";
 import { OfficeError, readOffice, writeOffice } from "./office";
 
 const asChunk = (c: {
@@ -113,7 +114,7 @@ export function agentCtx(
         if (!caseId || !caseOffice) return { ok: false, error: "Not a case chat." };
         try {
           const r = await writeOffice(caseId, ops, { by: "ai", userId, chatId, summary });
-          return { ok: true, changeId: r.changeId, summary: r.summary, office: r.office };
+          return { ok: true, summary: r.summary, office: r.office };
         } catch (e) {
           if (e instanceof OfficeError) return { ok: false, error: e.message };
           throw e;
@@ -131,6 +132,11 @@ export function agentCtx(
           : [],
       fileChunks: chunksReader(caseFiles, () => files.store ?? blobStore()),
       fileSummary: summaryReader(caseFiles, () => files.store ?? blobStore()),
+      fileEdit: async (fileId, patch) => {
+        const f = caseFiles.some((c) => c.id === fileId) ? await fileById(fileId) : null;
+        const c = f ? await editCard(f, patch as CardPatch, userId) : null;
+        return c ? { title: c.title, docType: c.docType } : null;
+      },
       search: (query, opts) => searchLaw(query, opts),
       read: async (ids) => (await sectionsOf(ids)).map((c) => ({ ...asChunk(c), ...(c.more && { more: c.more }) })),
       links: (target, direction, opts) => linksOf(target, direction, opts),

@@ -1,16 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  addDays,
-  apply,
-  awaitingOutcome,
-  emptyOffice,
-  journal,
-  nextDate,
-  type Office,
-  OfficeError,
-  officeSchema,
-  restore,
-} from ".";
+import { addDays, apply, awaitingOutcome, emptyOffice, journal, nextDate, OfficeError, officeSchema } from ".";
 
 const ids = () => {
   let n = 0;
@@ -146,38 +135,6 @@ describe("apply", () => {
       purpose: "further trial",
     });
     expect(journal(o).map((d) => d.date)).toEqual(["2027-01-15", "2026-12-12"]);
-  });
-});
-
-describe("undo", () => {
-  it("puts back exactly what one change touched, keeping later changes", () => {
-    const mint = ids();
-    const start: Office = apply(
-      emptyOffice(),
-      [{ op: "task.add", title: "List of witnesses", due: "2026-11-28" }],
-      "lawyer",
-      mint,
-    ).office;
-    const ai = apply(
-      start,
-      [
-        { op: "task.add", title: "Certified copy of the plan", due: "2026-11-14" },
-        {
-          op: "widget.add",
-          widget: { type: "table", title: "Witnesses", columns: ["Name", "Proves"], rows: [] },
-          at: 0,
-        },
-        { op: "task.update", id: "i1", set: { due: "2026-11-30" } },
-      ],
-      "ai",
-      mint,
-    );
-    // the lawyer works on after it
-    const later = apply(ai.office, [{ op: "header.set", set: { court: "DC Colombo" } }], "lawyer", mint).office;
-    const undone = restore(later, ai.items);
-    expect(undone.tasks).toEqual(start.tasks);
-    expect(undone.widgets).toEqual(start.widgets);
-    expect(undone.header.court).toBe("DC Colombo");
   });
 });
 

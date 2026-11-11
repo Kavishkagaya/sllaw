@@ -8,7 +8,7 @@ import { type BlobStore, getJson } from "@sllaw/storage";
 import { keys } from "./files/pipeline";
 
 type Meta = Partial<
-  Pick<CaseFile, "parties" | "dates" | "caseNumbers" | "lawsCited" | "tags"> & {
+  Pick<CaseFile, "parties" | "dates" | "caseNumbers" | "lawsCited" | "tags" | "fields"> & {
     title: string;
     language: string;
     court: string | null;
@@ -43,6 +43,7 @@ export function caseFilesFrom(rows: FileRow[]): CaseFile[] {
       caseNumbers: m.caseNumbers ?? [],
       lawsCited: m.lawsCited ?? [],
       tags: m.tags ?? [],
+      fields: m.fields ?? {},
     };
   });
 }

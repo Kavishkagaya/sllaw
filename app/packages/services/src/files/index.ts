@@ -3,6 +3,8 @@
 // steps as a workflow run and reports their states, live, as server-sent events. It knows nothing of cases: who may
 // add or see a file through a case is the case service's (../cases.ts). Functions taking an Account are for a
 // user's own files (owner only); the rest take ids and trust their caller.
+
+import { DOC_TYPES, FIELDS } from "@sllaw/ai";
 import {
   createFile,
   deleteFileRow,
@@ -100,6 +102,10 @@ export async function fileView(f: FileRow) {
   return {
     file: f,
     summary: card?.summary ?? null,
+    fields: card?.fields ?? {},
+    specs: card ? (FIELDS[card.docType] ?? []) : [],
+    edited: card?.edited ?? [],
+    docTypes: DOC_TYPES,
     downloadUrl: f.uploadState === "stored" ? await store.downloadUrl(keys.original(f.id), URL_TTL, f.name) : null,
     status: fileStatus(f),
   };

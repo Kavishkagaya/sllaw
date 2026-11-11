@@ -74,7 +74,7 @@ office: imported by db, ai, services, api, apps/web (pure: the case office's sch
   (docs/APP.md, Limits).
 - **`office`**: the case office (docs/APP.md, Case office): the zod schema of a case's office document (header,
   people, dates, tasks, widgets from the fixed catalog), the operations the page and the agent apply (`apply`), the
-  item-level diff and `restore` (undo), and date helpers (next date, waiting outcomes, Colombo today). Pure, like
+  item-level diff (`restore`/undo removed 2026-11-11: the office is not an editor), and date helpers (next date, waiting outcomes, Colombo today). Pure, like
   `usage`: every layer may import it; the web app imports it for types and date logic only (data still goes through
   `api`).
 - **`api`**: tRPC routers, thin: input validation (zod), auth, one service call. No logic, no queries, no ai.

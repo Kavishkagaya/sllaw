@@ -21,14 +21,11 @@ import { useOffice } from "./context";
 
 export { daysFrom, fmtDay, fmtShort, label, whenLabel } from "@/lib/office";
 
-/** What the agent wrote: a small sparkle; the history says when and lets the lawyer undo it. */
+/** What the agent wrote: a small sparkle. */
 export function AiMark({ by, className }: { by?: By; className?: string }) {
   if (by !== "ai") return null;
   return (
-    <span
-      title="Written by the AI. Undo it from History."
-      className={cn("inline-flex shrink-0 text-primary/70", className)}
-    >
+    <span title="Written by the AI." className={cn("inline-flex shrink-0 text-primary/70", className)}>
       <Sparkles className="size-3" aria-hidden />
       <span className="sr-only">(by AI)</span>
     </span>

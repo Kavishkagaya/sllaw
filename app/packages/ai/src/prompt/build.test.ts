@@ -60,6 +60,7 @@ const file = (c: string, over: Partial<CaseFile> = {}): CaseFile => ({
   caseNumbers: [],
   lawsCited: [],
   tags: [],
+  fields: {},
   ...over,
 });
 const ctx = (over: Partial<Ctx> = {}) =>

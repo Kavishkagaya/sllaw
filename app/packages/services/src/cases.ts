@@ -18,6 +18,12 @@ import {
 } from "@sllaw/db";
 import { blobStore } from "@sllaw/storage";
 import { chunksOf } from "./case-files";
+import { type CardPatch, editCard } from "./files/card";
+
+export { cardPatch, DOC_TYPES } from "@sllaw/ai";
+export { FileBusy } from "./files/card";
+export type { CardPatch };
+
 import {
   createUpload,
   type FileInput,
@@ -187,6 +193,13 @@ export async function openCaseFile(a: Signed, caseId: string, fileId: string) {
 
 /** A case file's text as its chunks, for the citation viewer (the whole file, a cited chunk highlighted): the same
  *  chunks, and so the same `<fileId>:<n>` ids, as the agent's tools. null when the user cannot see it. */
+/** Edits a case file's card (any field and the type; a new type re-reads the file). null when the user cannot see it
+ *  or it has no card yet. */
+export async function editCaseFile(a: Signed, caseId: string, fileId: string, patch: CardPatch) {
+  const f = await caseFile(a, caseId, fileId);
+  return f ? editCard(f, patch, a.user.id) : null;
+}
+
 export async function caseFileChunks(a: Signed, caseId: string, fileId: string) {
   const f = await caseFile(a, caseId, fileId);
   if (!f) return null;

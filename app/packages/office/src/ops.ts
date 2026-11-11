@@ -1,6 +1,5 @@
 // Changes to a case office: one list of operations for the lawyer's page and the agent's tool alike. `apply` runs them
-// on a copy, checks the result against the schema and returns what changed, item by item (`Item`: before and after),
-// so a change can be undone exactly (`restore`) however many changes came after it, and history can say what it did.
+// on a copy, checks the result against the schema and returns what changed, item by item (`Item`: before and after).
 import { z } from "zod";
 import {
   type By,
@@ -152,36 +151,6 @@ export function diff(before: Office, after: Office): Item[] {
   const order = (o: Office) => o.widgets.map((w) => w.id);
   if (!same(order(before), order(after))) items.push({ key: "order", before: order(before), after: order(after) });
   return items;
-}
-
-/** Puts back each item's `before` on the current office: undo. Later changes to other items stay. */
-export function restore(current: Office, items: Item[]): Office {
-  const o = structuredClone(current);
-  for (const it of items) {
-    if (it.key === "header") o.header = structuredClone(it.before) as Office["header"];
-    else if (it.key !== "order") {
-      const [kind, ...rest] = it.key.split(":");
-      const field = COLLECTIONS[kind as Coll];
-      const itemId = rest.join(":");
-      const list = o[field] as { id: string }[];
-      const at = list.findIndex((x) => x.id === itemId);
-      if (it.before == null) {
-        if (at >= 0) list.splice(at, 1);
-      } else if (at >= 0) list[at] = structuredClone(it.before) as { id: string };
-      else list.push(structuredClone(it.before) as { id: string });
-    }
-  }
-  const order = items.find((it) => it.key === "order");
-  if (order) {
-    const want = order.before as string[];
-    const rank = new Map(want.map((wid, i) => [wid, i]));
-    // the order it had; widgets added since keep their place after those
-    o.widgets = [
-      ...o.widgets.filter((w) => rank.has(w.id)).sort((a, b) => rank.get(a.id)! - rank.get(b.id)!),
-      ...o.widgets.filter((w) => !rank.has(w.id)),
-    ];
-  }
-  return check(o);
 }
 
 function check(o: Office): Office {

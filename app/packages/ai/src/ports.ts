@@ -67,6 +67,18 @@ export type CaseFile = {
   caseNumbers: string[];
   lawsCited: string[];
   tags: string[];
+  fields: Record<string, string | string[] | null>; // the type's own fields (agents/doc-types.ts)
+};
+/** What the agent may change on a card: its generic fields, the type, the type's own fields. */
+export type FileCardPatch = {
+  docType?: string;
+  title?: string;
+  summary?: string;
+  court?: string | null;
+  caseNumbers?: string[];
+  parties?: { name: string; role: string }[];
+  dates?: { date: string; what: string }[];
+  fields?: Record<string, string | string[] | null>;
 };
 /** A passage of a case file from search: one chunk (n, from 0, its place in the file's chunks.json), never across a
  *  page. */
@@ -74,16 +86,14 @@ export type FilePassage = { fileId: string; n: number; page: number; text: strin
 /** One of a file's chunks, as the index cut them (chunks.json): its id is `<fileId>:<n>`. */
 export type FileChunk = { n: number; page: number; text: string };
 
-/** What the agent's change to the case office came to: its line in the history, and the office after it; or why it
+/** What the agent's change to the case office came to: its summary line, and the office after it; or why it
  *  could not be made (nothing changed). */
-export type OfficeChanged =
-  | { ok: true; changeId: string; summary: string; office: Office }
-  | { ok: false; error: string };
+export type OfficeChanged = { ok: true; summary: string; office: Office } | { ok: false; error: string };
 
 export interface Ports {
   /** The case's office as it is now (case chat only). */
   officeRead(): Promise<Office>;
-  /** Changes the case's office as the agent, recorded with this chat and undoable by the lawyer. */
+  /** Changes the case's office as the agent. */
   officeChange(ops: Op[], summary: string): Promise<OfficeChanged>;
   search(query: string, opts: { mode?: Mode; filters?: Filters; limit?: number }): Promise<Hit[]>;
   /** The case's files only (services scopes it to case:<id>); fileIds narrows further. */
@@ -95,6 +105,9 @@ export interface Ports {
   fileChunks(fileId: string): Promise<FileChunk[] | null>;
   /** A case file's summary (its card's, in the blob store); null when there is none yet. */
   fileSummary(fileId: string): Promise<string | null>;
+  /** Edits a case file's card, as the lawyer asked: the fields given, or a new type (the file is read again for it).
+   *  null when it is not a file of this case or has no card yet. */
+  fileEdit(fileId: string, patch: FileCardPatch): Promise<{ title: string; docType: string } | null>;
   read(chunkIds: number[]): Promise<ReadChunk[]>;
   links(
     target: { docKey: string; chunkId?: number | null },
