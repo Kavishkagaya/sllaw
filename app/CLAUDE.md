@@ -117,7 +117,7 @@ once; `file.reprocess` reruns retryable failures and steps a stopped run left op
 is done, within 15 minutes of the row's last write. While busy, delete is refused (CONFLICT) and reprocess starts
 no second run. Delete marks the row `deleting` first (no run claims it), then removes vectors, blobs, row. A claim
 makes its run the file's owner (`run_id`); a step's end is written only by its owner.
-**Step timeouts** (`STEP_TIMEOUT`, pipeline.ts): extract 240 s, categorize 90 s, index 180 s, under Vercel's 300 s
+**Step timeouts** (`STEP_TIMEOUT`, pipeline.ts): extract 240 s, categorize 240 s (the reader takes up to 10 steps), index 180 s, under Vercel's 300 s
 function limit. `runStep` aborts the step's signal (passed to OCR, the model, embedding and Zilliz calls) and records
 a retryable `StepTimeout`: 3 attempts, then failed with "Try again". Raise them only with the function's maxDuration. `<step>_by` records what produced each output, so files done by an older version can be found.
 

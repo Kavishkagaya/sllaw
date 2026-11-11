@@ -1,0 +1,47 @@
+{
+  "title": "Files: read each document by its type",
+  "slug": "file-types",
+  "status": "agreed",
+  "branch": "app/file-types",
+  "issue": 46,
+  "neon_branch": {"name": "agent/file-types", "id": "br-solitary-fog-b7udpdyy"},
+  "goal": "Read every case file the way a lawyer would for its type: Jev (TypeSafe AI, on AI Gateway) names the document, falling back to DeepSeek when unsure; a small agent then pages through the whole file (at most 10 steps) and fills that type's fields. The card shows on the Files page and the case agent uses it, and both the lawyer and the agent can correct it. Jev takes over only if it proves itself on a gold set.",
+  "for_whom": "A practising Sri Lankan lawyer who uploads a case's papers (plaints, affidavits, journal entries, judgments, deeds) and needs to know what each says without opening it, and the case agent that answers from them.",
+  "done_check": [
+    {"id": "d1", "check": "A gold set of 20 text files (no scans) with checked labels: public judgments, orders, gazettes and Acts, plus plaints, answers, affidavits, journal entries, deeds/leases, letters of demand and charge sheets written by the app's agent from the Civil Procedure Code and the Acts (a different model from the reader), in English, Sinhala and Tamil. The user has checked all 20. Each label holds the type and, for the 8 types, the key fields."},
+    {"id": "d2", "check": "On the gold set, Jev plus the DeepSeek fallback names the right type for at least 18 of 20 files (90%; reported per language, beside DeepSeek alone). If it does not, DeepSeek keeps the job and the numbers are written in docs/APP.md. One command reruns the whole gold-set test (types and fields), so real files from lawyers can be added and checked later."},
+    {"id": "d3", "check": "For the 8 types (plaint, answer, affidavit, journal entry/order, judgment, deed/lease, letter of demand, charge sheet), at least 90% of key fields on the gold set match the label, and a field the document does not give stays empty. Names, dates, amounts, case numbers and quoted text stay as written in the document's language; descriptive fields (cause of action, what happened) are in English. A file holding several documents (a plaint with its annexures) is carded as its main document."},
+    {"id": "d4", "check": "Every file goes through the page-reading agent and finishes in at most 10 steps, including a 300-page file made by joining gold files; reading costs at most $0.02 per file on average over the gold set; cost and time per file (median and max) are reported and recorded."},
+    {"id": "d5", "check": "On the Files page, a file's card shows its type's fields. The lawyer can edit any field and change the type; changing the type re-reads the file for the new type and keeps fields the lawyer typed; edits survive a reload."},
+    {"id": "d6", "check": "The case agent reads the type-specific fields through fileCard, and when the lawyer asks it to correct a card it edits it and the edit shows in the chat; there is no undo and no edit history for cards (the lawyer edits the card by hand). It never edits a card unasked."},
+    {"id": "d7", "check": "The case page has no History and no undo any more (the History view, the undo tool and the chat card's undo are gone): an edit the agent makes shows in the chat and stays; the lawyer changes it back by hand."}
+  ],
+  "scenarios": [
+    {"id": "s1", "steps": "Upload a Sinhala journal entry (text, not a scan) to a case.", "expect": "The card reads 'Journal entry', with the date, what happened, the next date and its purpose."},
+    {"id": "s2", "steps": "Upload a 300-page bundle that contains a plaint and its annexures.", "expect": "Within 10 steps the card names it, lists the reliefs, cause of action and value."},
+    {"id": "s3", "steps": "A letter of demand was read as a letter; the lawyer changes the type to letter of demand.", "expect": "The amount and deadline appear; fields the lawyer had typed stay."},
+    {"id": "s4", "steps": "In the case chat: 'what reliefs does the plaint ask for?', then 'the plaint's value is Rs. 2.5m, fix the card'.", "expect": "The answer cites the plaint; the card is corrected and the change shows in the chat (no undo)."}
+  ],
+  "out_of_scope": [
+    "Files suggesting dates or header fields to the case page (the next brief).",
+    "Re-reading files uploaded before this, or code to keep the old card working (still in development, user).",
+    "Page numbers on card fields, and listing or splitting the documents inside a bundle (user: more work).",
+    "Scanned files: no scan support yet, so none in the gold set (user).",
+    "Type-specific fields for the other 32 types: they keep the generic card.",
+    "Real files from lawyers in the gold set: added when they arrive, and the test rerun."
+  ],
+  "decisions": [
+    {"date": "2026-11-11", "note": "Jev (typesafe-ai/jev-1.14.0, $0.042/M input, output free, 32k context) names the type; DeepSeek V4.1 Flash ($0.30/M in, $1.20/M out) extracts. Both on AI Gateway (user)."},
+    {"date": "2026-11-11", "note": "Every file goes through a page-reading agent capped at about 10 steps, not one call with the whole text (user). Kept: the Clairic change was dropped the same day."},
+    {"date": "2026-11-11", "note": "Files that fit Clairic's window (@cf/cloudflare/clairic, preview since 2026-10-19, 64k tokens, ~$0.10/M input, no output charge, per third-party write-ups) are read by Clairic in one call; longer ones by the DeepSeek page agent; the gold set decides (user). Not on Vercel AI Gateway (checked 2026-11-11): called on Workers AI with the app's Cloudflare account and token, like bge-m3."},
+    {"date": "2026-11-11", "note": "Clairic dropped for now (user): its text answers are spans of the document, so it cannot write the summary, title or English descriptive fields; a small file would still need DeepSeek, saving ~$0.001 a file for a second provider and a preview model. Retest it on the gold set when it leaves preview."},
+    {"date": "2026-11-11", "note": "Jev's bar is 90% right types with fallback (user)."},
+    {"date": "2026-11-11", "note": "Gold set written by the app's agent, since these documents are not public (docs/SOURCES.md, 2026-11-11); a writer model different from the reader (user + agent)."},
+    {"date": "2026-11-11", "note": "The card is editable by the lawyer and by the agent, any field and the type (user)."},
+    {"date": "2026-11-11", "note": "Gold set is 20 files, text only (user)."},
+    {"date": "2026-11-11", "note": "No history and no undo anywhere, cards or case page: it is not an editor, lawyers won't use it, and it can come back later if wanted. The case office's History and undo go (user)."}
+  ],
+  "progress": [
+    {"date": "2026-11-11", "note": "Scoped with the user in 6 rounds; issue #46 (follows #44)."}
+  ]
+}

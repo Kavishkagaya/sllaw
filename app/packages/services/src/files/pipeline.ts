@@ -73,7 +73,7 @@ export type RunOpts = {
  *  included), so a slow step ends itself, is recorded and retried, rather than its function being cut off with the
  *  step left running. Raise them only with the function's maxDuration. A file needing longer (a very long scan) fails
  *  with the timeout after its 3 attempts. */
-export const STEP_TIMEOUT: Record<Step, number> = { extract: 240_000, categorize: 90_000, index: 180_000 };
+export const STEP_TIMEOUT: Record<Step, number> = { extract: 240_000, categorize: 240_000, index: 180_000 };
 
 /** A step that ran out of time. Retryable: a slow model or OCR call is often quick the next time. */
 export class StepTimeout extends Error {
@@ -187,7 +187,7 @@ const STEP: Record<Step, (f: FileRow, d: Deps, signal: AbortSignal) => Promise<S
     const card = await d.categorizer.categorize({
       workspaceId: f.workspaceId,
       filename: f.name,
-      text: x.pages.map((p) => p.text).join("\n\n"),
+      pages: x.pages.map((p) => ({ page: p.n, text: p.text })),
       signal,
     });
     await putJson(d.store, keys.card(f.id), card);
