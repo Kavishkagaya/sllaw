@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "next dev",
+    "dev": "NODE_OPTIONS=--network-family-autoselection-attempt-timeout=3000 next dev",
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc"
