@@ -1,0 +1,313 @@
+{
+  "summary": {
+    "files": 20,
+    "types": {
+      "jevWithFallback": "20/20",
+      "filesModelAlone": "17/20"
+    },
+    "typesByLanguage": {
+      "jevWithFallback": {
+        "en": "14/14",
+        "si": "4/4",
+        "ta": "2/2"
+      },
+      "filesModelAlone": {
+        "en": "12/14",
+        "si": "4/4",
+        "ta": "1/2"
+      }
+    },
+    "fields": "51/55",
+    "maxSteps": 1,
+    "usdPerFile": {
+      "mean": 0.00116,
+      "max": 0.00235
+    },
+    "seconds": {
+      "median": 8,
+      "max": 13
+    },
+    "long": {
+      "pages": 300,
+      "type": "plaint",
+      "steps": 7,
+      "fields": "3/3",
+      "usd": 0.00923,
+      "s": 27
+    },
+    "allowed": {
+      "steps": 10,
+      "types": 40
+    }
+  },
+  "rows": [
+    {
+      "id": "plaint-en",
+      "lang": "en",
+      "type": "plaint",
+      "jev": "plaint",
+      "jevBy": "jev 1.00",
+      "alone": "plaint",
+      "fields": "3/3",
+      "misses": [],
+      "steps": 1,
+      "usd": 0.00098,
+      "s": 6
+    },
+    {
+      "id": "plaint-si",
+      "lang": "si",
+      "type": "plaint",
+      "jev": "plaint",
+      "jevBy": "jev 0.99",
+      "alone": "plaint",
+      "fields": "3/3",
+      "misses": [],
+      "steps": 1,
+      "usd": 0.0012,
+      "s": 9
+    },
+    {
+      "id": "answer-en",
+      "lang": "en",
+      "type": "answer",
+      "jev": "answer",
+      "jevBy": "jev 1.00",
+      "alone": "answer",
+      "fields": "3/3",
+      "misses": [],
+      "steps": 1,
+      "usd": 0.00097,
+      "s": 7
+    },
+    {
+      "id": "affidavit-en",
+      "lang": "en",
+      "type": "affidavit",
+      "jev": "affidavit",
+      "jevBy": "jev 1.00",
+      "alone": "affidavit",
+      "fields": "2/3",
+      "misses": [
+        "markedDocuments: The entry for document P4 in the reader's list omits the specific date '16th October 2023' which is included in the correct version of the field."
+      ],
+      "steps": 1,
+      "usd": 0.00101,
+      "s": 8
+    },
+    {
+      "id": "affidavit-ta",
+      "lang": "ta",
+      "type": "affidavit",
+      "jev": "affidavit",
+      "jevBy": "jev 1.00",
+      "alone": "affidavit",
+      "fields": "3/3",
+      "misses": [],
+      "steps": 1,
+      "usd": 0.00145,
+      "s": 11
+    },
+    {
+      "id": "journal-si",
+      "lang": "si",
+      "type": "journal_entry",
+      "jev": "journal_entry",
+      "jevBy": "jev 1.00",
+      "alone": "journal_entry",
+      "fields": "4/4",
+      "misses": [],
+      "steps": 1,
+      "usd": 0.00099,
+      "s": 8
+    },
+    {
+      "id": "journal-en",
+      "lang": "en",
+      "type": "journal_entry",
+      "jev": "journal_entry",
+      "jevBy": "jev 0.95",
+      "alone": "journal_entry",
+      "fields": "4/4",
+      "misses": [],
+      "steps": 1,
+      "usd": 0.00087,
+      "s": 7
+    },
+    {
+      "id": "deed-si",
+      "lang": "si",
+      "type": "deed",
+      "jev": "deed",
+      "jevBy": "jev 1.00",
+      "alone": "deed",
+      "fields": "5/5",
+      "misses": [],
+      "steps": 1,
+      "usd": 0.00114,
+      "s": 7
+    },
+    {
+      "id": "lease-en",
+      "lang": "en",
+      "type": "lease",
+      "jev": "lease",
+      "jevBy": "jev 1.00",
+      "alone": "lease",
+      "fields": "5/5",
+      "misses": [],
+      "steps": 1,
+      "usd": 0.00096,
+      "s": 8
+    },
+    {
+      "id": "demand-en",
+      "lang": "en",
+      "type": "letter_of_demand",
+      "jev": "letter_of_demand",
+      "jevBy": "jev 1.00",
+      "alone": "letter_of_demand",
+      "fields": "2/3",
+      "misses": [
+        "demandedFrom: The reader omitted the address portion of the recipient's identity, which was present in the correct data."
+      ],
+      "steps": 1,
+      "usd": 0.00082,
+      "s": 6
+    },
+    {
+      "id": "demand-ta",
+      "lang": "ta",
+      "type": "letter_of_demand",
+      "jev": "letter_of_demand",
+      "jevBy": "jev 1.00",
+      "alone": "deed",
+      "fields": "3/3",
+      "misses": [],
+      "steps": 1,
+      "usd": 0.00108,
+      "s": 7
+    },
+    {
+      "id": "charges-si",
+      "lang": "si",
+      "type": "charge_sheet",
+      "jev": "charge_sheet",
+      "jevBy": "jev 1.00",
+      "alone": "charge_sheet",
+      "fields": "3/3",
+      "misses": [],
+      "steps": 1,
+      "usd": 0.00108,
+      "s": 9
+    },
+    {
+      "id": "charges-en",
+      "lang": "en",
+      "type": "charge_sheet",
+      "jev": "charge_sheet",
+      "jevBy": "jev 1.00",
+      "alone": "charge_sheet",
+      "fields": "3/3",
+      "misses": [],
+      "steps": 1,
+      "usd": 0.00075,
+      "s": 6
+    },
+    {
+      "id": "letter-en",
+      "lang": "en",
+      "type": "letter",
+      "jev": "letter",
+      "jevBy": "jev 1.00",
+      "alone": "letter",
+      "fields": "-",
+      "misses": [],
+      "steps": 1,
+      "usd": 0.00099,
+      "s": 8
+    },
+    {
+      "id": "act-9-2021",
+      "lang": "en",
+      "type": "legislation",
+      "jev": "legislation",
+      "jevBy": "jev 0.99",
+      "alone": "statement",
+      "fields": "-",
+      "misses": [],
+      "steps": 1,
+      "usd": 0.00142,
+      "s": 8
+    },
+    {
+      "id": "act-8-2024",
+      "lang": "en",
+      "type": "legislation",
+      "jev": "legislation",
+      "jevBy": "jev 0.99",
+      "alone": "statement",
+      "fields": "-",
+      "misses": [],
+      "steps": 1,
+      "usd": 0.00141,
+      "s": 6
+    },
+    {
+      "id": "gazette-2289-40",
+      "lang": "en",
+      "type": "gazette",
+      "jev": "gazette",
+      "jevBy": "jev 0.97",
+      "alone": "gazette",
+      "fields": "-",
+      "misses": [],
+      "steps": 1,
+      "usd": 0.00074,
+      "s": 5
+    },
+    {
+      "id": "ca-dc-480-2000",
+      "lang": "en",
+      "type": "judgment",
+      "jev": "judgment",
+      "jevBy": "jev 0.95",
+      "alone": "judgment",
+      "fields": "2/3",
+      "misses": [
+        "authorities: The reader's list omits several authorities cited in the correct list, specifically 'section 754 of the Civil Procedure Code', 'Rent Act No.7 of 1972', and the legal maxim 'Neminum sibi ipsum causam possessions mutare posse'."
+      ],
+      "steps": 1,
+      "usd": 0.00235,
+      "s": 13
+    },
+    {
+      "id": "ca-hcc-14-2023",
+      "lang": "en",
+      "type": "judgment",
+      "jev": "judgment",
+      "jevBy": "jev 1.00",
+      "alone": "judgment",
+      "fields": "2/3",
+      "misses": [
+        "authorities: The reader missed several authorities present in the correct list, including Section 331(1) of the Code of Criminal Procedure Act No. 15 of 1979, Article 138(1) of the Constitution, section 2(1)(d) of the Offensive Weapons Act, prevention of Corruption Act 1947, and IEA 1872."
+      ],
+      "steps": 1,
+      "usd": 0.00134,
+      "s": 8
+    },
+    {
+      "id": "ca-writ-01-2025-order",
+      "lang": "en",
+      "type": "order",
+      "jev": "order",
+      "jevBy": "fallback",
+      "alone": "order",
+      "fields": "4/4",
+      "misses": [],
+      "steps": 1,
+      "usd": 0.00165,
+      "s": 11
+    }
+  ]
+}

@@ -144,6 +144,20 @@ in v1; an entity graph can be built later from the same per-file JSON.
   (Workers AI Read: bge-m3 embedding; `CLOUDFLARE_API_TOKEN`). Checked 2026-10-26: the R2 token gets 403 on the ETL
   bucket `sllaw`, the AI token 403 on R2. Set in apps/web/.env.local and Vercel Production. The full-access token stays
   in the repo root .env for the ETL only.
+- **Reading a file by its type (#46, 2026-11-11):** categorize is two steps (`ai/src/agents/categorize.ts`). The type:
+  Jev (`typesafe-ai/jev-1.14.0`, a decision model on AI Gateway, $0.042/M input, output free, `MODEL_CLASSIFY`) picks
+  one of the 40 types from the first 12k characters; below 0.6 or on an error the files model picks it. The card: an
+  agent on the files model (DeepSeek V4.1 Flash) sees the whole pages that fit 30k characters, reads the rest with
+  `readPages` (20 pages / 30k characters a call), and hands the card in with a `submit` tool, at most 10 steps; 8
+  types have their own fields (`doc-types.ts`). Gold set: 20 text files (`services/scripts/gold-files/`: 14 written by
+  Gemini 3 Flash in English, Sinhala and Tamil, 2 Acts and a gazette from the corpus, 3 Court of Appeal PDFs from
+  lankalaw.net read into memory each run); `pnpm --filter @sllaw/services gold-files eval` (~$0.30). Run 2026-11-11:
+  types 20/20 with Jev (19/20 in a first run; the files model alone 17/20 and 15/20), fields 51/55 (93%; 37/55
+  before the reader had to submit through a tool: it answered from the first page without reading), mean $0.0012
+  and max $0.0024 a file, 8 s median, 13 s max; a 300-page file (a plaint and 299 pages of annexures) in 7 steps,
+  3/3 fields, $0.009, 27 s. A first try with `Output.object` beside the tools never called `readPages` (1 step
+  every file). Clairic (Cloudflare) was looked at and not used: its text answers are spans, so it cannot write the
+  English fields. Not checked: scans (no OCR in the set), real lawyers' files (none yet).
 - **Step timeouts (user, 2026-10-26):** each step has a time limit (extract 240 s, categorize 240 s since 2026-11-11 for the 10-step reader, index 180 s),
   below Vercel's default 300 s function limit, so a slow step ends itself instead of being cut off and left running
   for 15 minutes. The step's calls are cancelled, not abandoned. A timeout is retried (3 attempts in all), then failed
