@@ -67,19 +67,26 @@ export function withUsage<T>(scope: Scope, fn: () => T): T {
 export const usageScope = (): Scope | undefined => als.getStore();
 
 /** Records one event for the current scope (or `scope`, for work outside one). Never throws and never waits: a
- *  failed write is logged, not passed to the caller, since a user's request must not fail on metering. */
-export function meter(e: UsageEvent, scope: Scope | undefined = als.getStore()) {
+ *  failed write is logged, not passed to the caller, since a user's request must not fail on metering. The event
+ *  may be a promise (a cost still being looked up); flushUsage waits for it too. */
+export function meter(e: UsageEvent | Promise<UsageEvent>, scope: Scope | undefined = als.getStore()) {
   if (!sink) return;
-  const { task, ...rest } = e;
-  const m: Metered = {
-    ...rest,
-    workspaceId: scope?.workspaceId ?? null,
-    userId: scope?.userId ?? null,
-    task: scope?.task ?? task ?? "unknown",
-    ref: scope?.ref ?? null,
-    at: new Date(),
-  };
-  const p = sink([m]).catch((err) => console.error("usage: event not stored", m.kind, m.task, err));
+  const at = new Date();
+  const write = (s: Sink, { task, ...rest }: UsageEvent) =>
+    s([
+      {
+        ...rest,
+        workspaceId: scope?.workspaceId ?? null,
+        userId: scope?.userId ?? null,
+        task: scope?.task ?? task ?? "unknown",
+        ref: scope?.ref ?? null,
+        at,
+      },
+    ]);
+  const s = sink;
+  const p = Promise.resolve(e)
+    .then((ev) => write(s, ev))
+    .catch((err) => console.error("usage: event not stored", err));
   pending.add(p);
   void p.finally(() => pending.delete(p));
 }

@@ -6,6 +6,7 @@ import { sql } from "drizzle-orm";
 import {
   bigint,
   boolean,
+  doublePrecision,
   index,
   integer,
   json,
@@ -62,7 +63,7 @@ export const planLimits = pgTable(
       .notNull()
       .references(() => plans.id, { onDelete: "cascade" }),
     metric: text().notNull(), // services/limits.ts METRICS
-    max: bigint({ mode: "number" }).notNull(),
+    max: doublePrecision().notNull(), // in the metric's unit: a count, bytes, USD
   },
   (t) => [primaryKey({ columns: [t.planId, t.metric] })],
 );
@@ -97,7 +98,7 @@ export const userLimits = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     metric: text().notNull(),
-    max: bigint({ mode: "number" }),
+    max: doublePrecision(),
     expiresAt: timestamp("expires_at", { withTimezone: true }),
     note: text(),
     setBy: uuid("set_by").references(() => users.id, { onDelete: "set null" }),

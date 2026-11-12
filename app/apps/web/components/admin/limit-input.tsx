@@ -1,5 +1,5 @@
 "use client";
-// A limit's max as typed on /admin: storage in MB, everything else as is; empty = no limit (null).
+// A limit's max as typed on /admin: storage in MB, spend in USD (cents and below), counts whole; empty = no limit.
 import { useEffect, useRef, useState } from "react";
 import { Input } from "@/components/ui/input";
 
@@ -11,9 +11,9 @@ export const fromInput = (unit: string, s: string): number | null | undefined =>
   if (!t) return null;
   const n = Number(t);
   if (!Number.isFinite(n) || n < 0) return undefined; // not a number: not saved
-  return Math.round(unit === "bytes" ? n * MB : n);
+  return unit === "usd" ? n : Math.round(unit === "bytes" ? n * MB : n);
 };
-export const unitHint = (unit: string) => (unit === "bytes" ? "MB" : unit === "tokens" ? "tokens" : "");
+export const unitHint = (unit: string) => (unit === "bytes" ? "MB" : unit === "usd" ? "USD" : "");
 
 /** Saves on blur or Enter when the value changed; shows the unit beside it. */
 export function LimitInput({
@@ -44,7 +44,7 @@ export function LimitInput({
   return (
     <div className="flex items-center gap-2">
       <Input
-        inputMode="numeric"
+        inputMode={unit === "usd" ? "decimal" : "numeric"}
         className="h-8 w-32 text-right tabular-nums"
         placeholder="No limit"
         value={s}

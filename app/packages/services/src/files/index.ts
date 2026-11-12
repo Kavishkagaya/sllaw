@@ -23,6 +23,7 @@ import { getJson } from "@sllaw/storage";
 import { flushUsage, meter } from "@sllaw/usage";
 import { getRun, start } from "workflow/api";
 import type { Account } from "../accounts";
+import { checkSpend } from "../limits";
 import { appDeps } from "./deps";
 import { type Card, type Deps, type FileEvent, keys } from "./pipeline";
 import { fileWorkflow } from "./workflow";
@@ -183,11 +184,13 @@ async function own(a: Signed, id: string) {
 }
 
 /** A private file: read and searchable by its owner only. */
-export const startUpload = (a: Signed, input: FileInput) =>
-  createUpload({ workspaceId: a.workspace.id, userId: a.user.id }, input, {
+export const startUpload = async (a: Signed, input: FileInput) => {
+  await checkSpend(a.user); // its processing is model work for the uploader
+  return createUpload({ workspaceId: a.workspace.id, userId: a.user.id }, input, {
     steps: STEPS,
     scopes: [`user:${a.user.id}`],
   });
+};
 
 /** The bytes through the app, for a store without direct upload (and small files). Only while the upload is pending. */
 export async function putUpload(a: Signed, id: string, bytes: Uint8Array) {
@@ -204,6 +207,7 @@ export async function finishUpload(a: Signed, id: string) {
   const f = await own(a, id);
   if (!f) return null;
   if (f.uploadState !== "pending") return fileStatus(f); // stored already (a second call), failed, or deleting
+  await checkSpend(a.user); // checked again where processing starts: an upload begun under the allowance waits
   const d = appDeps();
   const head = await d.store.head(keys.original(id));
   if (!head) throw new Error("the file has not reached the store");
@@ -239,7 +243,9 @@ export async function myFileEvents(a: Signed, id: string, lastEventId?: number) 
 
 export async function reprocessFile(a: Signed, id: string, steps?: Step[]) {
   const f = await own(a, id);
-  return f ? rerun(f, steps) : null;
+  if (!f) return null;
+  await checkSpend(a.user); // a rerun is model work
+  return rerun(f, steps);
 }
 
 /** null when the file is not this user's; "busy" while a run still works on it. */

@@ -38,12 +38,12 @@ describe("the max for each metric", () => {
   it("a user's own limit replaces the plan's until it expires; null is unlimited", () => {
     const own = [
       { metric: "messages", max: 50, expiresAt: d("2026-12-31T00:00:00Z"), note: null },
-      { metric: "tokens", max: null, expiresAt: null, note: null },
+      { metric: "spend", max: null, expiresAt: null, note: null },
       { metric: "searches", max: 5, expiresAt: d("2026-11-01T00:00:00Z"), note: null }, // expired
     ];
     const m = maxesOf(free, own, now);
     expect(m.messages).toEqual({ max: 50, source: "user" });
-    expect(m.tokens).toEqual({ max: null, source: "user" });
+    expect(m.spend).toEqual({ max: null, source: "user" });
     expect(m.searches).toEqual({ max: null, source: "plan" });
   });
   it("no plan at all is unlimited", () => {
@@ -52,7 +52,9 @@ describe("the max for each metric", () => {
 });
 
 describe("over a limit", () => {
-  it("a counter blocks once reached (the next turn would add to it)", () => {
+  it("a counter blocks once reached (the next turn would add to it); spend in fractions of a dollar", () => {
+    expect(over("spend", 0.1999, 0.2)).toBe(false);
+    expect(over("spend", 0.2, 0.2)).toBe(true);
     expect(over("messages", 9, 10)).toBe(false);
     expect(over("messages", 10, 10)).toBe(true);
     expect(over("messages", 1e9, null)).toBe(false);
@@ -68,7 +70,7 @@ describe("over a limit", () => {
 describe("resets", () => {
   it("daily counters at the next Colombo midnight (18:30 UTC), monthly on the 1st, caps never", () => {
     expect(resetOf("messages", now)?.toISOString()).toBe("2026-11-09T18:30:00.000Z");
-    expect(resetOf("tokens_month", now)?.toISOString()).toBe("2026-11-30T18:30:00.000Z");
+    expect(resetOf("spend_month", now)?.toISOString()).toBe("2026-11-30T18:30:00.000Z");
     expect(resetOf("storage", now)).toBeNull();
   });
   it("just after Colombo midnight is already the next day", () => {
@@ -80,7 +82,10 @@ describe("resets", () => {
     expect(e.message).toBe(
       "You have sent today's 10 messages on the Free plan. You can send more at midnight (Sri Lanka time).",
     );
-    expect(new LimitReached("tokens_month", 1, 1, "Free", resetOf("tokens_month", now)).message).toContain("on 1 Dec");
+    expect(new LimitReached("spend_month", 2.1, 2, "Free", resetOf("spend_month", now)).message).toBe(
+      "You have used this month's allowance on the Free plan. It resets on 1 Dec.",
+    );
+    expect(new LimitReached("spend", 0.21, 0.2, "Free", resetOf("spend", now)).message).not.toMatch(/\$|0\.2|USD/);
     expect(new LimitReached("case_files", 4, 0, "Pro", null).message).toBe(
       "This case has 4 files; the Pro plan allows 0 per case. Remove one to add another.",
     );

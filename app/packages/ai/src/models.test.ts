@@ -1,9 +1,9 @@
 import { flushUsage, type Metered, meter, setUsageSink, withUsage } from "@sllaw/usage";
-import { stepCountIs, streamText, tool, wrapLanguageModel } from "ai";
+import { gateway, stepCountIs, streamText, tool, wrapLanguageModel } from "ai";
 import { MockLanguageModelV4 } from "ai/test";
-import { afterEach, expect, test } from "vitest";
+import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { z } from "zod";
-import { meterMiddleware } from "./models";
+import { meterMiddleware, priceOf } from "./models";
 
 const usage = (input: number, output: number) => ({
   inputTokens: { total: input, noCache: input, cacheRead: 0, cacheWrite: 0 },
@@ -54,7 +54,19 @@ function twoStepModel() {
   });
 }
 
-afterEach(() => setUsageSink(null));
+// the gateway's price list and generation records, never the network in a test
+beforeEach(() => {
+  vi.spyOn(gateway, "getAvailableModels").mockResolvedValue({
+    models: [
+      { id: "mock-model-id", pricing: { input: "0.000001", output: "0.000002", cachedInputTokens: "0.0000001" } },
+    ],
+  } as never);
+  vi.spyOn(gateway, "getGenerationInfo").mockRejectedValue(new Error("Usage event not found"));
+});
+afterEach(() => {
+  setUsageSink(null);
+  vi.restoreAllMocks();
+});
 
 test("a streamed turn read after its scope closed is still metered for that user and chat, each step once", async () => {
   const events: Metered[] = [];
@@ -109,5 +121,75 @@ test("outside any scope a call is metered for the model's workspace, with no use
   await generateText({ model: wrapLanguageModel({ model, middleware: meterMiddleware("files", "w2") }), prompt: "q" });
   await flushUsage();
   expect(events).toHaveLength(1);
-  expect(events[0]).toMatchObject({ kind: "llm", workspaceId: "w2", userId: null, task: "files", costUsd: null });
+  // no cost and no generation id: the tokens at the list price, marked estimated
+  expect(events[0]).toMatchObject({ kind: "llm", workspaceId: "w2", userId: null, task: "files", estimated: true });
+  expect(events[0].costUsd).toBeCloseTo(5 * 0.000001 + 1 * 0.000002);
+});
+
+test("a stream cut off before its finish (the stop button) is still metered, estimated, once", async () => {
+  const events: Metered[] = [];
+  setUsageSink(async (es) => void events.push(...es));
+  const ac = new AbortController();
+  const model = new MockLanguageModelV4({
+    doStream: async () => ({
+      stream: new ReadableStream<object>({
+        async start(c) {
+          c.enqueue({ type: "stream-start", warnings: [] });
+          c.enqueue({ type: "text-start", id: "x" });
+          c.enqueue({ type: "text-delta", id: "x", delta: "a".repeat(400) });
+          // never finishes: the reader is stopped
+        },
+      }) as unknown as ReadableStream<never>,
+    }),
+  });
+  const r = withUsage({ workspaceId: "w1", userId: "u1", task: "chat", ref: "chat:c1" }, () =>
+    streamText({
+      model: wrapLanguageModel({ model, middleware: meterMiddleware("main", "w1") }),
+      prompt: "q",
+      abortSignal: ac.signal,
+    }),
+  );
+  for await (const t of r.textStream) if (t) ac.abort();
+  await flushUsage();
+  expect(events).toHaveLength(1);
+  expect(events[0]).toMatchObject({ kind: "llm", userId: "u1", task: "chat", estimated: true, meta: { cut: true } });
+  expect(events[0].quantity.output).toBe(100); // 400 characters, about 4 a token
+  expect(events[0].costUsd).toBeGreaterThan(100 * 0.000002);
+});
+
+test("a stream stopped before its reply began is metered too, its prompt only", async () => {
+  const events: Metered[] = [];
+  setUsageSink(async (es) => void events.push(...es));
+  const ac = new AbortController();
+  const model = new MockLanguageModelV4({
+    doStream: async () => {
+      ac.abort();
+      throw new DOMException("aborted", "AbortError");
+    },
+  });
+  const r = withUsage({ workspaceId: "w1", userId: "u1", task: "chat", ref: "chat:c1" }, () =>
+    streamText({
+      model: wrapLanguageModel({ model, middleware: meterMiddleware("main", "w1") }),
+      prompt: "q",
+      abortSignal: ac.signal,
+      onError: () => {},
+    }),
+  );
+  await r.consumeStream();
+  await flushUsage();
+  expect(events).toHaveLength(1);
+  expect(events[0]).toMatchObject({ userId: "u1", estimated: true, meta: { cut: true } });
+  expect(events[0].quantity.output).toBe(0);
+  expect(events[0].quantity.input).toBeGreaterThan(0);
+});
+
+test("a reply without its cost is priced from its generation record when the gateway has written it", async () => {
+  vi.mocked(gateway.getGenerationInfo)
+    .mockRejectedValueOnce(new Error("Usage event not found"))
+    .mockResolvedValueOnce({ totalCost: 0.0042 } as never);
+  const t = { input: 10, cached: 0, output: 10, reasoning: 0 };
+  expect(await priceOf("mock-model-id", t, "gen_1", [0, 0, 0])).toBe(0.0042);
+  // never written: the list price
+  expect(await priceOf("mock-model-id", t, "gen_2", [0])).toBeCloseTo(10 * 0.000001 + 10 * 0.000002);
+  expect(await priceOf("unknown/model", t, null)).toBeNull();
 });

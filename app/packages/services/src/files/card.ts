@@ -5,7 +5,7 @@ import { type Card, type DocType, FIELDS, type FieldValue } from "@sllaw/ai";
 import { claimReread, endReread, type FileRow, setFileCard } from "@sllaw/db";
 import { getJson, putJson } from "@sllaw/storage";
 import { flushUsage, withUsage } from "@sllaw/usage";
-import { checkTokens } from "../limits";
+import { checkSpend } from "../limits";
 import { appDeps } from "./deps";
 import { type Deps, keys } from "./pipeline";
 
@@ -72,9 +72,15 @@ export class FileBusy extends Error {
   }
 }
 
-/** Edits a file's card and returns it; null when it has no card yet (still being read, or no text). `userId` is
- *  who it is metered for when a new type is read. */
-export async function editCard(f: FileRow, patch: CardPatch, userId: string | null, d: Deps = appDeps()) {
+/** Edits a file's card and returns it; null when it has no card yet (still being read, or no text). `user` is who
+ *  a new type's re-read is checked and metered for. */
+export async function editCard(
+  f: FileRow,
+  patch: CardPatch,
+  user: { id: string; isAdmin?: boolean } | null,
+  d: Deps = appDeps(),
+) {
+  const userId = user?.id ?? null;
   if (f.categorizeState !== "done") return null;
   const card = await getJson<Card>(d.store, keys.card(f.id));
   if (!card) return null;
@@ -82,7 +88,7 @@ export async function editCard(f: FileRow, patch: CardPatch, userId: string | nu
   if (patch.docType && patch.docType !== card.docType) {
     const x = await getJson<{ pages: { n: number; text: string }[] }>(d.store, keys.extract(f.id));
     if (!x) return null;
-    if (userId) await checkTokens(userId); // re-reads count toward the user's model tokens
+    if (user) await checkSpend(user); // a re-read is model work: the user's spend
     if (!(await claimReread(f.id))) throw new FileBusy();
     try {
       const fresh = await withUsage(

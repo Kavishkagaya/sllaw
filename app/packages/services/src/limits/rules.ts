@@ -8,8 +8,8 @@ import { dayOf, monthOf } from "../periods";
 
 export const METRICS = {
   messages: { kind: "counter", per: "day", unit: "count", label: "Messages a day" },
-  tokens: { kind: "counter", per: "day", unit: "tokens", label: "Context a day" },
-  tokens_month: { kind: "counter", per: "month", unit: "tokens", label: "Context a month" },
+  spend: { kind: "counter", per: "day", unit: "usd", label: "Spend a day" },
+  spend_month: { kind: "counter", per: "month", unit: "usd", label: "Spend a month" },
   searches: { kind: "counter", per: "day", unit: "count", label: "Searches a day" },
   case_files: { kind: "cap", per: "case", unit: "count", label: "Files per case" },
   storage: { kind: "cap", per: "user", unit: "bytes", label: "Storage" },
@@ -19,8 +19,10 @@ export type Metric = keyof typeof METRICS;
 export const METRIC_KEYS = Object.keys(METRICS) as Metric[];
 export const isMetric = (m: string): m is Metric => m in METRICS;
 
-/** What a chat turn and a case upload are checked against. */
-export const CHAT_METRICS = ["messages", "tokens", "tokens_month", "searches"] as const satisfies Metric[];
+/** What a chat turn is checked against. */
+export const CHAT_METRICS = ["messages", "spend", "spend_month", "searches"] as const satisfies Metric[];
+/** What any model work is checked against before it starts: a chat turn, a case upload, a re-type. */
+export const SPEND_METRICS = ["spend", "spend_month"] as const satisfies Metric[];
 
 export type Plan = { id: string; key: string; name: string; isDefault: boolean; limits: Record<string, number> };
 export type UserPlan = { planId: string; startsAt: Date; endsAt: Date | null };
@@ -92,10 +94,10 @@ export function limitMessage(m: Metric, max: number, plan: string, resetsAt: Dat
   switch (m) {
     case "messages":
       return `You have sent today's ${num.format(max)} ${max === 1 ? "message" : "messages"} on the ${plan} plan. You can send more ${at}.`;
-    case "tokens":
-      return `You have used today's context allowance on the ${plan} plan (${num.format(max)} tokens). It resets ${at}.`;
-    case "tokens_month":
-      return `You have used this month's context allowance on the ${plan} plan (${num.format(max)} tokens). It resets ${at}.`;
+    case "spend": // never the amount: lawyers see their allowance as a share (brief spend-limits)
+      return `You have used today's allowance on the ${plan} plan. It resets ${at}.`;
+    case "spend_month":
+      return `You have used this month's allowance on the ${plan} plan. It resets ${at}.`;
     case "searches":
       return `You have reached today's ${num.format(max)} ${max === 1 ? "search" : "searches"} on the ${plan} plan. It resets ${at}.`;
     case "case_files":

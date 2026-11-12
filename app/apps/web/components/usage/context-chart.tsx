@@ -1,13 +1,14 @@
 "use client";
-// Context per day this month, with the daily limit as a dashed line: the user sees which days came near it. One
+// Spend per day this month (USD for staff, percent of the daily allowance for the lawyer), with the daily limit as a
+// dashed line: the user sees which days came near it. One
 // series, columns <= 24px, a tooltip per column on hover and focus, every value also in the table under it (as the
 // admin cost chart).
 import { useState } from "react";
 import { ticks } from "@/components/admin/daily-cost-chart";
-import { fmtNum } from "@/lib/format";
+import { fmtUsd } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
-type Day = { day: string; tokens: number; messages: number };
+type Day = { day: string; spend: number; messages: number };
 
 // a YYYY-MM-DD day as text, the same on the server and in the browser (UTC both sides: no hydration mismatch)
 const dayLabel = (d: string, long = false) =>
@@ -18,10 +19,11 @@ const dayLabel = (d: string, long = false) =>
       : { day: "numeric", month: "short", timeZone: "UTC" },
   );
 
-export function ContextChart({ days, limit }: { days: Day[]; limit: number | null }) {
+export function ContextChart({ days, limit, money }: { days: Day[]; limit: number | null; money: boolean }) {
+  const fmt = (v: number) => (money ? fmtUsd(v) : `${Math.round(v)}%`);
   const [hover, setHover] = useState<{ i: number; x: number } | null>(null);
   const show = (i: number, el: HTMLElement) => setHover({ i, x: el.offsetLeft + el.offsetWidth / 2 });
-  const ys = ticks(Math.max(0, limit ?? 0, ...days.map((d) => d.tokens)));
+  const ys = ticks(Math.max(0, limit ?? 0, ...days.map((d) => d.spend)));
   const top = ys.at(-1) || 1;
   const h = (v: number) => `${(v / top) * 100}%`;
   const shown = hover && days[hover.i];
@@ -34,7 +36,7 @@ export function ContextChart({ days, limit }: { days: Day[]; limit: number | nul
         <div className="relative h-48 w-12 shrink-0 text-right text-[0.7rem] text-muted-foreground tabular-nums">
           {ys.map((v) => (
             <span key={v} className="absolute right-0 -translate-y-1/2" style={{ bottom: h(v) }}>
-              {fmtNum(v)}
+              {fmt(v)}
             </span>
           ))}
         </div>
@@ -47,7 +49,7 @@ export function ContextChart({ days, limit }: { days: Day[]; limit: number | nul
               <button
                 key={d.day}
                 type="button"
-                aria-label={`${dayLabel(d.day, true)}: ${fmtNum(d.tokens)} tokens, ${d.messages} messages`}
+                aria-label={`${dayLabel(d.day, true)}: ${fmt(d.spend)}, ${d.messages} messages`}
                 onPointerEnter={(e) => show(i, e.currentTarget)}
                 onFocus={(e) => show(i, e.currentTarget)}
                 onBlur={() => setHover(null)}
@@ -56,9 +58,9 @@ export function ContextChart({ days, limit }: { days: Day[]; limit: number | nul
                 <span
                   className={cn(
                     "w-full rounded-t-[4px] transition-opacity group-hover:opacity-80 group-focus-visible:ring-2 group-focus-visible:ring-ring",
-                    limit && d.tokens >= limit ? "bg-destructive" : "bg-primary",
+                    limit && d.spend >= limit ? "bg-destructive" : "bg-primary",
                   )}
-                  style={{ height: d.tokens ? `max(2px, ${h(d.tokens)})` : 0 }}
+                  style={{ height: d.spend ? `max(2px, ${h(d.spend)})` : 0 }}
                 />
               </button>
             ))}
@@ -67,7 +69,7 @@ export function ContextChart({ days, limit }: { days: Day[]; limit: number | nul
             <div className="pointer-events-none absolute inset-x-0" style={{ bottom: h(limit) }}>
               <div className="border-t-2 border-dashed border-foreground/60" />
               <span className="absolute right-0 bottom-1 rounded bg-background/90 px-1 text-[0.7rem] font-medium text-foreground">
-                Daily limit {fmtNum(limit)}
+                Daily limit{money && ` ${fmt(limit)}`}
               </span>
             </div>
           )}
@@ -77,7 +79,7 @@ export function ContextChart({ days, limit }: { days: Day[]; limit: number | nul
               className="pointer-events-none absolute -top-2 z-10 -translate-x-1/2 -translate-y-full rounded-md border bg-popover px-2.5 py-1.5 text-xs whitespace-nowrap text-popover-foreground shadow-sm"
               style={{ left: hover.x }}
             >
-              <div className="text-sm font-semibold tabular-nums">{fmtNum(shown.tokens)} tokens</div>
+              <div className="text-sm font-semibold tabular-nums">{fmt(shown.spend)}</div>
               <div className="text-muted-foreground">
                 {dayLabel(shown.day, true)} · {shown.messages} messages
               </div>
@@ -99,7 +101,7 @@ export function ContextChart({ days, limit }: { days: Day[]; limit: number | nul
             {days.map((d) => (
               <tr key={d.day} className="border-b last:border-0">
                 <td>{dayLabel(d.day, true)}</td>
-                <td className="text-right tabular-nums">{fmtNum(d.tokens)} tokens</td>
+                <td className="text-right tabular-nums">{fmt(d.spend)}</td>
                 <td className="text-right text-muted-foreground tabular-nums">{d.messages} messages</td>
               </tr>
             ))}

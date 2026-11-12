@@ -68,7 +68,7 @@ const fileInput = {
 const caseInput = { title: z.string().trim().min(1).max(200), facts: z.string().max(20_000) };
 const period = z.enum(PERIODS).optional();
 const metric = z.enum(METRIC_KEYS);
-const max = z.number().int().nonnegative().nullable(); // null: unlimited
+const max = z.number().nonnegative().nullable(); // null: unlimited; spend in USD, so not whole
 const note = z.string().trim().max(500).nullable();
 const steps = z.array(z.enum(["extract", "categorize", "index"])).optional();
 

@@ -45,31 +45,30 @@ export const userPlanHistory = (userId: string) =>
 export const userLimitRows = (userId: string) => db.select().from(userLimits).where(eq(userLimits.userId, userId));
 
 /** What a user used since `day` (today's midnight) and since `month` (the 1st), across all their workspaces:
- *  messages sent, model tokens (input + output, every step) of chats and of re-reading a file for a new type, and
- *  searches (Zilliz calls in a chat turn). */
+ *  messages sent, model spend in USD (every model call made for them: chat, their files' processing, re-typing a
+ *  file), and searches (Zilliz calls in a chat turn). */
 export async function userCounters(userId: string, day: Date, month: Date) {
-  const tokens = sql`coalesce((quantity->>'input')::bigint, 0) + coalesce((quantity->>'output')::bigint, 0)`;
-  const r = await db.execute<{ messages: number; tokens: number; tokensMonth: number; searches: number }>(sql`
+  const r = await db.execute<{ messages: number; spend: number; spendMonth: number; searches: number }>(sql`
     select
       count(*) filter (where kind = 'action' and task = 'chat.message' and at >= ${day})::int as messages,
-      coalesce(sum(${tokens}) filter (where kind = 'llm' and task in ('chat', 'file.retype') and at >= ${day}), 0)::float8 as tokens,
-      coalesce(sum(${tokens}) filter (where kind = 'llm' and task in ('chat', 'file.retype')), 0)::float8 as "tokensMonth",
+      coalesce(sum(cost_usd) filter (where kind = 'llm' and at >= ${day}), 0)::float8 as spend,
+      coalesce(sum(cost_usd) filter (where kind = 'llm'), 0)::float8 as "spendMonth",
       count(*) filter (where kind = 'vector' and task = 'chat' and at >= ${day})::int as searches
     from usage_events
     where user_id = ${userId} and at >= ${month}`);
-  return r.rows[0] ?? { messages: 0, tokens: 0, tokensMonth: 0, searches: 0 };
+  return r.rows[0] ?? { messages: 0, spend: 0, spendMonth: 0, searches: 0 };
 }
 
-/** A user's chat model tokens per day (Sri Lanka days) in [from, to): the usage graph. Days with none are left out. */
-export async function userDailyTokens(userId: string, from: Date, to: Date) {
-  const r = await db.execute<{ day: string; tokens: number; messages: number }>(sql`
+/** A user's model spend (USD) and messages per day (Sri Lanka days) in [from, to): the usage graph. Days with none
+ *  are left out. */
+export async function userDailySpend(userId: string, from: Date, to: Date) {
+  const r = await db.execute<{ day: string; spend: number; messages: number }>(sql`
     select to_char(at at time zone 'Asia/Colombo', 'YYYY-MM-DD') as day,
-      coalesce(sum(coalesce((quantity->>'input')::bigint, 0) + coalesce((quantity->>'output')::bigint, 0))
-        filter (where kind = 'llm'), 0)::float8 as tokens,
+      coalesce(sum(cost_usd) filter (where kind = 'llm'), 0)::float8 as spend,
       count(*) filter (where kind = 'action')::int as messages
     from usage_events
     where user_id = ${userId} and at >= ${from} and at < ${to}
-      and ((kind = 'llm' and task = 'chat') or (kind = 'action' and task = 'chat.message'))
+      and (kind = 'llm' or (kind = 'action' and task = 'chat.message'))
     group by 1 order by 1`);
   return r.rows;
 }

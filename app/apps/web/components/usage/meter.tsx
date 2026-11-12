@@ -1,13 +1,21 @@
 // One limit as a bar: what is used, and a line where the limit is. Under the limit the line is the end of the track;
 // past it (a turn may end over) the track grows to the use and the line moves in, so the overrun shows.
-import { fmtNum, fmtSize } from "@/lib/format";
+import { fmtNum, fmtSize, fmtUsd } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
-export type Unit = "count" | "tokens" | "bytes";
+export type Unit = "count" | "bytes" | "usd" | "percent"; // percent: a lawyer's spend, as a share of the allowance
 
 const GB = 1024 ** 3;
 export const fmtUnit = (n: number, unit: Unit) =>
-  unit !== "bytes" ? fmtNum(n) : n >= GB ? `${Number((n / GB).toFixed(1))} GB` : fmtSize(n);
+  unit === "usd"
+    ? fmtUsd(n)
+    : unit === "percent"
+      ? `${Math.round(n)}%`
+      : unit !== "bytes"
+        ? fmtNum(n)
+        : n >= GB
+          ? `${Number((n / GB).toFixed(1))} GB`
+          : fmtSize(n);
 
 const resetLabel = (at: Date | null, per: string) =>
   !at
@@ -43,7 +51,7 @@ export function Meter({
         <span className={cn("font-medium", big ? "text-base" : "text-sm")}>{label}</span>
         <span className="text-sm tabular-nums text-muted-foreground">
           <span className="font-semibold text-foreground">{fmtUnit(used, unit)}</span>
-          {max == null ? " · no limit" : ` of ${fmtUnit(max, unit)}`}
+          {max == null ? " · no limit" : unit === "percent" ? " used" : ` of ${fmtUnit(max, unit)}`}
         </span>
       </div>
       {max != null && (
@@ -68,7 +76,7 @@ export function Meter({
         </div>
       )}
       <div className="mt-1.5 flex justify-between text-xs text-muted-foreground">
-        <span>{max ? `${Math.round(share * 100)}% used` : ""}</span>
+        <span>{max && unit !== "percent" ? `${Math.round(share * 100)}% used` : ""}</span>
         <span>{reset}</span>
       </div>
     </div>

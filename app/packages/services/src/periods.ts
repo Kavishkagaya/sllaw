@@ -34,3 +34,13 @@ export function dayOf(d = new Date()) {
   const from = Date.UTC(local.getUTCFullYear(), local.getUTCMonth(), local.getUTCDate()) - COLOMBO;
   return { from: new Date(from), to: new Date(from + 86_400_000) };
 }
+
+/** The whole UTC days that cover p up to now, as the gateway's report takes them (YYYY-MM-DD, both inclusive), and
+ *  the same span as [from, to): our ledger is summed over exactly what the report covers. */
+export function utcDaysOf(p: Period, now = new Date()) {
+  const day = 86_400_000;
+  const from = Math.floor(p.from.getTime() / day) * day;
+  const to = Math.floor((Math.min(p.to.getTime(), now.getTime()) - 1) / day) * day + day;
+  const iso = (t: number) => new Date(t).toISOString().slice(0, 10);
+  return { startDate: iso(from), endDate: iso(to - day), from: new Date(from), to: new Date(to) };
+}
