@@ -334,6 +334,15 @@ in v1; an entity graph can be built later from the same per-file JSON.
   `providerOptions.gateway.user` = workspace id and `tags` = task (`ai/models.ts`), so spend reports group by
   workspace; fallbacks (`models`), `zeroDataRetention` / `disallowPromptTraining` filters. Cost per workspace is
   what pricing is set from. Embeddings stay on Workers AI (bge-m3, `packages/search`).
+- **Gateway's own usage data (checked 2026-11-12, Vercel docs, not called yet):** `GET /v1/report` (group_by user,
+  tag, model; date_part hour; UTC dates) gives aggregated spend and tokens, Pro/Enterprise teams only, freshness and
+  rate limits not documented; `GET /v1/generation?id=` gives one call's total/gateway/inference cost and tokens, but
+  only after an asynchronous delay ("Usage event not found" at first); gateway budgets (`/ai-gateway/budgets`) cap a
+  team, project, API key or Vercel team member, not our `user` value; `GET /v1/models` (no auth) lists per-token
+  prices. So our ledger, priced by the cost returned inline with each call, is what limits read; the report only
+  reconciles. **Tag surcharge measured on dev (2026-11-12):** 106 chat calls, billed minus inference cost >= $0.00015
+  every call (one tag), average $0.000308, max $0.00165, 23% of chat spend; what the extra above $0.00015 is was not
+  found. Tags kept (user, 2026-11-12, brief spend-limits).
 - **Usage per message (user, 2026-10-20):** each assistant message stores `usage` (jsonb: model, providers, steps,
   input/cached/output tokens, `cost` = inference, `gatewayCost` = billed, ms, the gateway's generation ids), summed
   over its steps in `streamChat`'s `onStepEnd`. Checked against the gateway's per-generation records. Each `tags`

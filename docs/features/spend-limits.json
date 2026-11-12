@@ -1,0 +1,42 @@
+{
+  "title": "Spend limits",
+  "slug": "spend-limits",
+  "status": "agreed",
+  "branch": "app/spend-limits",
+  "issue": 48,
+  "neon_branch": {"name": "agent/spend-limits", "id": "br-wandering-tree-b7e73hp1"},
+  "goal": "Unified tracking for every model call (the chat agent, the case file classifier and categorizer, re-typing a file), each priced by what the AI Gateway billed for it; and usage limits by spend (USD), not token counts, because cost is the proper limit.",
+  "for_whom": "A practising lawyer on a plan, who needs a fair allowance and a clear warning before it runs out; and platform staff, who need spend per lawyer that matches the gateway's bill.",
+  "done_check": [
+    {"id": "d1", "check": "Every AI Gateway model call is one usage_events row with a model and a cost: on the brief's database, one chat turn and one case upload (classify, categorize) and one re-type give exactly as many llm rows as gateway generations, each with cost_usd set and the user attributed. The decision-model classifier calls, missing on dev today (0 classify rows in 30 days), are among them."},
+    {"id": "d2", "check": "A call whose reply carries no billed cost (a chat step cut off by the stop button, a gateway reply without cost) is still recorded and priced from the gateway (its generation record, else tokens x the /v1/models price list), marked estimated."},
+    {"id": "d3", "check": "Two plan limits, 'Spend a day' and 'Spend a month' (USD, reset at Sri Lanka midnight and on the 1st), replace 'Context a day' and 'Context a month'; Free is $0.20 a day and $2 a month. Spend is the sum of cost_usd of the user's llm rows of every task (chat, file processing, re-type). Messages a day, searches a day, files per case and storage stay as they are."},
+    {"id": "d4", "check": "Spend is checked before a chat turn, a case upload and a re-type; once an allowance is used, each is refused with a plain message saying which allowance and when it resets. Work already started (a turn, a file's processing) finishes and counts, even past the limit."},
+    {"id": "d5", "check": "The lawyer sees only percent of allowance: /usage bars and the chat hint from 80% show no money anywhere. Admin pages (Usage, a user, Plans) show and edit spend in USD."},
+    {"id": "d6", "check": "Admin Usage shows, for the period, our ledger's model spend next to the AI Gateway's own report (/v1/report) and the difference; when the report is unavailable (not a Pro team, or an error) it says so instead."}
+  ],
+  "scenarios": [
+    {"id": "s1", "steps": "A lawyer on Free asks several questions about their case until today's spend passes 80%.", "expect": "A hint above the chat box says how much of today's allowance is used (percent, no money); /usage shows the same."},
+    {"id": "s2", "steps": "The same lawyer, past today's allowance, asks another question.", "expect": "It is refused in plain words: today's allowance is used, it resets at midnight. Yesterday's history is unaffected."},
+    {"id": "s3", "steps": "A lawyer uploads a scanned plaint to a case; it is processed (read, typed, summarised).", "expect": "The processing's model cost appears in that lawyer's spend on /usage (as percent) and in USD on their admin user page, attributed to the file."},
+    {"id": "s4", "steps": "Platform staff open Admin Usage for this month.", "expect": "Our model spend total and the gateway's total side by side, with the difference."}
+  ],
+  "out_of_scope": [
+    "Pricing embeddings, OCR, Zilliz or storage into spend: they stay bounded by the existing caps (files per case, storage).",
+    "A new files-a-day or files-a-month limit.",
+    "Gateway-native budgets (one API key per lawyer).",
+    "Showing amounts to lawyers in USD or LKR.",
+    "Dropping the gateway task tags.",
+    "Payments, seats, firm plans."
+  ],
+  "decisions": [
+    {"date": "2026-11-12", "note": "Everything a lawyer causes counts toward their spend: chat and the processing of their files, not chat alone (user)."},
+    {"date": "2026-11-12", "note": "Spend a day + spend a month replace the token limits; message, search and cap limits stay; Free $0.20/day, $2/month (user)."},
+    {"date": "2026-11-12", "note": "Lawyers see percent of allowance, never money; admins see USD (user)."},
+    {"date": "2026-11-12", "note": "Our ledger is the source for limits, not the gateway's report: /v1/report is aggregated, asynchronous and Pro-only, and gateway budgets are per Vercel team member, not per end user; the per-call cost the gateway returns inline is the same figure, available at once. /v1/report is used only to reconcile (Vercel docs, checked 2026-11-12)."},
+    {"date": "2026-11-12", "note": "Non-gateway costs (bge-m3, OCR, Zilliz, R2) are not priced into spend; existing caps bound them (user)."},
+    {"date": "2026-11-12", "note": "One path for every model call (user): re-type is a normal categorizer call, not a pipeline run, so no separate capture or check; spend sums every llm row with no task list, and one checkSpend replaces checkTokens where model work starts."},
+    {"date": "2026-11-12", "note": "Task tags stay, though measured on dev at >= $0.00015 per call, 23% of chat spend over 106 calls (avg surcharge $0.000308 on avg billed $0.001335) (user)."}
+  ],
+  "progress": [{"date": "2026-11-12", "note": "Scoped with the user in three rounds; issue #48; branch app/spend-limits; Neon branch agent/spend-limits."}]
+}
