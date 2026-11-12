@@ -69,7 +69,9 @@ SPIDERS = ["documents.gov.lk/acts", "documents.gov.lk/gazettes", "parliament.lk/
            "lankalaw/acts-by-year", "lankalaw/le1980", "lankalaw/le1956"]
 
 
-def listing(db, name, limit=None):
+def listing(connect, name, limit=None):
+    """Crawl first, then connect: a crawl takes minutes, and Neon closes a connection left idle that long
+    (run 83e03e43, 2026-11-12)."""
     from etl.v2.run import SOURCES, v1_type
     rows = spider_rows(name, limit)
     out = []
@@ -80,13 +82,16 @@ def listing(db, name, limit=None):
         out.append((source, spider, url, typ, key, title, d, meta.get("date_precision") or "day", meta.get("lang"),
                     fmt, Json({**meta.get("listing", {}), "v1_meta": meta})))
     uniq = list({(r[0], r[2]): r for r in out}.values())
-    with db.cursor() as cur:
-        execute_values(cur, """INSERT INTO listings (source, spider, source_url, type, listed_key, title, date, date_precision,
-                                 language, format, listing) VALUES %s
-                               ON CONFLICT (source, source_url) DO UPDATE SET title = EXCLUDED.title, date = EXCLUDED.date,
-                                 type = EXCLUDED.type, listed_key = EXCLUDED.listed_key, language = EXCLUDED.language,
-                                 listing = listings.listing || EXCLUDED.listing, last_seen = NOW()""", uniq, page_size=2000)
-    db.commit()
+    db = connect()
+    try:
+        with db, db.cursor() as cur:      # commits, or rolls back on an error
+            execute_values(cur, """INSERT INTO listings (source, spider, source_url, type, listed_key, title, date, date_precision,
+                                     language, format, listing) VALUES %s
+                                   ON CONFLICT (source, source_url) DO UPDATE SET title = EXCLUDED.title, date = EXCLUDED.date,
+                                     type = EXCLUDED.type, listed_key = EXCLUDED.listed_key, language = EXCLUDED.language,
+                                     listing = listings.listing || EXCLUDED.listing, last_seen = NOW()""", uniq, page_size=2000)
+    finally:
+        db.close()
     s3, bucket = B.r2()
     body = gzip.compress("\n".join(json.dumps({"source": r[0], "spider": r[1], "url": r[2], "type": r[3], "key": r[4],
                                                "title": r[5], "date": r[6], "language": r[8], "format": r[9]},

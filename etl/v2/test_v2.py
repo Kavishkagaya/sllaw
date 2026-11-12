@@ -170,3 +170,24 @@ md = [P("1. Cited as the X Act.", "Short title."),
 ch, _, _ = v2("act:4/2020", "X", md)
 assert [c["label"] for c in ch if c["label"]] == ["1", "2", "3", "4"], [c["label"] for c in ch]
 print("ok mended numbers")
+
+# a listing crawls first and connects only to write (run 83e03e43, 2026-11-12: Neon closed the idle connection)
+from unittest import mock
+from etl.v2 import stages
+seen = []
+
+
+class Conn:
+    def __enter__(self): return self
+    def __exit__(self, *a): seen.append("commit")
+    def cursor(self): return mock.MagicMock()
+    def close(self): seen.append("close")
+
+
+with mock.patch.object(stages, "spider_rows", lambda n, l: seen.append("crawl") or [
+        ("parliament", "https://parliament.lk/a.pdf", "A Act", "2020-01-01", {"act_no": "1/2020", "lang": "ENGLISH"})]), \
+     mock.patch.object(stages, "execute_values", lambda cur, sql, rows, page_size: seen.append(f"write {len(rows)}")), \
+     mock.patch.object(stages.B, "r2", lambda: (mock.Mock(), "bucket")):
+    stages.listing(lambda: seen.append("connect") or Conn(), "parliament.lk/acts")
+assert seen == ["crawl", "connect", "write 1", "commit", "close"], seen
+print("ok listing connects after the crawl")

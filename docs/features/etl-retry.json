@@ -1,0 +1,27 @@
+{
+  "title": "ETL steps survive a dropped connection and retry",
+  "slug": "etl-retry",
+  "status": "agreed",
+  "branch": "main",
+  "issue": 50,
+  "neon_branch": null,
+  "goal": "Fix the nightly run that failed on 2026-11-12 (run 83e03e43: listing parliament.lk/acts and lankalaw/acts-by-year died when Neon closed the connection the crawl held open), and make Dagster retry a failed step, because that is how workflows run reliably (user).",
+  "for_whom": "The user, who runs the pipeline from Dagster and should not have to rerun it by hand after a blip.",
+  "done_check": [
+    {"id": "d1", "check": "A listing opens its database connection only after the site is crawled (with the retrying pg_connect), so a long crawl holds no idle connection; a unit test shows the crawl runs before any connect."},
+    {"id": "d2", "check": "Every op in the sllaw_v2 job retries a failure twice, waiting 2 then 4 minutes; the link gold set and quality gate verdict failures (bad data) do not retry. Shown by a test on the job definition and the Failure flags."},
+    {"id": "d3", "check": "The user's rerun from Dagster on ampere finishes with the two listing steps green."}
+  ],
+  "scenarios": [
+    {"id": "s1", "steps": "Neon drops the connection or DNS blips while a step runs.",
+     "expect": "The step fails once, Dagster retries it after 2 minutes, and the run goes on."},
+    {"id": "s2", "steps": "The gate finds an error-level issue outside gazettes.",
+     "expect": "The run fails at once, with no retry."}
+  ],
+  "out_of_scope": ["Retrying inside the other stages' work queue (it already retries items 3 times).", "Alerts on a failed run."],
+  "decisions": [
+    {"date": "2026-11-12", "note": "2 retries, 2 then 4 min, exponential (user). Verdict failures of the checks don't retry (user); crashes, dropped connections and no free GPU for embed do."}
+  ],
+  "progress": [{"date": "2026-11-12", "note": "Scoped with the user; issue #50."},
+    {"date": "2026-11-12", "note": "d1 and d2 built: stages.listing(connect, ...) crawls then connects (test_v2 'ok listing connects after the crawl'); job op_retry_policy RETRY, gold/gate verdicts allow_retries=False (etl.v2.test_pipeline passed in ampere's dagster_venv on a temp copy, deleted). Next: validate, push, d3 is the user's rerun."}]
+}

@@ -532,8 +532,14 @@ rewrites a run's summary against another); (4) one site down no longer stops the
   (`etl_venv`; extract in `sllaw_venv` for docling), and the queue in the state database stays the truth, so an
   op can be retried and other hosts can add workers mid-run. A stage op fails if any item ended `failed`; the link
   gold op fails below 210/210; the gate op fails on an error in anything but a gazette or a structure gold miss;
-  publish and embed write only with `apply: true` in the run config. Weekly schedule (Sunday 02:00 Colombo),
+  publish and embed write only with `apply: true` in the run config. Daily schedule (02:00 Colombo),
   off until turned on in the UI. `all.sh` stays as the no-engine way to run the same chain.
+- **Retries (user, 2026-11-12, brief `etl-retry`):** every op retries a failure twice, 2 then 4 minutes later
+  (`RETRY`, the job's `op_retry_policy`); the link gold and gate verdicts (bad data) raise with
+  `allow_retries=False`. Why: run `83e03e43` (2026-11-12 02:00) lost `parliament.lk/acts` and
+  `lankalaw/acts-by-year` because the listing held one Neon connection through the whole crawl and Neon closed
+  it; a listing now crawls first and connects (`pg_connect`, retried) only to write. A site that fails is still
+  a warning, not an op failure (its last listing stays), so a retry does not help a site that is down.
 - Dagster 1.13.29 in `/var/tmp/e19309/dagster_venv` on ampere (its own venv); `bash etl/v2/dagster.sh` starts
   the UI (tmux `dgweb`, 127.0.0.1:3070; from a laptop `ssh -L 3070:localhost:3070 ampere`) and the daemon (tmux
   `dgdaemon`, one run at a time). Run history in `/var/tmp/e19309/dagster_home` (SQLite, local disk; losing it

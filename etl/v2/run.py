@@ -491,13 +491,12 @@ def do_extract(c, sha, fp=None):
 
 def listing(name, limit=None):
     from etl.v2 import stages
-    with db() as c:
-        for n in (stages.SPIDERS if name == "all" else [name]):
-            try:                       # one site down must not stop the others; its old listing stays as it was
-                print(n, stages.listing(c, n, limit), flush=True)
-            except Exception as e:
-                c.rollback()
-                print(n, "FAILED", repr(e)[:300], flush=True)
+    from etl.fetch import pg_connect
+    for n in (stages.SPIDERS if name == "all" else [name]):
+        try:                           # one site down must not stop the others; its old listing stays as it was
+            print(n, stages.listing(lambda: pg_connect(url=os.environ["V2_DATABASE_URL"]), n, limit), flush=True)
+        except Exception as e:
+            print(n, "FAILED", repr(e)[:300], flush=True)
 
 
 DO = {"build": do_build, "links": do_links, "fetch": do_fetch, "extract": do_extract,

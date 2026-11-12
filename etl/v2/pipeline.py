@@ -287,7 +287,8 @@ def link_gold(context: dg.OpExecutionContext, got: dict):
         raise dg.Failure("no total in gold-links output")
     context.add_output_metadata({"gold": f"{m[1]}/{m[2]}"})
     if m[1] != m[2]:
-        raise dg.Failure(f"link gold set {m[1]}/{m[2]}", metadata={"misses": "\n".join(l for l in out if l.startswith("MISS"))})
+        raise dg.Failure(f"link gold set {m[1]}/{m[2]}", metadata={"misses": "\n".join(l for l in out if l.startswith("MISS"))},
+                         allow_retries=False)                 # bad data: a retry gives the same answer
     return got
 
 
@@ -306,7 +307,7 @@ def quality_gate(context: dg.OpExecutionContext, got: dict):
                                  "summary": "\n".join(out[-60:])})
     bad = [l for l in errors if re.search(r"\((?!gazette \d+\))", l)]   # a kind other than gazette in the breakdown
     if bad or (gold and "laws exactly right 50/50" not in gold):
-        raise dg.Failure("quality gate: " + "; ".join(bad or [gold]))
+        raise dg.Failure("quality gate: " + "; ".join(bad or [gold]), allow_retries=False)   # bad data, as above
     checked(context, passed=got["state"])
     context.log.info(f"passed: state {got['state']} marked")
 
@@ -339,7 +340,13 @@ def gather(results):
     return results
 
 
-@dg.job(description="sllaw v2: listing -> fetch -> extract -> ocr -> build -> links -> resolve -> checks -> publish -> embed")
+# a failed op (a dropped connection, a DNS blip, a site or GPU briefly busy) is retried twice, 2 then 4 minutes later;
+# every op is safe to rerun (the queue is the state). A check that finds bad data says allow_retries=False (user, 2026-11-12)
+RETRY = dg.RetryPolicy(max_retries=2, delay=120, backoff=dg.Backoff.EXPONENTIAL)
+
+
+@dg.job(description="sllaw v2: listing -> fetch -> extract -> ocr -> build -> links -> resolve -> checks -> publish -> embed",
+        op_retry_policy=RETRY)
 def sllaw_v2():
     after_listing = fetch(gather([op() for op in LISTINGS]))
     done = resolve(links(build(ocr(extract(after_listing)))))

@@ -121,8 +121,8 @@ Keys: Acts `act:N/YYYY`, Laws `law:N/YYYY`, chapters `cap:N` (1980) and `cap1956
 
 ### Hosts
 
-Department servers, LDAP user `e19309`, reached through tesla (`ssh -J tesla e19309@<ip>`; `ssh ampere` is set
-up). `~/sllaw` is the shared NFS home (slow: run Python from `/var/tmp/e19309/*_venv`, never `~/sllaw/.venv`);
+Department servers, LDAP user `e19309`, reached through tesla (`ssh ampere` etc. in `~/.ssh/config`; no key on the laptop, so
+log in by password with pexpect as `/ada-ssh` shows, 2026-11-12). `~/sllaw` is the shared NFS home (slow: run Python from `/var/tmp/e19309/*_venv`, never `~/sllaw/.venv`);
 `/var/tmp/e19309` is per host and survives reboots, `/tmp` does not. Skill: `/ada-ssh`.
 
 - **ampere** 10.40.18.10: the work host. 2× RTX A6000 48 GB, shared and busy. Venvs `etl_venv`, `sllaw_venv`
@@ -166,7 +166,8 @@ one, and record dead ends and what was *not* checked.
   host; set `VLLM_USE_FLASHINFER_SAMPLER=0` inside the tmux command. `etl/lighton_setup.sh` and `etl/ocr_ada.sh` do
   all three.
 - **DNS on the department hosts drops for a minute or so**: connect with `etl.fetch.pg_connect()`, which retries.
-- **Neon closes a connection left idle for hours** (embed's mark, 2026-11-08): open a fresh one after a long step.
+- **Neon closes a connection left idle** (embed's mark after hours, 2026-11-08; a listing's crawl after minutes,
+  2026-11-12): open the connection after the long step, with `pg_connect()`. Dagster ops also retry twice.
 - **Tmux sessions and Dagster do not survive a reboot**: rerun `etl/v2/dagster.sh` on ampere.
 - **Node can't reach Neon on a slow network** (2026-11-11, this laptop): IPv6 is unreachable and an IPv4 connect
   takes 1-3 s, past Node's 250 ms per address, so every query is `fetch failed` (AggregateError, ETIMEDOUT) while
