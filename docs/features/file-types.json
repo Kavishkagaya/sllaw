@@ -1,10 +1,10 @@
 {
   "title": "Files: read each document by its type",
   "slug": "file-types",
-  "status": "agreed",
+  "status": "merged",
   "branch": "app/file-types",
   "issue": 46,
-  "neon_branch": {"name": "agent/file-types", "id": "br-solitary-fog-b7udpdyy"},
+  "neon_branch": null,
   "goal": "Read every case file the way a lawyer would for its type: Jev (TypeSafe AI, on AI Gateway) names the document, falling back to DeepSeek when unsure; a small agent then pages through the whole file (at most 10 steps) and fills that type's fields. The card shows on the Files page and the case agent uses it, and both the lawyer and the agent can correct it. Jev takes over only if it proves itself on a gold set.",
   "for_whom": "A practising Sri Lankan lawyer who uploads a case's papers (plaints, affidavits, journal entries, judgments, deeds) and needs to know what each says without opening it, and the case agent that answers from them.",
   "done_check": [
@@ -48,6 +48,7 @@
     {"date": "2026-11-11", "note": "Gold set built (20 files) and scored: types 20/20 with Jev, fields 51/55, max $0.0024 a file, 300-page file in 7 steps (numbers in docs/APP.md). The reader now submits its card through a tool. Next: the user checks the 20 labels; then the card page, editing, the agent's card edits, the case page's history removal."},
     {"date": "2026-11-11", "note": "Built: Edit details on the file page, case.editFile, the agent's correction through fileCard (fileEdit tool merged in), History and undo removed from the case page. Browser: s1 (Sinhala journal: next date 2023-06-20, trial) and s3 (letter -> letter of demand: amount and deadline back, typed title kept) pass; s4's correction is not reliable on the files model (d6 reworded with the user). Dev server: NODE_OPTIONS connect timeout for this network. Next: the user's check of the 20 labels, then /validate."},
     {"date": "2026-11-11", "note": "The user accepted the 20 gold labels as they are (asked, 'count them checked'); the review page: https://claude.ai/artifact/VRAgKFemDZL7aTTZPuSBh6. Next: /validate."},
+    {"date": "2026-11-11", "note": "Validated in 2 rounds (semantic PASS; security FAIL then PASS: paid re-read limit, bounded patch, old-card defaults, fenced filename). Merged as PR #47; Neon branch agent/file-types deleted. Next: the skills brief (agent loads tools by intent), which is to make agent corrections reliable."},
     {"date": "2026-11-11", "note": "Scoped with the user in 6 rounds; issue #46 (follows #44)."}
   ]
 }
