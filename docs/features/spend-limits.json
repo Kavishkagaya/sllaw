@@ -1,10 +1,10 @@
 {
   "title": "Spend limits",
   "slug": "spend-limits",
-  "status": "agreed",
+  "status": "merged",
   "branch": "app/spend-limits",
   "issue": 48,
-  "neon_branch": {"name": "agent/spend-limits", "id": "br-wandering-tree-b7e73hp1"},
+  "neon_branch": null,
   "goal": "Unified tracking for every model call (the chat agent, the case file classifier and categorizer, re-typing a file), each priced by what the AI Gateway billed for it; and usage limits by spend (USD), not token counts, because cost is the proper limit.",
   "for_whom": "A practising lawyer on a plan, who needs a fair allowance and a clear warning before it runs out; and platform staff, who need spend per lawyer that matches the gateway's bill.",
   "done_check": [
@@ -43,6 +43,7 @@
   "progress": [
     {"date": "2026-11-12", "note": "Scoped with the user in three rounds; issue #48; branch app/spend-limits; Neon branch agent/spend-limits."},
     {"date": "2026-11-12", "note": "Built d1-d6: meterCall for every gateway call (estimated when no cost), spend/spend_month (migration 0010 on the brief's branch), checkSpend before chat, upload, re-type, percent-only /usage, admin USD, per-file spend, gateway reconcile; unit tests pass. Next: live check on the brief's database, then /validate."},
-    {"date": "2026-11-12", "note": "Live check on the brief's database (test user, headed browser): a chat turn = 5 llm rows summing to the message's billed $0.0047262; an upload = Jev classify + reader rows, priced, user and file attached; a re-type = 1 file.retype row; a stop before the reply began wrote nothing (doStream rejected before the wrapper), fixed and rechecked (estimated, prompt only); a stop mid-turn = billed step 1 + estimated cut step 2. At 82% the chat hint and /usage show percent only (usage.mine and the page carry no amount); past the limit, chat, upload and re-type are all refused with the plain message. Admin: USD on the user page, spend per file, Plans 0.2 / 2; Admin Usage says the gateway report needs a paid Vercel plan (team is not Pro). Not checked: an OCR'd scanned PDF (text file used), the reconcile numbers against a live report (unavailable on this team). Next: /validate."}
+    {"date": "2026-11-12", "note": "Live check on the brief's database (test user, headed browser): a chat turn = 5 llm rows summing to the message's billed $0.0047262; an upload = Jev classify + reader rows, priced, user and file attached; a re-type = 1 file.retype row; a stop before the reply began wrote nothing (doStream rejected before the wrapper), fixed and rechecked (estimated, prompt only); a stop mid-turn = billed step 1 + estimated cut step 2. At 82% the chat hint and /usage show percent only (usage.mine and the page carry no amount); past the limit, chat, upload and re-type are all refused with the plain message. Admin: USD on the user page, spend per file, Plans 0.2 / 2; Admin Usage says the gateway report needs a paid Vercel plan (team is not Pro). Not checked: an OCR'd scanned PDF (text file used), the reconcile numbers against a live report (unavailable on this team). Next: /validate."},
+    {"date": "2026-11-12", "note": "Validated: security FAIL (reprocess, private upload and finishUpload skipped checkSpend), fixed, PASS in rounds 2-3; semantic PASS in rounds 1-2 (fixed its finding: a cut step's estimate now counts tool definitions). Migration 0010 run on production with the user's yes; PR #49 rebase-merged at 8524a72; Neon branch agent/spend-limits deleted. Open, low: a call with no known price counts as $0; gateway error text shown to staff. Found outside scope: a chat whose law-read step errored fails to open (trail.tsx:79 titlesOf)."}
   ]
 }
