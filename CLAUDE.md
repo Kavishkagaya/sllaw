@@ -85,8 +85,10 @@ Each came from a correction or a costly mistake. Guarded = `.claude/hooks/guard.
 - **Test the app the way a lawyer talks** (user, 2026-11-11): plain questions about the case and its people
   ("the Perera Traders demand"), never file names, ids or our own terms ("card", "field", "fileEdit"), and no
   invented facts that contradict the documents just to provoke the agent.
-- **Scope the simplest version** (user, 2026-11-11): only what the user asked for; no undo, history or other
-  "just in case" extras. They come back when a user asks for them.
+- **YAGNI, simplest version** (user, 2026-11-11, 2026-11-12): scope and build only what the user asked for; no
+  undo, history or other "just in case" extras (they come back when a user asks). The smallest change that works:
+  one line where one line does it, not a new module, option or abstraction. One path for one kind of thing: a model
+  call is a model call wherever it starts (metered, priced and checked the same way), no per-caller special case.
 - **Never repeat an investigation:** read `docs/SOURCES.md` before probing a site, `docs/PIPELINE_V2.md` before
   changing the pipeline. Findings get written down in the same session (see "Writing things down").
 
