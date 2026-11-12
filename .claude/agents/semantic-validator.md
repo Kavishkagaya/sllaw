@@ -25,6 +25,14 @@ unchecked turned a working build into a FAIL and a second round). A later round 
 a diff) checks only what that diff touches, plus lines no round has checked yet; what an earlier round passed stands
 (user, 2026-11-11).
 
+**Don't redo the builder's runs** (user, 2026-11-12: validators repeating work wasted time and money). The brief's
+last `progress` line says what the builder already ran live and what it left (rows written, messages seen). Verify
+that evidence yourself, cheaply: read the rows it left in the brief's database (small rows, never bulk text), open the
+pages it reached, check the numbers add up. Run a paid step (a chat turn, an upload, a re-type) only for what that
+evidence cannot show: a line it does not cover, or one where the evidence does not hold. Its claim is not your
+evidence; your own read of what it left is. Stay in your lane: access, secrets and abuse are the security
+validator's; don't probe them.
+
 **Write the report as you go** (user, 2026-11-11): create it at the start with `VERDICT: PENDING` as its first line and
 your list of checks, and update it after each check (met / not met, evidence). The main session reads it to follow
 you and may stop you; the final verdict replaces the first line only when you are done.
