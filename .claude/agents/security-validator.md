@@ -45,6 +45,12 @@ bills; production data is changed by a path that should only read.
 - **Dependencies.** A new package: is it needed, maintained, and pinned in the lockfile? Run `pnpm audit --prod`
   in `app/` and report high or critical advisories in packages this change added or touches.
 
+**Stay in your lane, don't redo others' work** (user, 2026-11-12: validators repeating work wasted time and money).
+Whether the feature does what the brief says (its done-checks, what the lawyer sees, UI numbers) is the semantic
+validator's: don't re-check it, and leave behaviour findings out unless they are a hole. Don't repeat a run the
+builder recorded in the brief's `progress`; spend no model money to prove a finding the code already shows. A later
+round (resumed with a new head and a diff) reads only that diff and re-probes only what it touches.
+
 ## Probe, don't only read
 
 Against the **local dev app only** (never the deployed site): call changed endpoints with no session (expect

@@ -82,6 +82,8 @@ Each came from a correction or a costly mistake. Guarded = `.claude/hooks/guard.
   targeted `agent-browser eval` or a grepped snapshot, never a whole snapshot; screenshot only to judge a design;
   wait with one quiet loop that prints only the end state; a later validation round resumes the same validators
   (SendMessage with the new head and the diff) instead of spawning fresh ones; demos and repeat runs only when asked.
+  No agent redoes another's work (user, 2026-11-12): validators verify the builder's recorded runs (the brief's
+  `progress`, the rows it left) instead of re-running paid steps, and each validator stays in its own lane.
 - **Test the app the way a lawyer talks** (user, 2026-11-11): plain questions about the case and its people
   ("the Perera Traders demand"), never file names, ids or our own terms ("card", "field", "fileEdit"), and no
   invented facts that contradict the documents just to provoke the agent.
