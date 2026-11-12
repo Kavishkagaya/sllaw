@@ -71,6 +71,13 @@
       "when": 1794307903646,
       "tag": "0009_case_office",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1794453946358,
+      "tag": "0010_spend_limits",
+      "breakpoints": true
     }
   ]
 }

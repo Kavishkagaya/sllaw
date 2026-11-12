@@ -1,5 +1,5 @@
-// A user's limits and their context use: the /usage page, and the user's section on /admin/users/<id>. Context
-// first (today, this month, per day), then the other limits.
+// A user's limits and their spend: the /usage page (spend as percent of the allowance, never money) and the user's
+// section on /admin/users/<id> (USD). The allowance first (today, this month, per day), then the other limits.
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { fmtNum } from "@/lib/format";
 import { ContextChart } from "./context-chart";
@@ -18,22 +18,25 @@ export type Limit = {
 };
 export type Status = {
   plan: { key: string; name: string } | null;
+  money: boolean;
   limits: Limit[];
-  days: { day: string; tokens: number; messages: number }[];
+  days: { day: string; spend: number; messages: number }[];
 };
 
 export function UsageView({ s }: { s: Status }) {
   const by = (m: string) => s.limits.find((l) => l.metric === m);
-  const today = by("tokens");
-  const month = by("tokens_month");
-  const rest = s.limits.filter((l) => !l.metric.startsWith("tokens"));
+  const today = by("spend");
+  const month = by("spend_month");
+  const rest = s.limits.filter((l) => !l.metric.startsWith("spend"));
   return (
     <div className="grid gap-4">
       <Card>
         <CardHeader>
-          <CardTitle className="font-serif text-xl">Context</CardTitle>
+          <CardTitle className="font-serif text-xl">{s.money ? "Model spend" : "Allowance"}</CardTitle>
           <p className="text-sm text-muted-foreground">
-            The text the assistant reads and writes for your questions: the laws and files it looks at, and its answers.
+            {s.money
+              ? "What the gateway billed for their model calls: chat, reading their files, re-typing a file."
+              : "The assistant's work for you: answering your questions and reading the files you add to your cases."}
           </p>
         </CardHeader>
         <CardContent className="grid gap-6">
@@ -44,7 +47,7 @@ export function UsageView({ s }: { s: Status }) {
                 label="Today"
                 used={today.used ?? 0}
                 max={today.max}
-                unit="tokens"
+                unit={today.unit}
                 per="day"
                 resetsAt={today.resetsAt}
               />
@@ -55,7 +58,7 @@ export function UsageView({ s }: { s: Status }) {
                 label="This month"
                 used={month.used ?? 0}
                 max={month.max}
-                unit="tokens"
+                unit={month.unit}
                 per="month"
                 resetsAt={month.resetsAt}
               />
@@ -63,7 +66,11 @@ export function UsageView({ s }: { s: Status }) {
           </div>
           <div>
             <h3 className="mb-5 text-sm font-medium">Per day this month</h3>
-            <ContextChart days={s.days} limit={today?.max ?? null} />
+            {s.days.length ? (
+              <ContextChart days={s.days} limit={today?.max ?? null} money={s.money} />
+            ) : (
+              <p className="text-sm text-muted-foreground">No daily limit on your plan.</p>
+            )}
           </div>
         </CardContent>
       </Card>

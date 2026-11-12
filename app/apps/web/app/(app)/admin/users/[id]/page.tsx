@@ -86,6 +86,36 @@ export default async function AdminUserPage({
             </Table>
           </Section>
 
+          <Section title="Model spend per file" hint="Reading their files (type, card, re-typing), per file.">
+            <Table
+              head={[
+                <th key="f">File</th>,
+                <th key="t">Tasks</th>,
+                <th key="n" className="num">
+                  Model calls
+                </th>,
+                <th key="c" className="num">
+                  Cost
+                </th>,
+              ]}
+              empty={u.files.length ? undefined : "No files read in this period."}
+            >
+              {u.files.map((f) => (
+                <tr key={f.fileId}>
+                  <td className="max-w-72 truncate font-medium" title={f.name ?? f.fileId}>
+                    {f.name ?? <span className="text-muted-foreground">Deleted file</span>}
+                  </td>
+                  <td className="text-muted-foreground">{f.tasks.join(", ")}</td>
+                  <td className="num">{fmtNum(f.calls)}</td>
+                  <td className="num font-medium">
+                    {fmtUsd(f.costUsd)}
+                    {f.estimated && <span className="ml-1 text-xs text-muted-foreground">est.</span>}
+                  </td>
+                </tr>
+              ))}
+            </Table>
+          </Section>
+
           <Section title="What was used" hint="Per kind of call, task and model.">
             <Breakdown rows={u.breakdown} />
           </Section>

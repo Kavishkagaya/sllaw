@@ -39,6 +39,31 @@ const within = (p: Period) => sql`e.at >= ${p.from} and e.at < ${p.to}`;
 export const usageTotal = async (p: Period) =>
   (await rows<UsageTotals>(sql`select ${totals} from usage_events e where ${within(p)}`))[0]!;
 
+/** Model calls over the period, everyone's: what the gateway billed us by our ledger, how many, how many estimated. */
+export const llmSpend = async (p: Period) =>
+  (
+    await rows<{ costUsd: number; calls: number; estimated: number }>(sql`
+      select coalesce(sum(e.cost_usd), 0)::float8 as "costUsd", count(*)::int as calls,
+        count(*) filter (where e.estimated)::int as estimated
+      from usage_events e where e.kind = 'llm' and ${within(p)}`)
+  )[0]!;
+
+/** One user's model spend per file over the period (processing, re-typing), the most first; name null once deleted. */
+export const userFileSpend = (p: Period, userId: string) =>
+  rows<{
+    fileId: string;
+    name: string | null;
+    costUsd: number;
+    calls: number;
+    tasks: string[];
+    estimated: boolean;
+  }>(sql`
+    select substr(e.ref, 6) as "fileId", f.name, coalesce(sum(e.cost_usd), 0)::float8 as "costUsd",
+      count(*)::int as calls, array_agg(distinct e.task) as tasks, bool_or(e.estimated) as estimated
+    from usage_events e left join files f on f.id::text = substr(e.ref, 6)
+    where e.kind = 'llm' and e.user_id = ${userId} and e.ref like 'file:%' and ${within(p)}
+    group by 1, 2 order by 3 desc limit 50`);
+
 /** Usage per workspace over the period (workspace_id null: metered outside any scope). */
 export const usageByWorkspace = (p: Period) =>
   rows<UsageTotals & { workspaceId: string | null }>(sql`

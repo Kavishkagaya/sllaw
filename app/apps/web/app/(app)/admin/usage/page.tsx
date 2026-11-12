@@ -43,6 +43,8 @@ export default async function AdminUsagePage({ searchParams }: { searchParams: P
             />
           </div>
 
+          <Reconcile r={u.reconcile} />
+
           <Section title="Workspaces" hint="Every workspace, the most spent first. Stored is what its files hold now.">
             <Table
               head={[
@@ -110,5 +112,46 @@ export default async function AdminUsagePage({ searchParams }: { searchParams: P
         </div>
       </main>
     </div>
+  );
+}
+
+/** Our ledger's model spend next to the gateway's own report for the same UTC days, and the difference. */
+function Reconcile({
+  r,
+}: {
+  r: Awaited<ReturnType<Awaited<ReturnType<typeof serverApi>>["admin"]["usage"]>>["reconcile"];
+}) {
+  const g = r.gateway;
+  const days = r.startDate === r.endDate ? r.startDate : `${r.startDate} to ${r.endDate}`;
+  return (
+    <Section
+      title="Model spend against the gateway"
+      hint={`Our ledger (every model call, priced as the gateway billed it) and the AI Gateway's own report, over the UTC days ${days}. The report is late by minutes to hours and counts every caller of the gateway, scripts and evals included.`}
+    >
+      {g.costUsd == null ? (
+        <p className="text-sm text-muted-foreground">
+          <span className="font-medium text-foreground">Our ledger: {fmtUsd(r.ours.costUsd)}</span> (
+          {fmtNum(r.ours.calls)} calls). The gateway&apos;s report is unavailable: {g.error}
+        </p>
+      ) : (
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
+          <Stat
+            label="Our ledger"
+            value={fmtUsd(r.ours.costUsd)}
+            hint={`${fmtNum(r.ours.calls)} model calls${r.ours.estimated ? `, ${fmtNum(r.ours.estimated)} estimated` : ""}`}
+          />
+          <Stat label="AI Gateway report" value={fmtUsd(g.costUsd)} hint={`${fmtNum(g.requests ?? 0)} requests`} />
+          <Stat
+            label="Difference"
+            value={`${r.ours.costUsd - g.costUsd < 0 ? "−" : "+"}${fmtUsd(Math.abs(r.ours.costUsd - g.costUsd))}`}
+            hint={
+              g.costUsd
+                ? `${(((r.ours.costUsd - g.costUsd) / g.costUsd) * 100).toFixed(1)}% of the gateway's`
+                : "ours minus the gateway's"
+            }
+          />
+        </div>
+      )}
+    </Section>
   );
 }

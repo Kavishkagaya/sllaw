@@ -134,7 +134,7 @@ export function agentCtx(
       fileSummary: summaryReader(caseFiles, () => files.store ?? blobStore()),
       fileEdit: async (fileId, patch) => {
         const f = caseFiles.some((c) => c.id === fileId) ? await fileById(fileId) : null;
-        const c = f ? await editCard(f, patch as CardPatch, userId) : null;
+        const c = f ? await editCard(f, patch as CardPatch, userId ? { id: userId } : null) : null;
         return c ? { title: c.title, docType: c.docType } : null;
       },
       search: (query, opts) => searchLaw(query, opts),

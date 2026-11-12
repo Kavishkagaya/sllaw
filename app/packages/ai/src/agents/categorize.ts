@@ -117,7 +117,7 @@ export async function classify(input: {
         abortSignal: signal,
         providerOptions: { gateway: { user: workspaceId, tags: ["task:classify"] } },
       });
-      meterDecision(workspaceId, using, r.usage.inputTokens, r.providerMetadata);
+      meterDecision(workspaceId, using, r.usage, r.providerMetadata);
       const a = r.answers.docType;
       const p = a.probabilities?.[a.choice] ?? null;
       if (DOC_TYPES.includes(a.choice as DocType) && (p == null || p >= SURE))

@@ -35,7 +35,7 @@ import {
   rerun,
   type Signed,
 } from "./files";
-import { checkCaseUpload } from "./limits";
+import { checkCaseUpload, checkSpend } from "./limits";
 
 /** The case if this user may see and change it, else null. ponytail: only the case's author may until case_shares
  *  exists (docs/APP.md, Access: viewer reads, editor adds/removes). Then this becomes the caseViewer / caseEditor
@@ -197,7 +197,7 @@ export async function openCaseFile(a: Signed, caseId: string, fileId: string) {
  *  or it has no card yet. */
 export async function editCaseFile(a: Signed, caseId: string, fileId: string, patch: CardPatch) {
   const f = await caseFile(a, caseId, fileId);
-  return f ? editCard(f, patch, a.user.id) : null;
+  return f ? editCard(f, patch, a.user) : null;
 }
 
 export async function caseFileChunks(a: Signed, caseId: string, fileId: string) {
@@ -209,7 +209,9 @@ export async function caseFileChunks(a: Signed, caseId: string, fileId: string) 
 
 export async function reprocessCaseFile(a: Signed, caseId: string, fileId: string, steps?: Step[]) {
   const f = await caseFile(a, caseId, fileId);
-  return f ? rerun(f, steps) : null;
+  if (!f) return null;
+  await checkSpend(a.user); // a rerun is model work for whoever asks
+  return rerun(f, steps);
 }
 
 /** Removes a file from the case, and so everywhere: a case file has no use outside its case. null when the user

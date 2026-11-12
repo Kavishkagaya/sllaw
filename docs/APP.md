@@ -165,8 +165,8 @@ in v1; an entity graph can be built later from the same per-file JSON.
   do this reliably (4 realistic tries, 2026-11-11: once title and summary instead of the amount, twice it said it had
   corrected without calling the tool): accepted for now, the skills brief is to fix it. Saved at once: no history,
   no undo (user, 2026-11-11). To the lawyer they are "the file's details", never a card (user).
-  A new type's re-read is paid: its tokens (task `file.retype`) count toward the user's daily and monthly model
-  token limits, checked before it starts (`checkTokens`), and it claims the file's categorize step (done -> running)
+  A new type's re-read is paid: its model calls (task `file.retype`) count toward the user's spend a day and a
+  month, checked before it starts (`checkSpend`, 2026-11-12), and it claims the file's categorize step (done -> running)
   so a second re-read, a reprocess or a delete waits (CONFLICT). Found by the security validator, 2026-11-11.
   Second eval run (the semantic validator, 2026-11-11): types 20/20 with Jev (files model alone 16/20, Tamil 0/2),
   fields 51/55, mean $0.00086 a file; the 300-page file took 2 steps and $0.0012 that run (7 and $0.009 in the
@@ -343,6 +343,14 @@ in v1; an entity graph can be built later from the same per-file JSON.
   reconciles. **Tag surcharge measured on dev (2026-11-12):** 106 chat calls, billed minus inference cost >= $0.00015
   every call (one tag), average $0.000308, max $0.00165, 23% of chat spend; what the extra above $0.00015 is was not
   found. Tags kept (user, 2026-11-12, brief spend-limits).
+- **Every gateway call is one `llm` row** (2026-11-12, brief spend-limits): `meterCall` (`ai/models.ts`) for model
+  steps (generate, stream) and decisions (Jev) alike, priced by the cost the gateway returns inline. Without one (a
+  reply with no cost, or a stream cut off by the stop button: no finish part, so no usage and no generation id), the
+  row is still written, `estimated`: the generation record (`/v1/generation`, polled 2, 4, 8 s) when there is an id,
+  else tokens at the `/v1/models` list price (a cut stream's tokens are counted roughly: its prompt and the text that
+  came, 4 characters a token; `meta.cut`; a stop before the reply began, when `doStream` itself rejects, is metered
+  the same way with the prompt alone, found live 2026-11-12). The tag surcharge is `reportingTagWriteCost` in the gateway's metadata,
+  $0.000075 a tag on a Jev call (probe, 2026-11-12).
 - **Usage per message (user, 2026-10-20):** each assistant message stores `usage` (jsonb: model, providers, steps,
   input/cached/output tokens, `cost` = inference, `gatewayCost` = billed, ms, the gateway's generation ids), summed
   over its steps in `streamChat`'s `onStepEnd`. Checked against the gateway's per-generation records. Each `tags`
@@ -382,21 +390,30 @@ in v1; an entity graph can be built later from the same per-file JSON.
   `source = workspace:<id>`, so the check does not change). Workspaces stay as they are, no new features on them until
   a firm asks. Two kinds of metric (`services/src/limits/rules.ts`, `METRICS`): **counters** from `usage_events`
   (which outlive deleted chats and cases, so deleting gives nothing back), reset at Sri Lanka midnight or on the 1st:
-  `messages` (a new `action` event `chat.message` per message sent, idem `chat.message:<id>`), `tokens` and
-  `tokens_month` (chat model input + output, the `llm` events), `searches` (Zilliz calls in a chat turn: inside a chat
+  `messages` (a new `action` event `chat.message` per message sent, idem `chat.message:<id>`), `spend` and
+  `spend_month` (USD: the sum of `cost_usd` of every `llm` event of the user, any task: chat, their files'
+  processing, re-typing; replaced `tokens`/`tokens_month` in migration 0010, 2026-11-12, brief spend-limits),
+  `searches` (Zilliz calls in a chat turn: inside a chat
   every vector call is a search); **caps** from the tables, what exists now: `case_files` (files in a case, checked
   against the case author's plan) and `storage` (bytes of the files a user owns, pending uploads at their declared
   size). No message or upload data is recorded twice. Config: `plans` (one `is_default`), `plan_limits` (no row =
   no limit), `user_plans` (from/until, note, set by; the active row with the latest start wins, else the default),
   `user_limits` (a user's own max in place of the plan's until it expires; null = unlimited); migration 0008 seeds
-  **Free**: 10 messages, 300k tokens a day, 4M tokens a month, 300 searches a day, 20 files per case, 1 GB. Checked
-  before a chat turn (`checkChat`: a turn that starts under a counter may end over it; two sent at once can both
-  pass) and before a case upload (`checkCaseUpload`); `LimitReached` is a 429 from the chat route and
+  **Free**: 10 messages, 300 searches a day, 20 files per case, 1 GB; 0010 sets $0.20 a day and $2 a month
+  (`max` is double precision since 0010). Checked before a chat turn (`checkChat`: a turn that starts under a counter
+  may end over it; two sent at once can both pass), before a case upload (`checkCaseUpload`, spend first), and
+  `checkSpend` wherever else model work starts: a private upload, `finishUpload` (an upload begun under the allowance
+  is not processed past it), reprocessing a file or a case file, a re-type (security validator, 2026-11-12); work
+  already started finishes and counts. Staff skip every check. `LimitReached` is a 429 from the chat route and
   `TOO_MANY_REQUESTS` from tRPC, its message for the user ("You have sent today's 10 messages on the Free plan...").
-  Platform staff are not limited. Plans are cached a minute per instance. UI: `/usage` (context today and this month
-  as bars with the limit marked, context per day this month with the daily limit as a line, the other limits), a
-  hint above the chat box from 80%, `/admin/plans` (edit each plan's limits, default, new plan) and on
-  `/admin/users/<id>` the user's plan (give with an end date, end), own limits and usage against each. Not done:
+  Platform staff are not limited. Plans are cached a minute per instance. **Lawyers never see money** (user,
+  2026-11-12): `usageStatus` sends spend as percent of the allowance (unit `percent`, "Today's allowance"), the
+  per-day chart in percent of the daily allowance, and the limit message names no amount; staff
+  (`usageStatus(.., { money: true })`) see USD. UI: `/usage` (the allowance today and this month as bars, per day this
+  month with the daily limit as a line, the other limits), a hint above the chat box from 80%, `/admin/plans` (edit each plan's limits, default, new plan) and on
+  `/admin/users/<id>` the user's plan (give with an end date, end), own limits and usage against each, and model
+  spend per file. `/admin/usage` puts our ledger's model spend next to the gateway's `/v1/report` for the same UTC
+  days, with the difference, or says why the report is unavailable. Not done:
   payments, seats, ad hoc attachments (a counter on `usage_events` when they exist).
 - **Case office (user, 2026-11-10, brief case-office, #43):** the case page is the lawyer's office file. One JSON
   document per case (`case_offices.doc`, migration 0009) holds the header (court, case number, kind, our side, stage,
