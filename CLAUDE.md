@@ -123,7 +123,9 @@ Keys: Acts `act:N/YYYY`, Laws `law:N/YYYY`, chapters `cap:N` (1980) and `cap1956
 
 Department servers, LDAP user `e19309`, reached through tesla (`ssh ampere` etc. in `~/.ssh/config`; no key on the laptop, so
 log in by password with pexpect as `/ada-ssh` shows, 2026-11-12). `~/sllaw` is the shared NFS home (slow: run Python from `/var/tmp/e19309/*_venv`, never `~/sllaw/.venv`);
-`/var/tmp/e19309` is per host and survives reboots, `/tmp` does not. Skill: `/ada-ssh`.
+`/var/tmp/e19309` is per host and survives reboots, `/tmp` does not. Its git checkout is stale (most files
+untracked, `git pull` refuses, 2026-11-12): code gets there by copying changed files (check first that the remote
+copy matches the base commit), then `bash etl/v2/dagster.sh` with no run active. Skill: `/ada-ssh`.
 
 - **ampere** 10.40.18.10: the work host. 2× RTX A6000 48 GB, shared and busy. Venvs `etl_venv`, `sllaw_venv`
   (docling), `gpu_venv` (bge-m3), `lighton_venv` (vLLM), `dagster_venv`; env in `/var/tmp/e19309/{neon,v2}.env`.

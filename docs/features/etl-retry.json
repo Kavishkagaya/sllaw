@@ -23,5 +23,6 @@
     {"date": "2026-11-12", "note": "2 retries, 2 then 4 min, exponential (user). Verdict failures of the checks don't retry (user); crashes, dropped connections and no free GPU for embed do."}
   ],
   "progress": [{"date": "2026-11-12", "note": "Scoped with the user; issue #50."},
-    {"date": "2026-11-12", "note": "d1 and d2 built: stages.listing(connect, ...) crawls then connects (test_v2 'ok listing connects after the crawl'); job op_retry_policy RETRY, gold/gate verdicts allow_retries=False (etl.v2.test_pipeline passed in ampere's dagster_venv on a temp copy, deleted). Next: validate, push, d3 is the user's rerun."}]
+    {"date": "2026-11-12", "note": "d1 and d2 built: stages.listing(connect, ...) crawls then connects (test_v2 'ok listing connects after the crawl'); job op_retry_policy RETRY, gold/gate verdicts allow_retries=False (etl.v2.test_pipeline passed in ampere's dagster_venv on a temp copy, deleted). Next: validate, push, d3 is the user's rerun."},
+    {"date": "2026-11-12", "note": "Semantic and security PASS on d0e3b27; pushed to main. Copied stages/run/pipeline/test files to ampere (they matched e72bab2), restarted Dagster 10:31, test_pipeline passes there. d3 waits on the user's rerun from Dagster. Semantic's minor note: a listing write that fails after pg_connect's retries is a per-site FAILED warning, not an op failure (as before, by design)."}]
 }
