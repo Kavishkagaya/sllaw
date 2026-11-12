@@ -62,6 +62,23 @@ def close(child):
     child.wait()
 ```
 
+### Piping a script to any host (ampere, ada, turing) — the default for probes
+
+Answer only password prompts (tesla's, then the host's) and feed the script as stdin. Never match a catch-all
+pattern before the prompt: tesla's banner arrives first, and a script line sent as the "password" is refused
+(2026-11-12, cost a false "password rejected" report).
+
+```python
+import pexpect, os, sys
+child = pexpect.spawn('/bin/bash', ['-c', f'ssh -o StrictHostKeyChecking=no {sys.argv[1]} bash -s < {sys.argv[2]}'],
+                      timeout=300)
+out = b""
+while child.expect(['assword:', pexpect.EOF], timeout=300) == 0:
+    out += child.before
+    child.sendline(os.environ["ADA_PASSWORD"])
+print((out + child.before).decode(errors="replace"))
+```
+
 ### Copying files to ada
 
 Use pexpect with `scp` (not sshpass):
