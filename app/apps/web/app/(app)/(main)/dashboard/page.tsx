@@ -26,7 +26,7 @@ export default async function Home() {
           <section>
             <div className="flex items-end justify-between gap-4">
               <div>
-                <h1 className="font-serif text-3xl font-semibold tracking-tight">Your cases</h1>
+                <h1 className="text-3xl font-semibold tracking-tight">Your cases</h1>
                 <p className="mt-1 text-sm text-muted-foreground">
                   Work inside a case: its chats read every question with its facts.
                 </p>
@@ -52,7 +52,7 @@ export default async function Home() {
                 >
                   <span className="flex items-start gap-2">
                     <Briefcase className="mt-1 size-4 shrink-0 text-muted-foreground" />
-                    <span className="line-clamp-2 font-serif text-base leading-snug font-semibold">{c.title}</span>
+                    <span className="line-clamp-2 text-base leading-snug font-semibold">{c.title}</span>
                   </span>
                   <span className="mt-auto flex justify-between gap-2 pt-2 text-xs text-muted-foreground">
                     <span className="flex items-center gap-1">
@@ -67,7 +67,7 @@ export default async function Home() {
           </section>
 
           <section className="mt-14">
-            <h2 className="font-serif text-xl font-semibold tracking-tight">Quick question</h2>
+            <h2 className="text-xl font-semibold tracking-tight">Quick question</h2>
             <p className="mt-1 mb-4 text-sm text-muted-foreground">
               Outside any case, answered from the Constitution and Acts of Sri Lanka. You can move it into a case later.
             </p>

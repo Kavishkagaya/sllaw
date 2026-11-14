@@ -226,7 +226,7 @@ export function WidgetCard({
         className="group flex min-w-0 flex-1 items-baseline gap-2 rounded text-left focus-visible:outline-2 focus-visible:outline-ring"
         aria-expanded={!widget.collapsed}
       >
-        <h2 className="truncate font-serif text-[1.05rem] font-semibold tracking-tight">{title}</h2>
+        <h2 className="truncate text-[1.05rem] font-semibold tracking-tight">{title}</h2>
         {count != null && <span className="shrink-0 text-xs text-muted-foreground tabular-nums">{count}</span>}
         <AiMark by={by} className="self-center" />
         <ChevronDown

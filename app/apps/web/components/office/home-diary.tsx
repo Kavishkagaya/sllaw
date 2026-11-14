@@ -31,8 +31,10 @@ function DateRow({
   return (
     <li className="border-t">
       <Link href={href} className="group grid grid-cols-[4rem_1fr] transition-colors hover:bg-accent/50">
-        <div className={cn("border-r py-2.5 pr-3 text-right", isToday && "text-primary", waiting && "text-brass-ink")}>
-          <div className="font-serif text-xl leading-none font-semibold tabular-nums">{l.day}</div>
+        <div
+          className={cn("border-r py-2.5 pr-3 text-right", isToday && "text-primary", waiting && "text-unverified-ink")}
+        >
+          <div className="text-xl leading-none font-semibold tabular-nums">{l.day}</div>
           <div className="mt-0.5 text-xs text-muted-foreground">{l.weekday.slice(0, 3)}</div>
         </div>
         <div className="min-w-0 py-2.5 pr-4 pl-3 text-sm">
@@ -41,7 +43,7 @@ function DateRow({
             <span
               className={cn(
                 "ml-auto shrink-0 text-xs",
-                waiting ? "text-brass-ink" : isToday ? "font-medium text-primary" : "text-muted-foreground",
+                waiting ? "text-unverified-ink" : isToday ? "font-medium text-primary" : "text-muted-foreground",
               )}
             >
               {waiting ? "Record what happened" : whenLabel(today, date)}
@@ -62,7 +64,7 @@ export function HomeDiary({ diary }: { diary: Diary }) {
   return (
     <section aria-labelledby="week">
       <div className="flex items-baseline justify-between gap-4">
-        <h2 id="week" className="font-serif text-2xl font-semibold tracking-tight">
+        <h2 id="week" className="text-2xl font-semibold tracking-tight">
           This week
         </h2>
         <span className="text-sm text-muted-foreground">{fmtDay(today)}</span>
@@ -74,7 +76,7 @@ export function HomeDiary({ diary }: { diary: Diary }) {
       ) : (
         <div className="mt-4 grid grid-cols-1 gap-x-8 gap-y-8 lg:grid-cols-[minmax(0,1fr)_19rem]">
           <div className="overflow-hidden rounded-lg border bg-card shadow-2xs">
-            <h3 className="px-4 pt-3 pb-2 font-serif text-[1.05rem] font-semibold">Court dates</h3>
+            <h3 className="px-4 pt-3 pb-2 text-[1.05rem] font-semibold">Court dates</h3>
             {!upcoming.length && !waiting.length ? (
               <p className="border-t px-4 py-3 text-sm text-muted-foreground">None in the next seven days.</p>
             ) : (
@@ -105,7 +107,7 @@ export function HomeDiary({ diary }: { diary: Diary }) {
           </div>
           <div>
             <div className="flex items-baseline gap-2 border-b border-foreground/15 pb-1.5">
-              <h3 className="font-serif text-[1.05rem] font-semibold">Tasks due</h3>
+              <h3 className="text-[1.05rem] font-semibold">Tasks due</h3>
               {tasks.some((t) => t.due < today) && (
                 <span className="text-xs text-destructive">{tasks.filter((t) => t.due < today).length} overdue</span>
               )}

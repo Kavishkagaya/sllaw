@@ -28,7 +28,7 @@ export default async function AdminUserPage({
           <div className="flex flex-wrap items-end justify-between gap-3">
             <div>
               <div className="flex items-center gap-2">
-                <h1 className="font-serif text-3xl font-semibold tracking-tight">{name}</h1>
+                <h1 className="text-3xl font-semibold tracking-tight">{name}</h1>
                 {u.user.isAdmin && <Badge variant="secondary">Admin</Badge>}
               </div>
               <p className="text-sm text-muted-foreground">

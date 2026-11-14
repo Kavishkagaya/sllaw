@@ -238,3 +238,15 @@ export async function changeStatus(chunkIds: number[]) {
     };
   });
 }
+
+/** What the public Coverage page counts, in one query that returns one row: Acts and Laws, Revised Edition chapters
+ *  (1956 and 1980), the amendments followed (change links into a section), and the last publish. */
+export async function coverageCounts() {
+  const { rows } = await db.execute<{ acts: number; chapters: number; amendments: number; updated: string | null }>(sql`
+    select
+      (select count(*)::int from ${docs} where ${docs.key} like 'act:%' or ${docs.key} like 'law:%') as acts,
+      (select count(*)::int from ${docs} where ${docs.key} like 'cap:%' or ${docs.key} like 'cap1956:%') as chapters,
+      (select count(*)::int from ${links} where ${inArray(links.kind, CHANGE_KINDS)}) as amendments,
+      (select max(${docs.publishedAt})::text from ${docs}) as updated`);
+  return rows[0]!;
+}

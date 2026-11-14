@@ -35,7 +35,7 @@ export function PlansEditor() {
           <Card key={p.id}>
             <CardHeader className="flex flex-row items-center justify-between gap-2">
               <div className="flex items-center gap-2">
-                <CardTitle className="font-serif text-xl">{p.name}</CardTitle>
+                <CardTitle className="text-xl">{p.name}</CardTitle>
                 <code className="text-xs text-muted-foreground">{p.key}</code>
                 {p.isDefault && <Badge>Default</Badge>}
               </div>

@@ -9,11 +9,23 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
-  --font-heading: var(--font-serif);
-  --font-serif: var(--font-serif);
-  --color-brass: var(--brass);
-  --color-brass-ink: var(--brass-ink);
+  --font-heading: var(--font-sans);
   --font-sans: var(--font-sans);
+  --font-law: var(--font-serif);
+  --font-mono: var(--font-mono);
+  --color-ink: var(--ink);
+  --color-paper: var(--paper);
+  --color-law: var(--law);
+  --color-law-border: var(--law-border);
+  --color-law-ink: var(--law-ink);
+  --color-law-mark: var(--law-mark);
+  --color-file: var(--file);
+  --color-file-border: var(--file-border);
+  --color-file-ink: var(--file-ink);
+  --color-unverified: var(--unverified);
+  --color-unverified-border: var(--unverified-border);
+  --color-unverified-ink: var(--unverified-ink);
+  --color-ok: var(--ok);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -67,91 +79,118 @@
 }
 
 :root {
-  /* navy + brass: cool white and ink, one navy for everything you act on; brass marks the law (citations, the
-     logo), blue marks the user's own files (TONE in components/chat/source-view.tsx) */
-  --background: oklch(0.985 0.003 255);
-  --foreground: oklch(0.21 0.03 262);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.21 0.03 262);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.21 0.03 262);
-  --primary: oklch(0.37 0.1 262);
-  --primary-foreground: oklch(0.985 0.003 255);
-  --secondary: oklch(0.96 0.006 255);
-  --secondary-foreground: oklch(0.27 0.04 262);
-  --muted: oklch(0.962 0.005 255);
-  --muted-foreground: oklch(0.52 0.02 260);
-  --accent: oklch(0.945 0.012 258);
-  --accent-foreground: oklch(0.26 0.045 262);
-  --destructive: oklch(0.55 0.2 27);
-  --border: oklch(0.91 0.008 255);
-  --input: oklch(0.885 0.01 255);
-  --ring: oklch(0.55 0.1 262);
-  --brass: oklch(0.6 0.105 75);
-  /* brass for small text: dark enough to read on paper */
-  --brass-ink: oklch(0.47 0.095 70);
-  --chart-1: oklch(0.37 0.1 262);
-  --chart-2: oklch(0.6 0.105 75);
-  --chart-3: oklch(0.55 0.12 240);
-  --chart-4: oklch(0.7 0.06 262);
-  --chart-5: oklch(0.52 0.02 260);
+  /* Oxblood (neethi-redesign, 2026-11-14): ink on paper, one oxblood for everything you act on. Citations by kind:
+     law in an oxblood tint, the lawyer's own files in a neutral tint, anything unread in amber with a dashed edge
+     (CITE in components/chat/source-view.tsx). Statute text alone is serif (font-law). */
+  --background: #fbfaf7;
+  --foreground: #16140f;
+  --card: #ffffff;
+  --card-foreground: #16140f;
+  --popover: #ffffff;
+  --popover-foreground: #16140f;
+  --primary: #7d1d2c;
+  --primary-foreground: #ffffff;
+  --secondary: #f1eee8;
+  --secondary-foreground: #16140f;
+  --muted: #f3f1ec;
+  --muted-foreground: #645e54;
+  --accent: #ece8e0;
+  --accent-foreground: #16140f;
+  --destructive: #b42318;
+  --border: #e6e1d8;
+  --input: #dcd6cb;
+  --ring: #7d1d2c;
+  --ink: #16140f;
+  --paper: #fbfaf7;
+  /* law citations */
+  --law: #f5e9ea;
+  --law-border: #ecd6d8;
+  --law-ink: #6b1825;
+  --law-mark: #f7e6e8;
+  /* the lawyer's own files */
+  --file: #eeece6;
+  --file-border: #dedad2;
+  --file-ink: #3d3a33;
+  /* not verified */
+  --unverified: #fffaf0;
+  --unverified-border: #d9a441;
+  --unverified-ink: #7a5000;
+  --ok: #2e7d5b;
+  --dot: rgb(125 29 44 / 0.13);
+  --chart-1: #7d1d2c;
+  --chart-2: #16140f;
+  --chart-3: #b0606c;
+  --chart-4: #8a8478;
+  --chart-5: #d9a441;
   --radius: 0.5rem;
-  --elev-2xs: 0 1px 0 0 oklch(0.25 0.04 262 / 0.04);
-  --elev-xs: 0 1px 2px 0 oklch(0.25 0.04 262 / 0.06);
-  --elev-sm: 0 1px 2px 0 oklch(0.25 0.04 262 / 0.05), 0 1px 3px 0 oklch(0.25 0.04 262 / 0.07);
-  --elev-md: 0 2px 4px -1px oklch(0.25 0.04 262 / 0.05), 0 6px 12px -3px oklch(0.25 0.04 262 / 0.08);
-  --elev-lg: 0 4px 6px -2px oklch(0.25 0.04 262 / 0.05), 0 12px 24px -6px oklch(0.25 0.04 262 / 0.12);
-  --elev-xl: 0 8px 12px -4px oklch(0.25 0.04 262 / 0.06), 0 24px 48px -12px oklch(0.25 0.04 262 / 0.18);
-  --sidebar: oklch(0.97 0.005 255);
-  --sidebar-foreground: oklch(0.24 0.03 262);
-  --sidebar-primary: oklch(0.37 0.1 262);
-  --sidebar-primary-foreground: oklch(0.985 0.003 255);
-  --sidebar-accent: oklch(0.93 0.013 258);
-  --sidebar-accent-foreground: oklch(0.21 0.04 262);
-  --sidebar-border: oklch(0.91 0.008 255);
-  --sidebar-ring: oklch(0.55 0.1 262);
+  --elev-2xs: 0 1px 0 0 rgb(22 20 15 / 0.04);
+  --elev-xs: 0 1px 2px 0 rgb(22 20 15 / 0.06);
+  --elev-sm: 0 1px 2px 0 rgb(22 20 15 / 0.05), 0 1px 3px 0 rgb(22 20 15 / 0.06);
+  --elev-md: 0 2px 4px -1px rgb(22 20 15 / 0.05), 0 12px 32px -12px rgb(22 20 15 / 0.28);
+  --elev-lg: 0 4px 6px -2px rgb(22 20 15 / 0.05), 0 12px 24px -6px rgb(22 20 15 / 0.14);
+  --elev-xl: 0 8px 12px -4px rgb(22 20 15 / 0.06), 0 24px 48px -12px rgb(22 20 15 / 0.2);
+  --sidebar: #f3f1ec;
+  --sidebar-foreground: #3a362e;
+  --sidebar-primary: #7d1d2c;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #e8e3d9;
+  --sidebar-accent-foreground: #16140f;
+  --sidebar-border: #e6e1d8;
+  --sidebar-ring: #7d1d2c;
 }
 
 .dark {
-  --background: oklch(0.17 0.02 262);
-  --foreground: oklch(0.93 0.006 255);
-  --card: oklch(0.205 0.022 262);
-  --card-foreground: oklch(0.93 0.006 255);
-  --popover: oklch(0.22 0.022 262);
-  --popover-foreground: oklch(0.93 0.006 255);
-  --primary: oklch(0.72 0.105 262);
-  --primary-foreground: oklch(0.18 0.03 262);
-  --secondary: oklch(0.25 0.022 262);
-  --secondary-foreground: oklch(0.93 0.006 255);
-  --muted: oklch(0.235 0.02 262);
-  --muted-foreground: oklch(0.69 0.018 260);
-  --accent: oklch(0.27 0.026 262);
-  --accent-foreground: oklch(0.95 0.006 255);
-  --destructive: oklch(0.7 0.17 25);
-  --border: oklch(1 0 0 / 9%);
-  --input: oklch(1 0 0 / 14%);
-  --ring: oklch(0.7 0.08 262);
-  --brass: oklch(0.8 0.09 80);
-  --brass-ink: oklch(0.82 0.09 80);
-  --chart-1: oklch(0.72 0.105 262);
-  --chart-2: oklch(0.8 0.09 80);
-  --chart-3: oklch(0.72 0.1 240);
-  --chart-4: oklch(0.55 0.06 262);
-  --chart-5: oklch(0.69 0.018 260);
-  --elev-2xs: 0 1px 0 0 oklch(0 0 0 / 0.2);
-  --elev-xs: 0 1px 2px 0 oklch(0 0 0 / 0.3);
-  --elev-sm: 0 1px 2px 0 oklch(0 0 0 / 0.3), 0 1px 3px 0 oklch(0 0 0 / 0.25);
-  --elev-md: 0 2px 4px -1px oklch(0 0 0 / 0.3), 0 6px 14px -3px oklch(0 0 0 / 0.35);
-  --elev-lg: 0 4px 8px -2px oklch(0 0 0 / 0.3), 0 14px 28px -6px oklch(0 0 0 / 0.45);
-  --elev-xl: 0 8px 14px -4px oklch(0 0 0 / 0.35), 0 28px 56px -12px oklch(0 0 0 / 0.55);
-  --sidebar: oklch(0.15 0.018 262);
-  --sidebar-foreground: oklch(0.9 0.006 255);
-  --sidebar-primary: oklch(0.72 0.105 262);
-  --sidebar-primary-foreground: oklch(0.18 0.03 262);
-  --sidebar-accent: oklch(0.23 0.022 262);
-  --sidebar-accent-foreground: oklch(0.95 0.006 255);
-  --sidebar-border: oklch(1 0 0 / 8%);
-  --sidebar-ring: oklch(0.7 0.08 262);
+  --background: #14120e;
+  --foreground: #ece8e0;
+  --card: #1c1915;
+  --card-foreground: #ece8e0;
+  --popover: #211e19;
+  --popover-foreground: #ece8e0;
+  --primary: #d06a7a;
+  --primary-foreground: #16140f;
+  --secondary: #26231d;
+  --secondary-foreground: #ece8e0;
+  --muted: #211e19;
+  --muted-foreground: #a8a196;
+  --accent: #2a2620;
+  --accent-foreground: #f3f1ec;
+  --destructive: #f07a6a;
+  --border: rgb(255 255 255 / 0.09);
+  --input: rgb(255 255 255 / 0.15);
+  --ring: #d06a7a;
+  --ink: #ece8e0;
+  --paper: #14120e;
+  --law: #35191d;
+  --law-border: #5a2a31;
+  --law-ink: #f2bcc4;
+  --law-mark: #3d1c21;
+  --file: #2a2721;
+  --file-border: #3d3930;
+  --file-ink: #dcd6cb;
+  --unverified: #2a2214;
+  --unverified-border: #a07a2c;
+  --unverified-ink: #e9bd62;
+  --ok: #6cc59a;
+  --dot: rgb(208 106 122 / 0.12);
+  --chart-1: #d06a7a;
+  --chart-2: #ece8e0;
+  --chart-3: #8f3a48;
+  --chart-4: #a8a196;
+  --chart-5: #e9bd62;
+  --elev-2xs: 0 1px 0 0 rgb(0 0 0 / 0.2);
+  --elev-xs: 0 1px 2px 0 rgb(0 0 0 / 0.3);
+  --elev-sm: 0 1px 2px 0 rgb(0 0 0 / 0.3), 0 1px 3px 0 rgb(0 0 0 / 0.25);
+  --elev-md: 0 2px 4px -1px rgb(0 0 0 / 0.3), 0 12px 32px -12px rgb(0 0 0 / 0.6);
+  --elev-lg: 0 4px 8px -2px rgb(0 0 0 / 0.3), 0 14px 28px -6px rgb(0 0 0 / 0.45);
+  --elev-xl: 0 8px 14px -4px rgb(0 0 0 / 0.35), 0 28px 56px -12px rgb(0 0 0 / 0.55);
+  --sidebar: #100e0b;
+  --sidebar-foreground: #d6d0c4;
+  --sidebar-primary: #d06a7a;
+  --sidebar-primary-foreground: #16140f;
+  --sidebar-accent: #24211b;
+  --sidebar-accent-foreground: #f3f1ec;
+  --sidebar-border: rgb(255 255 255 / 0.08);
+  --sidebar-ring: #d06a7a;
 }
 
 @layer base {
@@ -175,6 +214,33 @@
 .md h1,
 .md h2,
 .md h3 {
-  font-family: var(--font-serif);
   font-weight: 600;
+  letter-spacing: -0.015em;
+}
+/* the dot-matrix texture: a field of oxblood dots (page grounds, empty states, the landing) */
+.dots {
+  background-image: radial-gradient(circle, var(--dot) 1px, transparent 1.3px);
+  background-size: 14px 14px;
+}
+/* small labels: Geist Mono, spaced capitals */
+.label-mono {
+  font-family: var(--font-mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+/* the arch drawing itself while the colleague works */
+.arch-working {
+  stroke-dasharray: 40 200;
+  animation: arch-draw 1.6s linear infinite;
+}
+@keyframes arch-draw {
+  to {
+    stroke-dashoffset: -240;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .arch-working {
+    animation: none;
+    stroke-dasharray: none;
+  }
 }

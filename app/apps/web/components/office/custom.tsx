@@ -73,10 +73,7 @@ export function NoteWidget({ widget: w }: { widget: W<"note"> }) {
             </div>
           </div>
         ) : w.text.trim() ? (
-          <Streamdown
-            className="md max-w-prose font-serif text-[0.95rem] leading-relaxed"
-            components={{ img: SafeImg } as never}
-          >
+          <Streamdown className="md max-w-prose text-[0.95rem] leading-relaxed" components={{ img: SafeImg } as never}>
             {w.text}
           </Streamdown>
         ) : (
@@ -317,7 +314,7 @@ export function TimelineWidget({ widget: w }: { widget: W<"timeline"> }) {
         {events.map((e) => (
           <li key={e.id} className="group relative ml-1.5 flex gap-3 border-l border-foreground/15 py-1.5 pl-4">
             <span className="absolute top-3 -left-[4.5px] size-2 rounded-full border-2 border-card bg-primary" />
-            <span className="w-24 shrink-0 font-serif text-sm font-semibold tabular-nums">{e.date}</span>
+            <span className="w-24 shrink-0 text-sm font-semibold tabular-nums">{e.date}</span>
             <div className="min-w-0 flex-1 text-sm">
               <EditText
                 value={e.text}

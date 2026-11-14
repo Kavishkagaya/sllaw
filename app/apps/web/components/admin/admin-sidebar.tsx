@@ -58,7 +58,7 @@ export function AdminSidebar() {
           <SidebarMenu>
             <SidebarMenuItem>
               <SidebarMenuButton asChild>
-                <Link href="/">
+                <Link href="/dashboard">
                   <ArrowLeft /> <span>Back to the app</span>
                 </Link>
               </SidebarMenuButton>

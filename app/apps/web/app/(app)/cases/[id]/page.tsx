@@ -39,13 +39,13 @@ export default async function CaseOverview({ params }: { params: Promise<{ id: s
               <div className="min-w-0 space-y-10">
                 <section>
                   <div className="flex items-baseline justify-between gap-2 border-b border-foreground/15 pb-1.5">
-                    <h2 className="font-serif text-[1.05rem] font-semibold tracking-tight">Facts</h2>
+                    <h2 className="text-[1.05rem] font-semibold tracking-tight">Facts</h2>
                     <Link href={`${base}/settings`} className="text-xs text-muted-foreground hover:text-foreground">
                       Edit
                     </Link>
                   </div>
                   {c.facts ? (
-                    <p className="mt-3 max-w-prose font-serif text-[0.95rem] leading-relaxed whitespace-pre-wrap text-foreground/80 line-clamp-8">
+                    <p className="mt-3 max-w-prose text-[0.95rem] leading-relaxed whitespace-pre-wrap text-foreground/80 line-clamp-8">
                       {c.facts}
                     </p>
                   ) : (
@@ -62,7 +62,7 @@ export default async function CaseOverview({ params }: { params: Promise<{ id: s
               <div className="min-w-0 space-y-8">
                 <section>
                   <div className="flex items-center justify-between gap-2 border-b border-foreground/15 pb-1">
-                    <h2 className="font-serif text-[1.05rem] font-semibold tracking-tight">Chats</h2>
+                    <h2 className="text-[1.05rem] font-semibold tracking-tight">Chats</h2>
                     <Button asChild size="icon-sm" variant="ghost" aria-label="New chat">
                       <Link href={`${base}/chats`}>
                         <MessageSquarePlus />
@@ -90,7 +90,7 @@ export default async function CaseOverview({ params }: { params: Promise<{ id: s
 
                 <section>
                   <div className="flex items-center justify-between gap-2 border-b border-foreground/15 pb-1">
-                    <h2 className="flex items-baseline gap-2 font-serif text-[1.05rem] font-semibold tracking-tight">
+                    <h2 className="flex items-baseline gap-2 text-[1.05rem] font-semibold tracking-tight">
                       Files
                       {files.length > 0 && (
                         <span className="font-sans text-xs font-normal text-muted-foreground">{files.length}</span>

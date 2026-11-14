@@ -20,6 +20,7 @@ import {
   cardPatch,
   caseFileChunks,
   changeOffice,
+  coverage,
   createCase,
   deleteCase,
   deleteFile,
@@ -251,6 +252,8 @@ export const appRouter = router({
   }),
   corpus: router({
     doc: publicProcedure.input(z.object({ key: z.string() })).query(({ input }) => getDoc(input.key)),
+    // the public Coverage page: a few counts, cached an hour
+    coverage: publicProcedure.query(() => coverage()),
     chunk: signedUser
       .input(z.object({ chunkId: z.number().int().positive(), date: z.iso.date().optional() }))
       .query(({ input }) => getChunk(input.chunkId, input.date)),

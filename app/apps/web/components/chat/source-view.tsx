@@ -73,7 +73,7 @@ function Head({
         <p className="flex items-center gap-1.5 text-[11px] font-medium tracking-wider text-muted-foreground uppercase">
           <Icon className="size-3.5" /> {kind}
         </p>
-        <h3 className="font-serif text-xl leading-snug font-semibold text-balance">{title}</h3>
+        <h3 className="text-xl leading-snug font-semibold text-balance">{title}</h3>
         {sub && <p className="text-sm text-muted-foreground">{sub}</p>}
       </div>
       {children && <div className="flex flex-wrap gap-2">{children}</div>}
@@ -81,25 +81,26 @@ function Head({
   );
 }
 
-/** The colours that tell a law (brass) from the user's own case file (blue), wherever a citation shows. */
+/** The colours that tell a law (an oxblood tint) from the lawyer's own file (a neutral tint), wherever a citation
+ *  shows: the same in the answer and in the panel. */
 export const TONE = {
   law: {
-    chip: "border-brass/40 bg-brass/10 text-brass-ink hover:bg-brass/20",
-    on: "border-brass bg-brass text-background hover:bg-brass/90",
-    soft: "border-brass/30 bg-brass/10 text-brass-ink",
-    text: "text-brass-ink",
-    quote: "border-brass/30 bg-brass/5",
-    rule: "border-brass/20",
-    mark: "bg-brass/10 ring-brass/40",
+    chip: "border-law-border bg-law text-law-ink hover:bg-law-mark",
+    on: "border-primary bg-primary text-primary-foreground hover:bg-primary/90",
+    soft: "border-law-border bg-law text-law-ink",
+    text: "text-law-ink",
+    quote: "border-law-border bg-card",
+    rule: "border-law-border",
+    mark: "bg-law-mark ring-law-border",
   },
   file: {
-    chip: "border-sky-500/40 bg-sky-500/10 text-sky-700 hover:bg-sky-500/20 dark:text-sky-300",
-    on: "border-sky-600 bg-sky-600 text-white hover:bg-sky-600/90 dark:border-sky-500 dark:bg-sky-500",
-    soft: "border-sky-500/30 bg-sky-500/10 text-sky-700 dark:text-sky-300",
-    text: "text-sky-700 dark:text-sky-300",
-    quote: "border-sky-500/30 bg-sky-500/5",
-    rule: "border-sky-500/20",
-    mark: "bg-sky-500/10 ring-sky-500/40",
+    chip: "border-file-border bg-file text-file-ink hover:bg-accent",
+    on: "border-foreground bg-foreground text-background hover:bg-foreground/90",
+    soft: "border-file-border bg-file text-file-ink",
+    text: "text-file-ink",
+    quote: "border-file-border bg-card",
+    rule: "border-file-border",
+    mark: "bg-file ring-file-border",
   },
 } as const;
 export type Tone = keyof typeof TONE;
@@ -112,9 +113,7 @@ function Quote({ label, tone, children }: { label: string; tone: Tone; children:
       <figcaption className={cn("border-b px-4 py-2 text-[11px] font-medium tracking-wider uppercase", t.rule, t.text)}>
         {label}
       </figcaption>
-      <blockquote className="px-4 py-3 font-serif text-[15px] leading-relaxed whitespace-pre-wrap">
-        {children}
-      </blockquote>
+      <blockquote className="px-4 py-3 font-law text-[15px] leading-relaxed whitespace-pre-wrap">{children}</blockquote>
     </figure>
   );
 }
@@ -138,7 +137,7 @@ function Whole({ title, onJump, children }: { title: string; onJump?: () => void
 
 const part = (on: boolean, tone: Tone) =>
   cn(
-    "scroll-mt-16 rounded-md px-3 py-2 font-serif text-[15px] leading-relaxed whitespace-pre-wrap transition-colors",
+    "scroll-mt-16 rounded-md px-3 py-2 font-law text-[15px] leading-relaxed whitespace-pre-wrap transition-colors",
     on ? cn("text-foreground ring-1", TONE[tone].mark) : "text-muted-foreground",
   );
 const crumb = "mb-1 font-sans text-xs font-medium text-foreground/70";
@@ -167,7 +166,7 @@ function Changes({
   return (
     <Collapsible open={open} onOpenChange={setOpen} className="rounded-lg border bg-card shadow-xs">
       <CollapsibleTrigger className="flex w-full items-center gap-2 px-4 py-3 text-left text-sm hover:bg-accent/50">
-        <History className="size-4 shrink-0 text-brass" />
+        <History className="size-4 shrink-0 text-primary" />
         <span className="flex-1">
           <span className="font-medium">
             Amended {changes.length} {changes.length === 1 ? "time" : "times"}
@@ -184,7 +183,7 @@ function Changes({
         <ol className="relative space-y-4 border-t px-4 py-4">
           {changes.map((ch, i) => (
             <li key={i} className="relative pl-5">
-              <span className="absolute top-1.5 left-0 size-2 rounded-full bg-brass" />
+              <span className="absolute top-1.5 left-0 size-2 rounded-full bg-primary" />
               {i < changes.length - 1 && (
                 <span className="absolute top-4 bottom-[-1.25rem] left-[3.5px] w-px bg-border" />
               )}
@@ -197,7 +196,7 @@ function Changes({
                 {ch.date && ` · ${ch.date}`}
               </p>
               {ch.clause && (
-                <p className="mt-1.5 line-clamp-4 font-serif text-[13px] leading-relaxed text-muted-foreground">
+                <p className="mt-1.5 line-clamp-4 font-law text-[13px] leading-relaxed text-muted-foreground">
                   {ch.clause}
                 </p>
               )}

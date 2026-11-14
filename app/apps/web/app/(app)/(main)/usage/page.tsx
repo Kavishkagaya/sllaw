@@ -12,7 +12,7 @@ export default async function UsagePage() {
       <main className="flex-1 overflow-y-auto">
         <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6">
           <div className="flex items-center gap-2">
-            <h1 className="font-serif text-3xl font-semibold tracking-tight">Usage</h1>
+            <h1 className="text-3xl font-semibold tracking-tight">Usage</h1>
             {s.plan && <Badge variant="secondary">{s.plan.name} plan</Badge>}
           </div>
           <p className="mt-1 mb-6 text-sm text-muted-foreground">

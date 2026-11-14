@@ -1,14 +1,20 @@
 import { ClerkProvider } from "@clerk/nextjs";
-import { Geist, Source_Serif_4 } from "next/font/google";
+import { Geist_Mono, Instrument_Sans, Source_Serif_4 } from "next/font/google";
 import { ThemeProvider } from "next-themes";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { TRPCReactProvider } from "@/trpc/client";
 import "./globals.css";
 
-const sans = Geist({ subsets: ["latin"], variable: "--font-sans" });
-const serif = Source_Serif_4({ subsets: ["latin"], variable: "--font-serif" });
+// Instrument Sans for the interface, Source Serif 4 for statute text only (font-law), Geist Mono for small labels.
+const sans = Instrument_Sans({ subsets: ["latin"], variable: "--font-sans" });
+const serif = Source_Serif_4({ subsets: ["latin"], variable: "--" });
+const mono = Geist_Mono({ subsets: ["latin"], variable: "--font-mono" });
 
-export const metadata = { title: "sllaw", description: "Sri Lankan law, answered with citations." };
+export const metadata = {
+  title: { default: "Neethi · Your AI colleague for Sri Lankan law", template: "%s · Neethi" },
+  description: "Neethi answers from the Constitution and Acts of Sri Lanka as they stand, cited to the section.",
+  applicationName: "Neethi",
+};
 
 // Clerk's forms take the theme's CSS variables, so they follow light and dark with the rest of the app.
 const appearance = {
@@ -33,10 +39,16 @@ const appearance = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${sans.variable} ${serif.variable}`} suppressHydrationWarning>
+    <html lang="en" className={`${sans.variable} ${serif.variable} ${mono.variable}`} suppressHydrationWarning>
       <body className="antialiased">
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
-          <ClerkProvider appearance={appearance} signInUrl="/sign-in" signUpUrl="/sign-up">
+          <ClerkProvider
+            appearance={appearance}
+            signInUrl="/sign-in"
+            signUpUrl="/sign-up"
+            signInFallbackRedirectUrl="/dashboard"
+            afterSignOutUrl="/"
+          >
             <TooltipProvider>
               <TRPCReactProvider>{children}</TRPCReactProvider>
             </TooltipProvider>
