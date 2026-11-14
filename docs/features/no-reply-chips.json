@@ -1,0 +1,20 @@
+{
+  "title": "Remove reply chips",
+  "slug": "no-reply-chips",
+  "status": "agreed",
+  "branch": "app/no-reply-chips",
+  "issue": 55,
+  "neon_branch": {"name": "agent/no-reply-chips", "id": "br-round-pine-b7px1jkn"},
+  "goal": "Remove the reply chips (the ask tool that shows the agent's missing facts as tappable questions under an answer in a case chat), added by onboarding #51 d6. No suggestions at all: a proper suggestion feature, if ever, gets its own scope (user, 2026-11-14).",
+  "for_whom": "A practising lawyer in a case chat.",
+  "done_check": [
+    {"id": "d1", "check": "The agent has no ask tool and its case prompt no longer mentions it; no chips render under any answer, new or old; an old chat that stored an ask call still shows its answer text in full (not folded into the trail); the agent still names missing facts in its answer text, as before onboarding."}
+  ],
+  "scenarios": [
+    {"id": "s1", "steps": "In a case with few facts, ask what the client's position is.", "expect": "A cited answer that says in its text which facts are missing; no tappable questions under it."}
+  ],
+  "out_of_scope": ["Any other suggestion feature (follow-up questions, prompts)."],
+  "decisions": [],
+  "progress": [{"date": "2026-11-14", "note": "Scoped with the user in one round; issue #55; branch app/no-reply-chips off origin/main, database agent/no-reply-chips."},
+    {"date": "2026-11-14", "note": "Built d1: tools/ask.ts deleted; main.setup.ts has no ask import, tool group or prompt line (the line is back to 'say which facts the answer turns on and which are missing'); chat.tsx renders no chips (onAsk, questions, setDraft use gone). trail.tsx splitAnswer still skips a stored tool-ask part (cast to string, since the type no longer has it), so an old chat's answer text after its ask call stays the answer; that line is unchanged from onboarding. Checks: biome, typecheck, 129 tests pass. s1 walked headed as testone on agent/no-reply-chips: Perera v. Silva case, asked 'What do we still need to know before the trial on the ejectment claim?', chat 7c21b472-3d49-4938-8421-2af9cd78d43c: a cited answer whose text names the missing facts ('Missing facts: any notice of termination given under clause 3, and the post-term position'), 0 question buttons under it (screenshot scratchpad no-chips.png). NOT walked: an old chat that stored ask calls; the only one (chat 4d8e5cd7…) belongs to the user's own account, not the test user. Next: /validate."}]
+}

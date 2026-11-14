@@ -20,8 +20,8 @@ number, side, parties, next date, missing facts with why), then the case opens w
 AI sees, the sections that apply as amended today, what facts are missing. Every new case works the same way. Built 2026-11-14: dropped files are the
 lawyer's own (read, not indexed, no scopes) until "Looks right" moves them into the case (`services/src/new-case.ts`);
 the draft is one metered call of the files model (`ai/agents/draft.ts`), told it has no statute book, so its missing
-facts never name a section; the first brief is an ordinary case-chat message, and missing facts come back as reply
-chips (`ask` tool). Clerk's "Setup your organization" task still shows after sign-up unless automatic first
+facts never name a section; the first brief is an ordinary case-chat message, and its missing facts are in its text. Reply chips (an `ask` tool)
+were removed 2026-11-14 (user: proper suggestions or none, #55). Clerk's "Setup your organization" task still shows after sign-up unless automatic first
 organization creation is on in the Clerk dashboard.
 
 **Case** (the core object): a chat scoped to the case, with every answer citing sections that open in a document

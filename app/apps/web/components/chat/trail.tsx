@@ -61,10 +61,10 @@ const uniq = <T,>(xs: T[]) => [...new Set(xs)];
 
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
-/** The answer is the text after the last research tool call (ask, the questions shown under the answer, is not one);
- *  the rest (thinking included, also after it) is the trail. */
+/** The answer is the text after the last tool call; the rest (thinking included, also after it) is the trail. An `ask`
+ *  call (reply chips, removed 2026-11-14) came after the answer in older chats, so it does not count. */
 export function splitAnswer(parts: Part[]) {
-  const lastTool = parts.findLastIndex((p) => p.type.startsWith("tool-") && p.type !== "tool-ask");
+  const lastTool = parts.findLastIndex((p) => p.type.startsWith("tool-") && (p.type as string) !== "tool-ask");
   return {
     trail: parts.filter((p, i) => p.type !== "step-start" && (p.type !== "text" || i < lastTool)),
     answer: parts.filter((p, i) => p.type === "text" && i > lastTool),
