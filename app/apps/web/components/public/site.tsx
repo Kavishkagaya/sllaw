@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Brand } from "@/components/brand";
+import { SiteMenu } from "@/components/public/site-menu";
 import { ThemeToggle } from "@/components/theme-toggle";
 
 // The public site's frame (neethi-redesign d3, d4): the header and the footer every public page shares. Signed in,
@@ -11,22 +12,20 @@ const NAV = [
   { href: "/#faq", label: "FAQ" },
 ];
 
-export const cta =
-  "inline-flex min-h-11 items-center justify-center rounded-lg bg-primary px-5 text-[15px] font-medium text-primary-foreground hover:bg-primary/90";
-export const ctaQuiet =
-  "inline-flex min-h-11 items-center justify-center rounded-lg border border-input bg-card px-5 text-[15px] text-foreground hover:bg-accent";
+/** One size for every button on the public site (landing-motion: uniform, 40 px on a phone, 44 px from sm). */
+export const btn =
+  "inline-flex min-h-10 items-center justify-center rounded-lg px-4 text-[14px] font-medium whitespace-nowrap sm:min-h-11 sm:px-5 sm:text-[15px]";
+export const cta = `${btn} bg-primary text-primary-foreground hover:bg-primary/90`;
+export const ctaQuiet = `${btn} border border-input bg-card text-foreground hover:bg-accent`;
 
 export function SiteHeader({ signedIn }: { signedIn: boolean }) {
   return (
-    <header className="border-b bg-background">
-      <div className="mx-auto flex max-w-[1200px] flex-wrap items-center gap-x-7 gap-y-2 px-4 py-3 sm:px-6">
+    <header className="relative border-b bg-background">
+      <div className="mx-auto flex max-w-[1200px] items-center gap-x-7 px-4 py-2 sm:px-6 sm:py-3">
         <Link href="/" aria-label="Neethi, home" className="py-2">
           <Brand />
         </Link>
-        <nav
-          aria-label="Site"
-          className="order-last -mx-2 flex w-full gap-1 overflow-x-auto text-[14.5px] sm:order-none sm:w-auto sm:flex-1"
-        >
+        <nav aria-label="Site" className="-mx-2 flex flex-1 gap-1 text-[14.5px] max-sm:hidden">
           {NAV.map((n) => (
             <Link
               key={n.href}
@@ -38,14 +37,19 @@ export function SiteHeader({ signedIn }: { signedIn: boolean }) {
           ))}
         </nav>
         <div className="ml-auto flex items-center gap-1.5 sm:ml-0">
-          <ThemeToggle />
+          <span className="max-sm:hidden">
+            <ThemeToggle />
+          </span>
           {signedIn ? (
             <Link href="/dashboard" className={cta}>
               Open Neethi
             </Link>
           ) : (
             <>
-              <Link href="/sign-in" className="flex min-h-11 items-center px-3 text-[14.5px] hover:text-primary">
+              <Link
+                href="/sign-in"
+                className="flex min-h-11 items-center px-3 text-[14.5px] hover:text-primary max-sm:hidden"
+              >
                 Sign in
               </Link>
               <Link href="/sign-up" className={cta}>
@@ -53,6 +57,7 @@ export function SiteHeader({ signedIn }: { signedIn: boolean }) {
               </Link>
             </>
           )}
+          <SiteMenu nav={NAV} signedIn={signedIn} />
         </div>
       </div>
     </header>
@@ -113,10 +118,7 @@ export function Plans() {
           <li>Case diary and hearing prep</li>
           <li>Higher monthly usage</li>
         </ul>
-        <Link
-          href="/sign-up"
-          className="mt-auto inline-flex min-h-11 items-center justify-center rounded-lg bg-[#7d1d2c] px-5 text-[15px] font-medium text-white hover:bg-[#6b1825]"
-        >
+        <Link href="/sign-up" className={`mt-auto ${btn} bg-[#7d1d2c] text-white hover:bg-[#6b1825]`}>
           Start free
         </Link>
       </div>
