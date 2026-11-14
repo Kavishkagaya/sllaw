@@ -12,9 +12,10 @@ export function StartChat({ caseId, placeholder }: { caseId?: string; placeholde
     <Composer
       draftKey={caseId ? `case:${caseId}` : "home"}
       placeholder={placeholder}
-      onSend={(text) => {
+      inCase={!!caseId}
+      onSend={(text, playbook) => {
         const id = crypto.randomUUID();
-        send(id, text, caseId);
+        send(id, text, caseId, playbook);
         router.push(caseId ? `/cases/${caseId}/chats/${id}` : `/chats/${id}`);
       }}
     />

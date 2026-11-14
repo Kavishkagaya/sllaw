@@ -8,12 +8,15 @@
 import {
   createAgentUIStream,
   createUIMessageStreamResponse,
-  type InferAgentUIMessage,
+  type InferUITools,
   stepCountIs,
   ToolLoopAgent,
+  type UIMessage,
   validateUIMessages,
 } from "ai";
+import { z } from "zod";
 import { model } from "../models";
+import { pickedPlaybook } from "../playbooks";
 import type { Ctx } from "../ports";
 import { buildPrompt, buildTools } from "../prompt/build";
 import { ChunkCache } from "../sources/cache";
@@ -51,7 +54,11 @@ export const mainAgent = (ctx: Ctx, map = new SourceMap(), cache = new ChunkCach
   });
 };
 
-export type ChatMessage = InferAgentUIMessage<ReturnType<typeof mainAgent>>;
+/** A data part the client may put on a user message: the playbook the lawyer picked for it (playbooks.ts). */
+export type ChatData = { playbook: { name: string } };
+const dataSchemas = { playbook: z.object({ name: z.string().max(100) }) };
+
+export type ChatMessage = UIMessage<unknown, ChatData, InferUITools<ReturnType<typeof mainAgent>["tools"]>>;
 
 /** What one assistant message cost, summed over its steps from the gateway's providerMetadata. cost is inference,
  *  gatewayCost what is billed (inference + surcharges such as the reporting tag); generations are the gateway's ids,
@@ -101,10 +108,16 @@ export async function streamChat(
   const agent = mainAgent(ctx, map);
   // the history as the model saw it: the same handles as before (the map is the chat's), so the prompt cache holds
   const history = (messages as Stored[]).map((m) => (m.parts ? { ...m, parts: partsToModel(m.parts, map) } : m));
-  const uiMessages = await validateUIMessages<ChatMessage>({ messages: history, tools: agent.tools });
+  const uiMessages = await validateUIMessages<ChatMessage>({ messages: history, tools: agent.tools, dataSchemas });
   const stream = await createAgentUIStream({
     agent,
     uiMessages,
+    // a playbook the lawyer picked: its text, on their message, every turn (so it stays open); a name this chat
+    // does not have is dropped
+    convertDataPart: (p) => {
+      const text = p.type === "data-playbook" ? pickedPlaybook(ctx, p.data.name) : undefined;
+      return text ? { type: "text", text } : undefined;
+    },
     originalMessages: uiMessages,
     abortSignal,
     generateMessageId: () => crypto.randomUUID(),

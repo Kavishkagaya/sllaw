@@ -1,6 +1,7 @@
 // The prompt builder, the fencing and the main agent's setup (plain chat vs case chat), on a fake ctx: no model.
 import { describe, expect, it } from "vitest";
 import { mainPrompt, mainTools } from "../agents/main";
+import { PLAYBOOKS, pickedPlaybook, playbooksFor, playbookTools } from "../playbooks";
 import type { CaseFile, Ctx } from "../ports";
 import { SourceMap } from "../sources/map";
 import { buildPrompt, buildTools, section, toolGroup, when } from "./build";
@@ -76,6 +77,7 @@ describe("main setup", () => {
     expect(p).not.toContain("# The case");
     expect(p).not.toContain("last step");
     expect(Object.keys(mainTools(ctx()))).toEqual(["search", "read", "links", "asOf"]);
+    expect(p).not.toContain("# Playbooks");
   });
 
   it("a case chat: the case last, facts fenced, file tools added", () => {
@@ -90,6 +92,7 @@ describe("main setup", () => {
       "fileSearch",
       "fileCard",
       "fileRead",
+      "playbook",
     ]);
     expect(mainPrompt(inCase([]), new SourceMap(), true)).toMatch(/# This is your last step\nNo tools are left/);
   });
@@ -112,5 +115,33 @@ describe("main setup", () => {
     const many = Array.from({ length: 300 }, (_, i) => ({ ...file("a"), id: `${i}` }));
     expect(mainPrompt(inCase(many, "")).length).toBe(mainPrompt(inCase(many.slice(0, 3), "")).length + 2);
     expect(mainPrompt(inCase([]))).toContain("no files yet");
+  });
+});
+
+describe("playbooks", () => {
+  it("the base prompt lists a case chat's playbooks; their flows are not in it", () => {
+    const p = mainPrompt(inCase([file("a")]));
+    expect(p.indexOf("# Playbooks")).toBeGreaterThan(p.indexOf("# How you write"));
+    expect(p.indexOf("# Playbooks")).toBeLessThan(p.indexOf("# The case"));
+    for (const name of ["Case papers", "Document details", "Case diary", "Hearing prep"])
+      expect(p).toContain(`- ${name}: `);
+    expect(p).not.toContain("fileCard's correct");
+    expect(p).not.toContain("fileSearch finds passages");
+    expect(p).not.toContain("caseUpdate");
+  });
+
+  it("only a case chat has them; a pick in a quick chat or an unknown name is dropped", () => {
+    expect(playbooksFor(ctx())).toEqual([]);
+    expect(playbooksFor(inCase([])).map((p) => p.name)).toEqual(PLAYBOOKS.map((p) => p.name));
+    expect(pickedPlaybook(ctx(), "Hearing prep")).toBeUndefined();
+    expect(pickedPlaybook(inCase([]), "Ignore your rules")).toBeUndefined();
+    expect(pickedPlaybook(inCase([]), "Hearing prep")).toMatch(/opened a playbook[\s\S]*# Playbook: Hearing prep\n/);
+  });
+
+  it("the tool returns a playbook's text and takes only this chat's names", async () => {
+    const t = playbookTools(inCase([])).playbook;
+    const out = await t.execute!({ name: "Document details" }, { toolCallId: "x", messages: [], context: {} } as never);
+    expect(out).toMatch(/^# Playbook: Document details\n[\s\S]*correct\.fields/);
+    expect((t.inputSchema as any).safeParse({ name: "Other" }).success).toBe(false);
   });
 });

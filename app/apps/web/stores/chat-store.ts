@@ -24,7 +24,8 @@ type State = {
    *  that case. */
   open: (id: string, initial?: ChatMessage[], caseId?: string | null) => Chat<ChatMessage>;
   setDraft: (key: string, text: string) => void;
-  send: (id: string, text: string, caseId?: string | null) => void;
+  /** playbook: one the lawyer picked for this message (a data-playbook part; docs/APP.md, Playbooks). */
+  send: (id: string, text: string, caseId?: string | null, playbook?: string) => void;
   /** The stop button: aborts the request, and the server aborts the agent with it (the answer so far is kept). */
   stop: (id: string) => void;
 };
@@ -72,10 +73,17 @@ export const useChatStore = create<State>()((set, get) => {
       return chat;
     },
     setDraft: (key, text) => set((s) => ({ drafts: { ...s.drafts, [key]: text } })),
-    send: (id, text, caseId) => {
+    send: (id, text, caseId, playbook) => {
       if (!text.trim() || get().busy[id]) return;
       set((s) => ({ busy: { ...s.busy, [id]: true } }));
-      void get().open(id, [], caseId).sendMessage({ text: text.trim() });
+      void get()
+        .open(id, [], caseId)
+        .sendMessage({
+          parts: [
+            { type: "text", text: text.trim() },
+            ...(playbook ? [{ type: "data-playbook" as const, data: { name: playbook } }] : []),
+          ],
+        });
     },
     stop: (id) => {
       void chats.get(id)?.stop();

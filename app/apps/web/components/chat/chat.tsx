@@ -167,8 +167,8 @@ export function Chat({
 
   const busy = status === "submitted" || status === "streaming";
   const empty = messages.length === 0;
-  const ask = (text: string) => {
-    send(id, text, caseId);
+  const ask = (text: string, playbook?: string) => {
+    send(id, text, caseId, playbook);
     // a fresh chat takes its own URL on its first message; Next syncs its router with pushState (no request)
     if (fresh && !location.pathname.endsWith(id)) history.pushState(null, "", `${location.pathname}/${id}`); // /chats → /chats/<id>
   };
@@ -319,7 +319,18 @@ export function Chat({
                         transition={SPRING}
                         className="ml-auto max-w-[85%] rounded-2xl rounded-br-sm bg-secondary px-4 py-2.5 whitespace-pre-wrap text-secondary-foreground"
                       >
-                        {m.parts.map((p, i) => (p.type === "text" ? <span key={i}>{p.text}</span> : null))}
+                        {m.parts.map((p, i) =>
+                          p.type === "text" ? (
+                            <span key={i}>{p.text}</span>
+                          ) : p.type === "data-playbook" ? (
+                            <span
+                              key={i}
+                              className="mt-1.5 flex w-fit rounded-md border bg-background/60 px-1.5 py-px font-mono text-xs text-muted-foreground"
+                            >
+                              playbook:{p.data.name}
+                            </span>
+                          ) : null,
+                        )}
                       </motion.div>
                     ) : (
                       <motion.div key={m.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
@@ -369,6 +380,7 @@ export function Chat({
             <Composer
               draftKey={draftKey}
               placeholder={caseId ? "Ask about this case…" : undefined}
+              inCase={!!caseId}
               onSend={ask}
               onStop={() => stop(id)}
               busy={busy}
