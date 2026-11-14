@@ -100,7 +100,7 @@ export function Composer({
                 className="flex-col items-start gap-0.5"
               >
                 <span className="font-medium">{p.name}</span>
-                <span className="text-xs text-muted-foreground">{p.when}</span>
+                <span className="text-xs text-muted-foreground first-letter:uppercase">{p.when}</span>
               </DropdownMenuItem>
             ))}
           </DropdownMenuContent>
