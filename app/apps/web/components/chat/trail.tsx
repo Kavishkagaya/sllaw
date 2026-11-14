@@ -1,7 +1,8 @@
 "use client";
-// How an answer was researched, in a lawyer's terms: thinking (expandable), what was searched and found, which
-// provisions were read, how they were amended, which related laws were looked at, which case files were searched
-// and read. No ids, modes or directions.
+// How an answer was researched, in a lawyer's terms (neethi-redesign d11): while it works, each step appears live on
+// a dotted thread under the working arch, with a timer; finished, the trail folds to one line ("How I got here") and
+// opens into sentences: what it looked for, what it found, chips that open in the sources panel, thinking as a short
+// excerpt. No ids, modes or directions.
 import type { ChatMessage } from "@sllaw/api";
 import {
   BookOpen,
@@ -18,9 +19,16 @@ import {
   Pencil,
   Search,
 } from "lucide-react";
-import { useState } from "react";
+import { createContext, useContext, useEffect, useState } from "react";
+import { BrandMark } from "@/components/brand";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { cn } from "@/lib/utils";
+
+/** What a chip in the trail opens in the sources panel: a law's chunk, or a passage of a case file. */
+export type TrailSource =
+  | { kind: "law"; chunkId: number; label: string }
+  | { kind: "file"; fileId: string; n: number; label: string };
+const OpenSource = createContext<(s: TrailSource) => void>(() => {});
 
 type Part = ChatMessage["parts"][number];
 
@@ -43,10 +51,22 @@ export function lawName(key: string) {
   if (kind === "chapter") return `Chapter ${n}`;
   return key;
 }
-const provision = (c: { label: string | null; title: string | null; docKey: string }) =>
-  [c.label && (/^\d/.test(c.label) ? `s. ${c.label}` : c.label), c.title ?? lawName(c.docKey)]
-    .filter(Boolean)
-    .join(", ");
+type Prov = { label: string | null; title: string | null; docKey: string };
+const isConstitution = (key: string) => key === "constitution" || key.startsWith("constitution:");
+/** "13" → "Art. 13" in the Constitution, "s. 13" elsewhere; a named label ("First Schedule") as it is. */
+const pin = (c: Prov) =>
+  c.label && (/^\d/.test(c.label) ? `${isConstitution(c.docKey) ? "Art." : "s."} ${c.label}` : c.label);
+const provision = (c: Prov) => [pin(c), c.title ?? lawName(c.docKey)].filter(Boolean).join(", ");
+/** A law's name, short, for a chip: "CODE OF CRIMINAL PROCEDURE ACT, No. 15 OF 1979" → "Code of Criminal Procedure
+ *  Act"; the Constitution as "Constitution". */
+function shortLaw(c: Prov) {
+  if (isConstitution(c.docKey)) return "Constitution";
+  const t = (c.title ?? lawName(c.docKey)).split(/,|\(/)[0]!.trim();
+  return t === t.toUpperCase()
+    ? t.toLowerCase().replace(/\b(?!of\b|and\b|the\b|for\b|in\b)\w/g, (x) => x.toUpperCase())
+    : t;
+}
+const chip = (c: Prov) => [pin(c), shortLaw(c)].filter(Boolean).join(", ");
 const KIND: Record<string, string> = {
   amends: "amend",
   inserts: "insert into",
@@ -87,11 +107,26 @@ function titlesOf(parts: Part[]) {
   return (key: string) => t.get(key) ?? lawName(key);
 }
 
-export function Trail({ parts, live }: { parts: Part[]; live: boolean }) {
-  // open while the agent works; a finished answer shows its trail folded
-  const [open, setOpen] = useState(live);
+/** m:ss since the trail went live: the colleague's time on this question. */
+function Timer() {
+  const [start] = useState(() => Date.now());
+  const [now, setNow] = useState(start);
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, []);
+  const s = Math.floor((now - start) / 1000);
+  return (
+    <span className="label-mono ml-auto text-[10px] text-muted-foreground tabular-nums">
+      {Math.floor(s / 60)}:{String(s % 60).padStart(2, "0")}
+    </span>
+  );
+}
+
+export function Trail({ parts, live, onOpen }: { parts: Part[]; live: boolean; onOpen?: (s: TrailSource) => void }) {
+  const [open, setOpen] = useState(false);
   const steps = parts.filter((p) => p.type !== "reasoning" && p.type !== "text");
-  if (!parts.length) return null;
+  if (!parts.length && !live) return null;
   const count = (t: string) => steps.filter((p) => p.type === t).length;
   const reads = parts.flatMap((p) => (p.type === "tool-read" && p.state === "output-available" ? p.output : [])).length;
   const passagesRead = parts
@@ -99,88 +134,138 @@ export function Trail({ parts, live }: { parts: Part[]; live: boolean }) {
     .flatMap((f) => f.chunks).length;
   const summary = [
     count("tool-search") && plural(count("tool-search"), "search", "searches"),
-    reads && `${plural(reads, "provision", "provisions")} read`,
+    reads && plural(reads, "provision", "provisions"),
     count("tool-asOf") && plural(count("tool-asOf"), "amendment check", "amendment checks"),
     count("tool-fileSearch") && plural(count("tool-fileSearch"), "file search", "file searches"),
-    passagesRead && `${plural(passagesRead, "file passage", "file passages")} read`,
+    passagesRead && plural(passagesRead, "file passage", "file passages"),
   ]
     .filter(Boolean)
-    .join(", ");
+    .join(" · ");
   const name = titlesOf(parts);
+  const thread = (
+    <ol className="relative">
+      <span
+        aria-hidden
+        className="absolute top-1.5 bottom-5 left-[10px] w-0.5 [background-image:radial-gradient(circle,var(--input)_1px,transparent_1.2px)] [background-size:2px_6px]"
+      />
+      {parts.map((p, i) => (
+        <Step key={i} p={p} name={name} active={live && i === parts.length - 1} />
+      ))}
+    </ol>
+  );
   return (
-    <Collapsible open={open} onOpenChange={setOpen} className="rounded-lg border bg-muted/30">
-      <CollapsibleTrigger className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-muted-foreground hover:text-foreground">
-        {live ? (
-          <Loader2 className="size-3.5 animate-spin" />
-        ) : (
-          <ChevronRight className={cn("size-3.5 transition-transform", open && "rotate-90")} />
-        )}
-        <span className="shrink-0 font-medium">{live ? "Researching" : "Researched"}</span>
-        {summary && <span className="min-w-0 truncate">· {summary}</span>}
-      </CollapsibleTrigger>
-      <CollapsibleContent>
-        <ol className="flex flex-col gap-2 border-t px-3 py-2.5">
-          {parts.map((p, i) => (
-            <Step key={i} p={p} name={name} active={live && i === parts.length - 1} />
-          ))}
-        </ol>
-      </CollapsibleContent>
-    </Collapsible>
+    <OpenSource.Provider value={onOpen ?? (() => {})}>
+      {live ? (
+        <div aria-live="polite">
+          <div className="mb-3.5 flex items-center gap-2.5">
+            <BrandMark working className="size-5" />
+            <span className="text-sm font-semibold">Working on it</span>
+            <Timer />
+          </div>
+          {thread}
+          <div aria-hidden className="mt-1 flex flex-col gap-2">
+            <span className="h-2.5 w-[92%] animate-pulse rounded-full bg-muted" />
+            <span className="h-2.5 w-[70%] animate-pulse rounded-full bg-muted" />
+          </div>
+        </div>
+      ) : (
+        <Collapsible open={open} onOpenChange={setOpen}>
+          <CollapsibleTrigger className="flex min-h-9 w-full items-center gap-2 rounded-lg bg-muted px-2.5 py-1.5 text-left text-[12.5px] text-muted-foreground hover:text-foreground">
+            <ChevronRight className={cn("size-3.5 shrink-0 transition-transform", open && "rotate-90")} />
+            <b className="shrink-0 font-semibold text-foreground">How I got here</b>
+            {summary && <span className="min-w-0 truncate">· {summary}</span>}
+          </CollapsibleTrigger>
+          <CollapsibleContent className="pt-3.5">{thread}</CollapsibleContent>
+        </Collapsible>
+      )}
+    </OpenSource.Provider>
   );
 }
 
+/** One step on the thread: its dot (icon in a circle), then the sentence. */
 function Row({
   icon: Icon,
   spin,
+  active,
+  mark,
   children,
 }: {
   icon: React.ComponentType<{ className?: string }>;
   spin?: boolean;
+  active?: boolean;
+  mark?: boolean; // a playbook step: the dot filled in oxblood
   children: React.ReactNode;
 }) {
   return (
-    <li className="flex gap-2 text-xs text-muted-foreground">
-      <Icon className={cn("mt-0.5 size-3.5 shrink-0", spin && "animate-spin")} />
-      <div className="min-w-0 flex-1 space-y-1">{children}</div>
+    <li className="relative flex gap-3 pb-3.5">
+      <span
+        className={cn(
+          "relative z-[1] flex size-[22px] shrink-0 items-center justify-center rounded-full border bg-card text-muted-foreground",
+          mark && "border-primary bg-primary text-primary-foreground",
+          active && !mark && "border-primary text-primary",
+        )}
+      >
+        <Icon className={cn("size-[11px]", spin && "animate-spin")} />
+      </span>
+      <div className={cn("min-w-0 flex-1 space-y-1 pt-0.5 text-[13.5px]", active && "font-medium text-primary")}>
+        {children}
+      </div>
     </li>
+  );
+}
+
+/** A law or file named in a step: a chip; with `src` it opens that source in the panel. */
+function Chip({ children, file, src }: { children: React.ReactNode; file?: boolean; src?: TrailSource }) {
+  const open = useContext(OpenSource);
+  const cls = cn(
+    "mt-1 mr-1 inline-flex max-w-full items-center truncate rounded-[5px] border px-[7px] py-px text-[11.5px] font-medium",
+    file
+      ? "border-file-border bg-file text-file-ink"
+      : src
+        ? "border-law-border bg-law text-law-ink"
+        : "bg-card text-foreground/80",
+  );
+  return src ? (
+    <button type="button" onClick={() => open(src)} className={cn(cls, "cursor-pointer hover:brightness-95")}>
+      {children}
+    </button>
+  ) : (
+    <span className={cls}>{children}</span>
   );
 }
 
 const Laws = ({ names }: { names: string[] }) =>
   names.length ? (
-    <div className="flex flex-wrap gap-1">
+    <div className="flex flex-wrap">
       {names.slice(0, 5).map((n) => (
-        <span key={n} className="rounded border bg-background px-1.5 py-px text-[11px]">
-          {n}
-        </span>
+        <Chip key={n}>{n}</Chip>
       ))}
-      {names.length > 5 && <span className="text-[11px]">+{names.length - 5} more</span>}
+      {names.length > 5 && <span className="mt-1 text-[11px] text-muted-foreground">+{names.length - 5} more</span>}
     </div>
   ) : null;
 
+/** Thinking, short: its first lines as an excerpt, never the full chain. */
+const excerpt = (t: string) => {
+  const one = t.trim().replace(/\s+/g, " ");
+  return one.length > 220 ? `${one.slice(0, 220).replace(/\s\S*$/, "")}…` : one;
+};
+
 function Step({ p, name, active }: { p: Part; name: (key: string) => string; active: boolean }) {
-  const [open, setOpen] = useState(false);
   if (p.type === "reasoning") {
     if (!p.text.trim()) return null;
     return (
-      <li>
-        <Collapsible open={open} onOpenChange={setOpen}>
-          <CollapsibleTrigger className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground">
-            {active ? <Loader2 className="size-3.5 animate-spin" /> : <Brain className="size-3.5" />}
-            <span>{active ? "Thinking…" : "Thinking"}</span>
-            <ChevronRight className={cn("size-3 transition-transform", open && "rotate-90")} />
-          </CollapsibleTrigger>
-          <CollapsibleContent>
-            <p className="mt-1.5 ml-5.5 border-l pl-3 text-xs leading-relaxed whitespace-pre-wrap text-muted-foreground">
-              {p.text.trim()}
-            </p>
-          </CollapsibleContent>
-        </Collapsible>
-      </li>
+      <Row icon={active ? Loader2 : Brain} spin={active} active={active}>
+        <p>{active ? "Thinking it through…" : "Thought it through"}</p>
+        {!active && (
+          <p className="font-law text-[13px] leading-normal text-muted-foreground italic">“{excerpt(p.text)}”</p>
+        )}
+      </Row>
     );
   }
   if (p.type === "text")
-    return p.text.trim() ? <li className="ml-5.5 text-xs text-muted-foreground italic">{p.text.trim()}</li> : null;
+    return p.text.trim() ? (
+      <li className="mb-3 ml-[34px] text-[13px] text-muted-foreground italic">{p.text.trim()}</li>
+    ) : null;
 
   const running =
     p.type.startsWith("tool-") && "state" in p && p.state !== "output-available" && p.state !== "output-error";
@@ -192,9 +277,9 @@ function Step({ p, name, active }: { p: Part; name: (key: string) => string; act
         ? uniq(p.output.map((h) => h.title ?? lawName(h.docKey)))
         : [];
     return (
-      <Row icon={running ? Loader2 : Search} spin={running}>
+      <Row icon={running ? Loader2 : Search} spin={running} active={running}>
         <p>
-          Searched <span className="text-foreground">“{p.input?.query}”</span>
+          Searched the law for <i>“{p.input?.query}”</i>
           {within?.length ? <> in {within.join(", ")}</> : null}
           {p.state === "output-available" && typeof p.output === "string" && <> — not in the corpus</>}
           {p.state === "output-available" && Array.isArray(p.output) && !p.output.length && <> — nothing found</>}
@@ -205,22 +290,26 @@ function Step({ p, name, active }: { p: Part; name: (key: string) => string; act
     );
   }
   if (p.type === "tool-read") {
-    const read = p.state === "output-available" ? p.output.map(provision) : [];
+    const read = p.state === "output-available" ? p.output : [];
     return (
-      <Row icon={running ? Loader2 : FileText} spin={running}>
+      <Row icon={running ? Loader2 : FileText} spin={running} active={running}>
         <p>
           {running
-            ? "Reading provisions…"
+            ? "Reading the provisions…"
             : failed
               ? "Reading failed"
-              : `Read ${read.length === 1 ? read[0] : plural(read.length, "provision", "provisions")}`}
+              : read.length === 1
+                ? "Read"
+                : `Read ${plural(read.length, "provision", "provisions")}`}
         </p>
-        {read.length > 1 && (
-          <ul className="list-disc pl-4">
-            {read.map((r, i) => (
-              <li key={i}>{r}</li>
+        {read.length > 0 && (
+          <div className="flex flex-wrap">
+            {read.map((r) => (
+              <Chip key={r.chunkId} src={{ kind: "law", chunkId: r.chunkId, label: chip(r) }}>
+                {chip(r)}
+              </Chip>
             ))}
-          </ul>
+          </div>
         )}
       </Row>
     );
@@ -229,7 +318,7 @@ function Step({ p, name, active }: { p: Part; name: (key: string) => string; act
     const o = p.state === "output-available" ? p.output : null;
     const last = o?.changes.at(-1)?.date;
     return (
-      <Row icon={running ? Loader2 : GitCompareArrows} spin={running}>
+      <Row icon={running ? Loader2 : GitCompareArrows} spin={running} active={running}>
         {running ? (
           <p>Checking amendments…</p>
         ) : !o ? (
@@ -237,7 +326,7 @@ function Step({ p, name, active }: { p: Part; name: (key: string) => string; act
         ) : (
           <>
             <p>
-              Amendments to <span className="text-foreground">{provision(o.chunk)}</span>:{" "}
+              Checked <span className="text-foreground">{provision(o.chunk)}</span> for amendments:{" "}
               {o.changes.length
                 ? `amended ${plural(o.changes.length, "time", "times")}${last ? `, last ${last}` : ""}`
                 : "not amended"}
@@ -252,9 +341,9 @@ function Step({ p, name, active }: { p: Part; name: (key: string) => string; act
     const o = p.state === "output-available" ? p.output : null;
     const found = o && typeof o === "object" ? uniq(o.hits.map((h) => h.title)) : [];
     return (
-      <Row icon={running ? Loader2 : FileSearch} spin={running}>
+      <Row icon={running ? Loader2 : FileSearch} spin={running} active={running}>
         <p>
-          Searched the case files for <span className="text-foreground">“{p.input?.query}”</span>
+          Searched the case files for <i>“{p.input?.query}”</i>
           {typeof o === "string" && <> — {o}</>}
           {o && typeof o === "object" && !o.hits.length && <> — nothing found</>}
           {failed && <> — failed</>}
@@ -271,7 +360,7 @@ function Step({ p, name, active }: { p: Part; name: (key: string) => string; act
     if (fixing) {
       const c = o && typeof o === "object" && "corrected" in o ? o.corrected : null;
       return (
-        <Row icon={running ? Loader2 : Pencil} spin={running}>
+        <Row icon={running ? Loader2 : Pencil} spin={running} active={running}>
           <p>
             {running
               ? "Correcting a file's details…"
@@ -287,7 +376,7 @@ function Step({ p, name, active }: { p: Part; name: (key: string) => string; act
     const titles = o && typeof o === "object" && "cards" in o ? (o.cards ?? []).map((c) => c.title) : [];
     const listed = o && typeof o === "object" && "files" in o;
     return (
-      <Row icon={running ? Loader2 : Files} spin={running}>
+      <Row icon={running ? Loader2 : Files} spin={running} active={running}>
         <p>
           {running
             ? "Looking at the case files…"
@@ -311,47 +400,60 @@ function Step({ p, name, active }: { p: Part; name: (key: string) => string; act
       return ns.length > 1 ? `pp. ${ns[0]}–${ns.at(-1)}` : ns.length ? `p. ${ns[0]}` : "";
     };
     return (
-      <Row icon={running ? Loader2 : FolderOpen} spin={running}>
+      <Row icon={running ? Loader2 : FolderOpen} spin={running} active={running}>
         <p>
-          {running ? (
-            "Reading a case file…"
-          ) : failed ? (
-            "Reading a case file failed"
-          ) : typeof o === "string" ? (
-            <>Could not read a case file — {o}</>
-          ) : read.length ? (
-            read.map((f, i) => (
-              <span key={f.file}>
-                {i ? "; " : "Read "}
-                {span(f)} of <span className="text-foreground">{f.title}</span>
-              </span>
-            ))
-          ) : o ? (
-            "Read a case file"
-          ) : null}
+          {running
+            ? "Reading a case file…"
+            : failed
+              ? "Reading a case file failed"
+              : typeof o === "string"
+                ? `Could not read a case file — ${o}`
+                : read.length
+                  ? "Read in your files"
+                  : o
+                    ? "Read a case file"
+                    : null}
         </p>
+        {read.length > 0 && (
+          <div className="flex flex-wrap">
+            {read.map((f) => {
+              const first = f.chunks[0];
+              const n = first ? Number(first.chunk.split(":").at(-1)) : Number.NaN;
+              const label = `${f.title}${span(f) ? `, ${span(f)}` : ""}`;
+              return (
+                <Chip
+                  key={f.file}
+                  file
+                  src={Number.isFinite(n) ? { kind: "file", fileId: f.file, n, label } : undefined}
+                >
+                  {label}
+                </Chip>
+              );
+            })}
+          </div>
+        )}
       </Row>
     );
   }
   if (p.type === "tool-playbook")
     return (
-      <Row icon={running ? Loader2 : BookOpen} spin={running}>
+      <Row icon={running ? Loader2 : BookOpen} spin={running} active={running} mark={!running && !failed}>
         <p>
-          Opened <span className="font-mono text-foreground">playbook:{p.input?.name}</span>
+          Opened the <b className="font-semibold">{p.input?.name}</b> playbook
           {failed && <> — failed</>}
         </p>
       </Row>
     );
   if (p.type === "tool-caseRead")
     return (
-      <Row icon={running ? Loader2 : LayoutDashboard} spin={running}>
+      <Row icon={running ? Loader2 : LayoutDashboard} spin={running} active={running}>
         <p>Read the case page</p>
       </Row>
     );
   if (p.type === "tool-caseUpdate") {
     const out = p.state === "output-available" ? p.output : null;
     return (
-      <Row icon={running ? Loader2 : LayoutDashboard} spin={running}>
+      <Row icon={running ? Loader2 : LayoutDashboard} spin={running} active={running}>
         <p>
           {running
             ? "Updating the case…"
@@ -369,7 +471,7 @@ function Step({ p, name, active }: { p: Part; name: (key: string) => string; act
     const subject = p.input?.docKey ? name(p.input.docKey) : "the provision";
     const kinds = uniq(groups.map((g) => KIND[g.kind] ?? "relate to"));
     return (
-      <Row icon={running ? Loader2 : Link2} spin={running}>
+      <Row icon={running ? Loader2 : Link2} spin={running} active={running}>
         <p>
           {running
             ? `Looking up laws related to ${subject}…`

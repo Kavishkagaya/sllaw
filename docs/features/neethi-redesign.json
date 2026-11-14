@@ -39,9 +39,11 @@
     {"date": "2026-11-14", "note": "Story: the AI colleague is the main thing; Case, the workspace, is the moat and comes second; one hero only (user)."},
     {"date": "2026-11-14", "note": "Sign-up open (not a waitlist); pricing shows Free, Lawyer, Chambers without prices; coverage counts live; one brief and one PR built in stages (tokens and shell, chat, other app pages, public site) (user)."},
     {"date": "2026-11-14", "note": "Reopened to add the chat's working parts (live steps, opened trail, playbooks, citation states, amendment timeline) after a board for them; the timeline is a drawing of corpus.chunk's changes, no new data (user)."},
-    {"date": "2026-11-14", "note": "Mockup agreed: claude.ai/artifact/4ghdf5b5xBRU7PvzfAHoKx (landing final; app boards give the direction, their sample content is not to be copied)."}
+    {"date": "2026-11-14", "note": "Mockup agreed: claude.ai/artifact/4ghdf5b5xBRU7PvzfAHoKx (landing final; app boards give the direction, their sample content is not to be copied)."},
+    {"date": "2026-11-14", "note": "Build: shadcn tokens kept by name with Oxblood values; new tokens law, file, unverified for the three citation kinds; headings move to sans, font-law (Source Serif) only for statute text. One AppSidebar rendered by both layouts (main, case) from one server loader. 'Amendments followed' counts kb change links (amends, inserts, replaces, repeals). Landing trust and FAQ say only you see a case (sharing is Coming soon); the Chambers button is Start free (no contact address exists)."}
   ],
   "progress": [
-    {"date": "2026-11-14", "note": "Scoped with the user over a canvas mockup (landing final, app boards as direction); agreed; issue #59; branch app/neethi-redesign off origin/main; Neon branch agent/neethi-redesign, .env.local points at it (production kept in .env.main)."}
+    {"date": "2026-11-14", "note": "Scoped with the user over a canvas mockup (landing final, app boards as direction); agreed; issue #59; branch app/neethi-redesign off origin/main; Neon branch agent/neethi-redesign, .env.local points at it (production kept in .env.main)."},
+    {"date": "2026-11-14", "note": "Stage 1 (71932a5): tokens light and dark, fonts, arch mark and favicon, Clerk frame, one sidebar (open case in place, usage meter), Home at /dashboard (sign-in lands there), public /, /pricing, /coverage, /privacy, /terms. Coverage live from kb: 3,227 Acts and Laws, 997 chapters, 20,075 section changes, updated 14 Nov 2026. Landing quotes (Art. 12(1), 13(1) and their titles) found verbatim on /doc/constitution. Next: the chat (d7, d11)."}
   ]
 }

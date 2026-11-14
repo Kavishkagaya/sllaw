@@ -59,12 +59,14 @@ function Head({
   kind,
   title,
   sub,
+  law,
   children,
 }: {
   icon: React.ComponentType<{ className?: string }>;
   kind: string;
   title: string;
   sub?: string | null;
+  law?: boolean; // a law's name in the statute serif
   children?: React.ReactNode;
 }) {
   return (
@@ -73,7 +75,9 @@ function Head({
         <p className="flex items-center gap-1.5 text-[11px] font-medium tracking-wider text-muted-foreground uppercase">
           <Icon className="size-3.5" /> {kind}
         </p>
-        <h3 className="text-xl leading-snug font-semibold text-balance">{title}</h3>
+        <h3 className={cn("text-xl leading-snug text-balance", law ? "font-law font-medium" : "font-semibold")}>
+          {title}
+        </h3>
         {sub && <p className="text-sm text-muted-foreground">{sub}</p>}
       </div>
       {children && <div className="flex flex-wrap gap-2">{children}</div>}
@@ -113,7 +117,14 @@ function Quote({ label, tone, children }: { label: string; tone: Tone; children:
       <figcaption className={cn("border-b px-4 py-2 text-[11px] font-medium tracking-wider uppercase", t.rule, t.text)}>
         {label}
       </figcaption>
-      <blockquote className="px-4 py-3 font-law text-[15px] leading-relaxed whitespace-pre-wrap">{children}</blockquote>
+      <blockquote
+        className={cn(
+          "px-4 py-3 text-[15px] leading-relaxed whitespace-pre-wrap",
+          tone === "law" ? "bg-law-mark font-law" : "bg-file",
+        )}
+      >
+        {children}
+      </blockquote>
     </figure>
   );
 }
@@ -183,7 +194,11 @@ function Changes({
         <ol className="relative space-y-4 border-t px-4 py-4">
           {changes.map((ch, i) => (
             <li key={i} className="relative pl-5">
-              <span className="absolute top-1.5 left-0 size-2 rounded-full bg-primary" />
+              {ch.date ? (
+                <span className="absolute top-1.5 left-0 size-2 rounded-full bg-primary" />
+              ) : (
+                <span className="absolute top-1.5 left-0 size-2 rounded-full border border-dashed border-muted-foreground" />
+              )}
               {i < changes.length - 1 && (
                 <span className="absolute top-4 bottom-[-1.25rem] left-[3.5px] w-px bg-border" />
               )}
@@ -208,7 +223,53 @@ function Changes({
   );
 }
 
-export function LawSource({ chunkId }: { chunkId: number }) {
+/** A law's line from enactment to today: its year from the key (the Constitution 1978), a dot for each dated change,
+ *  today at the end. Undated changes are not drawn (the list under it has them). */
+export function AmendmentLine({ docKey, changes }: { docKey: string; changes: { date: string | null }[] }) {
+  const thisYear = new Date().getFullYear();
+  const enacted =
+    docKey === "constitution" || docKey.startsWith("constitution:") ? 1978 : Number(docKey.split("/")[1]) || null;
+  const years = changes.flatMap((c) => (c.date ? [Number(c.date.slice(0, 4))] : []));
+  const from = Math.min(enacted ?? thisYear, ...years, thisYear - 1);
+  const x = (y: number) => 14 + ((y - from) / Math.max(1, thisYear - from)) * 312;
+  const label = `Amendment timeline: ${[enacted ? `enacted ${enacted}` : null, ...years.map(String), "today"].filter(Boolean).join(", ")}`;
+  return (
+    <svg viewBox="0 0 340 40" role="img" aria-label={label} className="h-auto w-full">
+      <path d="M8 14H332" className="stroke-input" />
+      {enacted && <circle cx={x(enacted)} cy="14" r="5" className="fill-card stroke-foreground" />}
+      {years.map((y, i) => (
+        <circle key={i} cx={x(y)} cy="14" r="4" className="fill-card stroke-primary" strokeWidth="1.5" />
+      ))}
+      <circle cx="326" cy="14" r="6" className="fill-primary" />
+      {enacted && (
+        <text
+          x={Math.max(14, x(enacted))}
+          y="35"
+          textAnchor="middle"
+          className="fill-muted-foreground font-mono text-[9px]"
+        >
+          {enacted}
+        </text>
+      )}
+      {[...new Set(years)].slice(-3).map((y) => (
+        <text key={y} x={x(y)} y="35" textAnchor="middle" className="fill-muted-foreground font-mono text-[9px]">
+          {Math.abs(x(y) - 326) < 30 || (enacted && Math.abs(x(y) - x(enacted)) < 30) ? "" : y}
+        </text>
+      ))}
+      <text x="326" y="35" textAnchor="middle" className="fill-primary font-mono text-[9px]">
+        TODAY
+      </text>
+    </svg>
+  );
+}
+
+/** What a source is and whether the agent read it: "✓ Read · in force today" in green, or nothing (the panel shows
+ *  the not-verified card above). */
+function ReadMark({ read, children }: { read?: boolean; children: React.ReactNode }) {
+  return read ? <p className="label-mono text-[10px] text-ok">✓ Read · {children}</p> : null;
+}
+
+export function LawSource({ chunkId, read }: { chunkId: number; read?: boolean }) {
   const trpc = useTRPC();
   const view = useQuery(trpc.corpus.chunk.queryOptions({ chunkId }));
   const key = view.data?.chunk.docKey;
@@ -222,7 +283,8 @@ export function LawSource({ chunkId }: { chunkId: number }) {
   let last: string | null = null;
   return (
     <div className="space-y-5 p-5">
-      <Head icon={Landmark} kind={lawName(c.docKey)} title={info?.title ?? c.title ?? c.docKey} sub={where}>
+      <ReadMark read={read}>{later.length ? `as at ${date}` : "the text in force"}</ReadMark>
+      <Head icon={Landmark} kind={lawName(c.docKey)} title={info?.title ?? c.title ?? c.docKey} sub={where} law>
         <Button asChild variant="outline" size="sm">
           <a href={`/doc/${c.docKey}#c${c.chunkId}`} target="_blank" rel="noopener">
             Open the law <ExternalLink />
@@ -236,7 +298,8 @@ export function LawSource({ chunkId }: { chunkId: number }) {
           </Button>
         )}
       </Head>
-      <Quote label="Cited text, as enacted" tone="law">
+      <AmendmentLine docKey={c.docKey} changes={changes} />
+      <Quote label="Cited text" tone="law">
         {c.text}
       </Quote>
       {changes.length > 0 && <Changes changes={changes} date={date} />}
@@ -267,7 +330,17 @@ export function LawSource({ chunkId }: { chunkId: number }) {
 }
 
 /** A case file, whole, page by page; n the cited chunk (null: the file itself was cited). */
-export function FileSource({ caseId, fileId, n }: { caseId?: string; fileId: string; n: number | null }) {
+export function FileSource({
+  caseId,
+  fileId,
+  n,
+  read,
+}: {
+  caseId?: string;
+  fileId: string;
+  n: number | null;
+  read?: boolean;
+}) {
   const trpc = useTRPC();
   const q = useQuery(trpc.case.fileChunks.queryOptions({ caseId: caseId ?? "", fileId }, { enabled: !!caseId }));
   const [at, jump] = useJump();
@@ -279,6 +352,7 @@ export function FileSource({ caseId, fileId, n }: { caseId?: string; fileId: str
   let page = 0;
   return (
     <div className="space-y-5 p-5">
+      <ReadMark read={read}>your file</ReadMark>
       <Head
         icon={FileText}
         kind="Case file"
@@ -287,7 +361,7 @@ export function FileSource({ caseId, fileId, n }: { caseId?: string; fileId: str
       >
         <Button asChild variant="outline" size="sm">
           <a href={`/cases/${caseId}/files/${f.id}`} target="_blank" rel="noopener">
-            Open the file <ExternalLink />
+            {cited ? `Open the file at page ${cited.page}` : "Open the file"} <ExternalLink />
           </a>
         </Button>
       </Head>

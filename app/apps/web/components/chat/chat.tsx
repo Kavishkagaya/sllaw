@@ -5,7 +5,9 @@ import { useMutation, useQueries, useQuery } from "@tanstack/react-query";
 import {
   ArrowLeft,
   BookMarked,
+  BookOpen,
   Briefcase,
+  Check,
   ChevronLeft,
   ChevronRight,
   FileText,
@@ -21,10 +23,10 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Streamdown } from "streamdown";
+import { BrandMark } from "@/components/brand";
 import { Composer } from "@/components/composer";
 import { SafeImg } from "@/components/safe-img";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -42,7 +44,7 @@ import { useChatStore } from "@/stores/chat-store";
 import { useTRPC } from "@/trpc/client";
 import { CaseChange } from "./case-change";
 import { FileSource, LawSource, lawName, shortPin, TONE, type Tone } from "./source-view";
-import { splitAnswer, Trail } from "./trail";
+import { splitAnswer, Trail, type TrailSource } from "./trail";
 
 /** A citation as the client gets it (real ids; the server maps the model's handles): a law chunk, a case file's
  *  chunk, a whole case file, or an old chat's file page ([[ref:pN|label]], before chunk citations). key is the same
@@ -124,11 +126,23 @@ export function Chat({
   }, [chat, initial]);
   const [open, setOpen] = useState<Cite | null>(null);
   const [sheet, setSheet] = useState(false);
-  // below xl the panel is a sheet; at xl it is always beside the thread
+  const [side, setSide] = useState<"right" | "bottom">("right");
+  // below xl the panel is a sheet (from the bottom on a phone); at xl it is always beside the thread
   const show = useCallback((c: Cite) => {
     setOpen(c);
+    setSide(matchMedia("(min-width: 40rem)").matches ? "right" : "bottom");
     setSheet(!matchMedia("(min-width: 80rem)").matches);
   }, []);
+  // a step's chip in the trail opens its source like a citation does
+  const openSource = useCallback(
+    (t: TrailSource) =>
+      show(
+        t.kind === "law"
+          ? { kind: "law", key: `s:${t.chunkId}`, label: t.label, chunkId: t.chunkId }
+          : { kind: "file", key: `c:${t.fileId}:${t.n}`, label: t.label, fileId: t.fileId, n: t.n },
+      ),
+    [show],
+  );
   // what the agent read in full (a citation of anything else is unverified), and every source the answers cite, in
   // order of first citation: its place is its number
   const { loaded, cites } = useMemo(() => {
@@ -190,31 +204,29 @@ export function Chat({
           return <>{children}</>;
         }
         const ok = c.kind === "page" || loaded.has(c.key);
+        const tone = toneOf(c);
         const chip = (
           <button
             type="button"
             onClick={() => show(c)}
-            aria-label={`Citation ${numbers.get(c.key)}: ${c.label}`}
+            aria-label={`Citation ${numbers.get(c.key)}: ${c.label}${ok ? "" : ", not verified"}`}
             className={cn(
-              "mx-0.5 inline-flex max-w-72 cursor-pointer items-stretch overflow-hidden rounded-md border align-middle font-sans text-xs leading-5.5 font-medium shadow-xs transition-all hover:-translate-y-px hover:shadow-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none active:translate-y-0",
+              "mx-0.5 inline-flex max-w-72 cursor-pointer items-center gap-1 rounded-[5px] border px-1.5 align-[1px] font-sans text-[12.5px] leading-5 font-medium transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
               !ok
-                ? "border-dashed border-destructive/60 bg-destructive/5 text-destructive"
+                ? "border-dashed border-unverified-border bg-unverified text-unverified-ink"
                 : open?.key === c.key
-                  ? TONE[toneOf(c)].on
-                  : TONE[toneOf(c)].chip,
+                  ? TONE[tone].on
+                  : TONE[tone].chip,
             )}
           >
-            <span className="flex shrink-0 items-center gap-1 border-r border-current/40 bg-current/10 px-1.5 font-semibold tabular-nums">
-              {!ok ? (
-                <TriangleAlert className="size-3" />
-              ) : toneOf(c) === "file" ? (
-                <FileText className="size-3" />
-              ) : (
-                <Landmark className="size-3" />
-              )}
+            <span className="shrink-0 tabular-nums opacity-80">
+              {!ok ? <TriangleAlert className="inline size-3 -translate-y-px" /> : tone === "file" ? "▤" : "§"}{" "}
               {numbers.get(c.key)}
             </span>
-            <span className="truncate px-2">{c.label}</span>
+            <span aria-hidden className="opacity-50">
+              ·
+            </span>
+            <span className="truncate">{c.label}</span>
           </button>
         );
         return ok ? (
@@ -222,7 +234,7 @@ export function Chat({
         ) : (
           <Tooltip>
             <TooltipTrigger asChild>{chip}</TooltipTrigger>
-            <TooltipContent>Cited but never read by the agent: unverified</TooltipContent>
+            <TooltipContent>Not verified: Neethi did not read this in this chat</TooltipContent>
           </Tooltip>
         );
       },
@@ -244,7 +256,10 @@ export function Chat({
   return (
     <div className="flex h-full">
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex h-12 shrink-0 items-center gap-2 px-3" style={{ borderBottomWidth: empty ? 0 : 1 }}>
+        <header
+          className="flex h-12 shrink-0 items-center gap-2 bg-card px-3"
+          style={{ borderBottomWidth: empty ? 0 : 1 }}
+        >
           <SidebarTrigger />
           {caseId && caseTitle && (
             <>
@@ -272,18 +287,31 @@ export function Chat({
           {!empty && (
             <Sheet open={sheet} onOpenChange={setSheet}>
               <SheetTrigger asChild>
-                <Button variant="ghost" size="sm" className="xl:hidden">
-                  <BookMarked /> Citations {cites.length > 0 && <Badge variant="secondary">{cites.length}</Badge>}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="rounded-full border-law-border bg-law text-law-ink hover:bg-law-mark xl:hidden"
+                >
+                  <BookMarked /> Sources {cites.length > 0 && <span className="tabular-nums">{cites.length}</span>}
                 </Button>
               </SheetTrigger>
-              <SheetContent className="w-full gap-0 p-0 sm:max-w-xl xl:hidden">
-                <SheetTitle className="sr-only">Citations</SheetTitle>
+              <SheetContent
+                side={side}
+                className={cn(
+                  "gap-0 p-0 xl:hidden",
+                  side === "bottom" ? "max-h-[85svh] rounded-t-2xl" : "w-full sm:max-w-xl",
+                )}
+              >
+                {side === "bottom" && (
+                  <span aria-hidden className="mx-auto mt-2.5 h-1 w-9 shrink-0 rounded-full bg-input" />
+                )}
+                <SheetTitle className="sr-only">Sources</SheetTitle>
                 {panel}
               </SheetContent>
             </Sheet>
           )}
         </header>
-        <div className={cn("flex min-h-0 flex-1 flex-col", empty && "justify-center pb-24")}>
+        <div className={cn("dots flex min-h-0 flex-1 flex-col", empty && "justify-center pb-24")}>
           <AnimatePresence mode="popLayout" initial={false}>
             {empty ? (
               <motion.div
@@ -292,7 +320,8 @@ export function Chat({
                 transition={{ duration: 0.2 }}
                 className="mx-auto w-full max-w-2xl space-y-2 px-4 pb-8 text-center"
               >
-                <h2 className="text-3xl font-semibold tracking-tight sm:text-4xl">
+                <BrandMark className="mx-auto mb-4 size-9" />
+                <h2 className="text-3xl font-semibold tracking-[-0.03em] sm:text-4xl">
                   {caseId ? "What would you like to know about this case?" : "What would you like to research?"}
                 </h2>
                 <p className="text-muted-foreground">
@@ -317,20 +346,21 @@ export function Chat({
                         initial={{ opacity: 0, y: 12 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={SPRING}
-                        className="ml-auto max-w-[85%] rounded-2xl rounded-br-sm bg-secondary px-4 py-2.5 whitespace-pre-wrap text-secondary-foreground"
+                        className="ml-auto flex max-w-[85%] flex-col items-end gap-1.5"
                       >
                         {m.parts.map((p, i) =>
-                          p.type === "text" ? (
-                            <span key={i}>{p.text}</span>
-                          ) : p.type === "data-playbook" ? (
+                          p.type === "data-playbook" ? (
                             <span
                               key={i}
-                              className="mt-1.5 flex w-fit rounded-md border bg-background/60 px-1.5 py-px font-mono text-xs text-muted-foreground"
+                              className="inline-flex items-center gap-1.5 rounded-full bg-law px-2.5 py-0.5 text-[11.5px] text-law-ink"
                             >
-                              playbook:{p.data.name}
+                              <BookOpen className="size-3" /> {p.data.name}
                             </span>
                           ) : null,
                         )}
+                        <div className="rounded-[12px_12px_4px_12px] bg-ink px-4 py-3 text-[15px] leading-normal whitespace-pre-wrap text-paper">
+                          {m.parts.map((p, i) => (p.type === "text" ? <span key={i}>{p.text}</span> : null))}
+                        </div>
                       </motion.div>
                     ) : (
                       <motion.div key={m.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
@@ -339,14 +369,16 @@ export function Chat({
                           live={busy && m.id === messages.at(-1)?.id}
                           components={components}
                           caseId={caseId}
+                          loaded={loaded}
+                          onOpen={openSource}
                         />
                       </motion.div>
                     ),
                   )}
                   {status === "submitted" && (
-                    <Step icon={Loader2} spin>
-                      Researching…
-                    </Step>
+                    <div className="rounded-xl border bg-card px-5 py-4 shadow-xs">
+                      <Trail parts={[]} live />
+                    </div>
                   )}
                   {error &&
                     (isLimit(error.message) ? (
@@ -381,6 +413,7 @@ export function Chat({
               draftKey={draftKey}
               placeholder={caseId ? "Ask about this case…" : undefined}
               inCase={!!caseId}
+              caseId={caseId}
               onSend={ask}
               onStop={() => stop(id)}
               busy={busy}
@@ -482,49 +515,66 @@ function Answer({
   live,
   components,
   caseId,
+  loaded,
+  onOpen,
 }: {
   parts: ChatMessage["parts"];
   live: boolean;
   components: Record<string, unknown>;
   caseId?: string;
+  loaded: Set<string>;
+  onOpen: (s: TrailSource) => void;
 }) {
   const { trail, answer } = splitAnswer(parts);
+  const writing = answer.some((p) => p.type === "text" && p.text);
   // the agent's changes to the case office, (docs/APP.md, Case office)
   const changes = parts.flatMap((p) =>
     p.type === "tool-caseUpdate" && p.state === "output-available" && typeof p.output === "object" && p.output.summary
       ? [p.output]
       : [],
   );
+  // this answer's citations: how many were read (checked) and how many were not
+  const keys = new Set<string>();
+  for (const p of answer)
+    if (p.type === "text")
+      for (const x of p.text.matchAll(CITE)) if (citeOf(x).kind !== "page") keys.add(citeOf(x).key);
+  const unread = [...keys].filter((k) => !loaded.has(k)).length;
   return (
-    <div className="flex flex-col gap-3">
-      <Trail parts={trail} live={live && !answer.some((p) => p.type === "text" && p.text)} />
+    <article className="flex flex-col gap-3.5 rounded-xl border bg-card px-4 py-4 shadow-xs sm:px-6 sm:py-5">
+      {(trail.length > 0 || (live && !writing)) && (
+        <div className="flex items-start gap-2.5">
+          {!(live && !writing) && <BrandMark className="mt-2 size-5" />}
+          <div className="min-w-0 flex-1">
+            <Trail parts={trail} live={live && !writing} onOpen={onOpen} />
+          </div>
+        </div>
+      )}
       {answer.map(
         (p, i) =>
           p.type === "text" && (
-            <Streamdown key={i} className="md" components={components as never} isAnimating={live}>
+            <Streamdown key={i} className="md text-[15px]" components={components as never} isAnimating={live}>
               {toLinks(p.text)}
             </Streamdown>
           ),
       )}
       {caseId && changes.map((c, i) => <CaseChange key={i} caseId={caseId} summary={c.summary} />)}
-    </div>
-  );
-}
-
-function Step({
-  icon: Icon,
-  spin,
-  children,
-}: {
-  icon: React.ComponentType<{ className?: string }>;
-  spin?: boolean;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="flex items-center gap-2 text-xs text-muted-foreground">
-      <Icon className={cn("size-3.5", spin && "animate-spin")} />
-      <span className="truncate">{children}</span>
-    </div>
+      {!live && keys.size > 0 && (
+        <div className="flex flex-wrap items-center gap-3 border-t border-dashed pt-3 text-[12.5px] text-muted-foreground">
+          {keys.size - unread > 0 && (
+            <span className="flex items-center gap-1.5 text-ok">
+              <Check className="size-3.5" />
+              {keys.size - unread} {keys.size - unread === 1 ? "citation" : "citations"} checked
+            </span>
+          )}
+          {unread > 0 && (
+            <span className="flex items-center gap-1.5 text-unverified-ink">
+              <TriangleAlert className="size-3.5" />
+              {unread} not verified
+            </span>
+          )}
+        </div>
+      )}
+    </article>
   );
 }
 
@@ -604,8 +654,7 @@ function CitationPanel({
     return (
       <div className="flex h-full flex-col">
         <div className="flex h-12 shrink-0 items-center gap-2 border-b pr-12 pl-4 xl:pr-4">
-          <BookMarked className="size-4 text-muted-foreground" />
-          <h2 className="text-sm font-medium">Citations</h2>
+          <h2 className="label-mono text-[10.5px] text-muted-foreground">Sources</h2>
           {cites.length > 0 && (
             <span className="ml-auto text-xs text-muted-foreground tabular-nums">
               {cites.length} in {groups.length} {groups.length === 1 ? "source" : "sources"}
@@ -616,7 +665,7 @@ function CitationPanel({
           {!cites.length ? (
             <div className="flex flex-col items-center gap-2 px-6 py-16 text-center text-sm text-muted-foreground">
               <BookMarked className="size-5" />
-              The provisions and case documents an answer cites appear here.
+              The law and the case papers an answer cites appear here.
             </div>
           ) : (
             <div className="flex flex-col gap-3">
@@ -660,8 +709,8 @@ function CitationPanel({
                                 <span className="flex items-center gap-1.5">
                                   <span className="truncate font-medium">{where}</span>
                                   {!ok && (
-                                    <span className="flex shrink-0 items-center gap-1 text-[11px] text-destructive">
-                                      <TriangleAlert className="size-3" /> unverified
+                                    <span className="flex shrink-0 items-center gap-1 text-[11px] text-unverified-ink">
+                                      <TriangleAlert className="size-3" /> not verified
                                     </span>
                                   )}
                                 </span>
@@ -731,10 +780,21 @@ function CitationPanel({
         </Button>
       </div>
       <div className="flex-1 overflow-y-auto">
+        {open.kind !== "page" && !loaded.has(open.key) && (
+          <div className="m-5 mb-0 rounded-xl border border-dashed border-unverified-border bg-unverified px-4 py-3.5">
+            <p className="label-mono flex items-center gap-1.5 text-[10px] text-unverified-ink">
+              <TriangleAlert className="size-3" /> Not verified
+            </p>
+            <p className="mt-1.5 text-[15px] font-semibold">Neethi did not read this in this chat</p>
+            <p className="mt-1 text-[13.5px] leading-normal text-muted-foreground">
+              It may be wrong or may not exist. Check it before you rely on it.
+            </p>
+          </div>
+        )}
         {open.kind === "law" ? (
-          <LawSource key={open.key} chunkId={open.chunkId} />
+          <LawSource key={open.key} chunkId={open.chunkId} read={loaded.has(open.key)} />
         ) : open.kind === "file" ? (
-          <FileSource key={open.key} caseId={caseId} fileId={open.fileId} n={open.n} />
+          <FileSource key={open.key} caseId={caseId} fileId={open.fileId} n={open.n} read={loaded.has(open.key)} />
         ) : (
           <p className="p-5 text-sm text-muted-foreground">
             An older citation of a file page. Open the case's files to see it.
