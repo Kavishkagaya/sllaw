@@ -49,10 +49,13 @@ export default async function Landing() {
             <p className="mt-3.5 font-law text-[17px] leading-[1.7]">
               <b>12.</b> (1) {ART_12_1}
             </p>
-            <div className="mt-5 flex gap-4 border-t border-[#3a362e] pt-4 text-[13.5px] text-[#b8b1a4]">
+            <div className="mt-5 flex items-center gap-4 border-t border-[#3a362e] pt-2 text-[13.5px] text-[#b8b1a4]">
               <span>Amended by</span>
               <span>Cited by</span>
-              <Link href="/coverage" className="ml-auto text-[#e6a9b3] hover:text-white">
+              <Link
+                href="/coverage"
+                className="ml-auto inline-flex min-h-11 items-center text-[#e6a9b3] hover:text-white"
+              >
                 What we cover →
               </Link>
             </div>

@@ -2,7 +2,7 @@ import { nextDate } from "@sllaw/office";
 import { AppSidebar } from "@/components/sidebar/app-sidebar";
 import { loadSidebar } from "@/components/sidebar/load";
 import { SidebarInset } from "@/components/ui/sidebar";
-import { fmtDay } from "@/lib/format";
+import { fmtShort } from "@/lib/office";
 import { orNotFound, serverApi } from "@/trpc/server";
 
 // Inside a case: the one sidebar with this case open in place (its pages and chats).
@@ -22,12 +22,12 @@ export default async function CaseLayout({
     loadSidebar(),
   ]);
   const next = office && nextDate(office.office, office.today);
-  const line = [office?.office.header.court, next && fmtDay(next.date)].filter(Boolean).join(" · ");
+  const line = [office?.office.header.court, next && fmtShort(next.date)].filter(Boolean).join(" · ");
   const files = s.cases.find((x) => x.id === id)?.files ?? 0;
   return (
     <>
       <AppSidebar {...s} open={{ id: c.id, title: c.title, line, files, chats }} />
-      <SidebarInset className="h-svh overflow-hidden">{children}</SidebarInset>
+      <SidebarInset className="dots h-svh overflow-hidden">{children}</SidebarInset>
     </>
   );
 }

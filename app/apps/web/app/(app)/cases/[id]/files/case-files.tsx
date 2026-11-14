@@ -10,6 +10,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { ConfirmDelete } from "@/components/confirm-delete";
+import { PapersDrawing } from "@/components/drawn";
 import { FileStateBadge, fileState } from "@/components/file-state";
 import { Button } from "@/components/ui/button";
 import {
@@ -112,7 +113,7 @@ export function CaseFiles({ caseId, initial }: { caseId: string; initial: CaseFi
           onClick={() => input.current?.click()}
           className="mt-6 flex w-full flex-col items-center gap-2 rounded-xl border border-dashed px-6 py-14 text-center transition-colors hover:bg-accent/40"
         >
-          <UploadIcon className="size-7 text-muted-foreground" />
+          <PapersDrawing />
           <span className="font-medium">Drop the case's files here, or click to choose</span>
           <span className="max-w-md text-sm text-muted-foreground">
             PDFs (scans too), Word documents and text, up to 50 MB each. Each file is read, sorted by kind and made
