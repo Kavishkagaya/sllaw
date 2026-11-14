@@ -298,7 +298,8 @@ BASH_RULES = [merge_rebase, no_worktree, headed_browser, downloads, production_w
 # ---- Scope rules (file edits) -----------------------------------------------------------------------------------
 # 2026-11-10 (user): scope together first, then build. A brief (docs/features/<slug>.json) starts in "scoping"; the
 # user's yes on the permission prompt moves it to "agreed"; after that its scope is frozen, and code under app/ or
-# etl/ can only be edited on a branch whose brief is agreed.
+# etl/ can only be edited on a branch whose brief is agreed. 2026-11-14 (user: "I can't agree to scope till I see the
+# result"): a scoping brief with "preview": true (turning it on asks the user) also opens its branch for a preview.
 
 BRIEF = re.compile(r"(^|/)docs/features/[^/]+\.json$")
 FROZEN = ("goal", "for_whom", "done_check", "scenarios", "out_of_scope")
@@ -346,6 +347,8 @@ def brief_edit(tool, inp):
     if was != "scoping" and any(old.get(k) != new.get(k) for k in FROZEN):
         return "deny", ("This scope was agreed with the user and is frozen (goal, for_whom, done_check, scenarios, "
                         "out_of_scope). To change it, ask the user, then set status back to \"scoping\" first.")
+    if new.get("preview") and not old.get("preview"):
+        return "ask", f"Build a preview of \"{new.get('title')}\" for the user to see before agreeing its scope?"
     if was == "scoping" and status == "agreed":
         checks = "; ".join(str(c.get("check", c)) for c in new.get("done_check", []))
         return "ask", f"USER SIGN-OFF: agree the scope of \"{new.get('title')}\"? Done when: {checks}"
@@ -373,7 +376,8 @@ def scope_gate(tool, inp):
                     b = json.load(f)
             except (OSError, ValueError):
                 continue
-            if b.get("branch") == branch and b.get("status") == "agreed":
+            if b.get("branch") == branch and (b.get("status") == "agreed" or
+                                              (b.get("status") == "scoping" and b.get("preview"))):
                 return None
     return "deny", (f"No agreed scope for branch {branch}, so code under app/ or etl/ can't be edited yet. Scope it "
                     "with the user first (/scope), then build on the brief's branch (/build).")

@@ -75,6 +75,9 @@ Each came from a correction or a costly mistake. Guarded = `.claude/hooks/guard.
   main and `vercel --prod` need `VERDICT: PASS` from both validators for that exact commit, in
   `<git-common-dir>/validation/<sha>/`; changes only to `docs/` or `*.md` pass. *Guarded.*
 - **Browser tests run headed** (`agent-browser --headed`); the user watches (2026-10-27). *Guarded.*
+- **Seeing comes before agreeing** (user, 2026-11-14): for work the user judges by eye (a page's look or motion), /scope
+  offers a preview before sign-off: `"preview": true` on the scoping brief (asks the user) opens its branch for
+  edits; the preview runs locally, uncommitted, and the user agrees or reshapes the scope from what they saw. *Guarded.*
 - **Unrelated work during a task goes to a subagent**, so the main thread stays on the task (2026-10-10); **every subagent runs on the cheapest model that can do its job** (user, 2026-11-11):
   chosen per spawn for that job (no agent definition pins one): haiku for search, reading and summaries, sonnet for
   ordinary code and most validation, opus only for hard judgement. *Guarded: every spawn but a fork names `model`.*
@@ -140,7 +143,7 @@ copy matches the base commit), then `bash etl/v2/dagster.sh` with no run active.
 ```bash
 cd app && pnpm check && pnpm typecheck && pnpm test           # app: biome, tsc, vitest (in memory, ~15 s)
 .venv/bin/python3 -m etl.test_structure                       # also etl.test_refs, etl.test_mentions, etl.v2.test_v2
-python3 .claude/hooks/test_guard.py                           # the guards (76 cases)
+python3 .claude/hooks/test_guard.py                           # the guards (78 cases)
 ```
 
 On ampere, against real data (on purpose, they cost): `python -m etl.v2.gate --workers 8` (quality gate),

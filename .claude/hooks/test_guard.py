@@ -149,7 +149,11 @@ with tempfile.TemporaryDirectory() as d:
         ("scoping edits goal freely", edit("Write", bp, content=json.dumps({**brief, "goal": "g2"})), None),
         ("code edit while scoping", edit("Write", code, content="x"), "deny"),
         ("sign-off asks the user", edit("Write", bp, content=json.dumps({**brief, "status": "agreed"})), "ask"),
+        ("preview asks the user", edit("Write", bp, content=json.dumps({**brief, "preview": True})), "ask"),
     ]
+    put({**brief, "preview": True})
+    checks.append(("code edit in a preview", edit("Write", code, content="x"), None))
+    put(brief)
     put({**brief, "status": "agreed"})
     agreed = {**brief, "status": "agreed"}
     checks += [
