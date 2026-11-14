@@ -35,9 +35,13 @@
     {"date": "2026-11-14", "note": "An opened playbook stays open for the chat: its instructions are in the history anyway (user asked; recommended, as in other AI apps)."},
     {"date": "2026-11-14", "note": "No on-demand tools (user): tools are kept as on main, by case or quick chat, and a playbook only says which tools to use. The tool list never changes mid-chat, and a playbook's text is appended at the end, so opening one never breaks the prompt cache. Playbooks are stored as data (name, when, where, text), so lawyer-written ones later have the same shape."},
     {"date": "2026-11-14", "note": "Opened shows in the trail as 'playbook:<name>' (user's wording); manual pick by a button in the question box (user)."},
-    {"date": "2026-11-14", "note": "Playbook names are a lawyer's office words, short nouns: Case papers, Document details, Case diary, Hearing prep (user: the first names read like instructions). Brief reopened for this and agreed again."}
+    {"date": "2026-11-14", "note": "Playbook names are a lawyer's office words, short nouns: Case papers, Document details, Case diary, Hearing prep (user: the first names read like instructions). Brief reopened for this and agreed again."},
+    {"date": "2026-11-14", "note": "Opened by the agent: a `playbook` tool (name from this chat's list) returns the text as a tool result, at the end of the chat and kept in the history. Picked by the lawyer: a `data-playbook` part on their message (no schema change: parts are json), turned into the playbook's text by convertDataPart every turn; a name the chat lacks is dropped. The tool list is fixed per kind of chat, so the cache holds."},
+    {"date": "2026-11-14", "note": "The case page's JSON left the base prompt (it was the last, per-change section): Case diary and Hearing prep read it with caseRead. The case section keeps the facts and the file count (case facts)."},
+    {"date": "2026-11-14", "note": "No playbook is any-chat: every flow moved out of the prompt is about a case. So a quick chat has no playbook section, tool or button; its prompt and tools are byte-identical to main's (cmp, 6,252 chars)."}
   ],
   "progress": [
-    {"date": "2026-11-14", "note": "Scoped with the user in 4 rounds; agreed; issue #57; branch app/playbooks; Neon branch agent/playbooks."}
+    {"date": "2026-11-14", "note": "Scoped with the user in 4 rounds; agreed; issue #57; branch app/playbooks; Neon branch agent/playbooks."},
+    {"date": "2026-11-14", "note": "Built d1-d5 (3f07acd + eval). d1: case-chat system prompt 11,674 chars on main -> 7,831 (Perera v. Silva, `CASE=... tool prompt`, now with the case page as a chat has it); quick chat identical to main. d5: `eval-details` 10/10 corrected (Rs. 51,000 -> 510,000 on the letter of demand, 5 phrasings x2), Document details opened 10/10, no false claim, $0.0046 total. Next: UI walk s1-s5, d6, docs."}
   ]
 }

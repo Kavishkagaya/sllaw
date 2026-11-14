@@ -13,7 +13,8 @@
     "eval-chat": "tsx --env-file=../../apps/web/.env.local scripts/eval-chat.ts",
     "eval-agent": "tsx --env-file=../../apps/web/.env.local scripts/eval-agent.ts",
     "gold-files": "tsx --env-file=../../apps/web/.env.local scripts/gold-files.ts",
-    "tool": "tsx --env-file=../../apps/web/.env.local scripts/tool.ts"
+    "tool": "tsx --env-file=../../apps/web/.env.local scripts/tool.ts",
+    "eval-details": "tsx --env-file=../../apps/web/.env.local scripts/eval-details.ts"
   },
   "devDependencies": {
     "@types/node": "^26.6.5",
