@@ -102,6 +102,13 @@ in v1; an entity graph can be built later from the same per-file JSON.
   `/privacy`, `/terms` (placeholders); Home is `/dashboard`, where sign-in lands. One sidebar
   (`components/sidebar/app-sidebar.tsx`) for every signed-in page: the open case expanded in place. Phones: 44 px
   tap targets (globals.css), the sidebar a drawer, the sources panel a bottom sheet.
+- **The landing moves (landing-motion #62, 2026-11-14):** CSS does the moving (globals.css "landing motion"), keyed on
+  `html[data-motion]`, set only when JS runs and motion is not reduced, so without it the page is still and whole.
+  `[data-reveal]` blocks rise in once (an IntersectionObserver marks `[data-shown]`); the hero (`hero-chat.tsx`) cycles
+  three lawyers' questions, 11 s each, all three in the server HTML layered in one grid cell (no layout jump), the cited
+  Article's card rising after each answer; quotes verbatim from the corpus. Phones: the public header is logo, Start
+  free and a menu (`site-menu.tsx`); one button size on the public site (`btn` in `site.tsx`: 40 px on a phone, 44 px
+  from sm). The user judged it from a live preview over six rounds; their calls are in the brief's decisions.
 - **Build order (2026-10-17):** M1 a law question answered with citations (scaffold #14, gateway #22, research tools
   #16, viewer #20, plain chat #21); M2 case workspace + main agent (#18, #17); M3 file ingestion (#19); M4 onboarding
   (#15). Judgments (#7) block release, not building.
