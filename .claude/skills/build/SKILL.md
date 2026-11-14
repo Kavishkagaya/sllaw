@@ -17,7 +17,8 @@ out to be wrong or impossible: then stop, explain, and reopen it with them (/sco
 **Loop**, one done-check (or scenario) at a time:
 1. Build it in the smallest slice that can be checked. Follow `app/CLAUDE.md` boundaries.
 2. Check it yourself the way the validator will: run the scenario in the headed browser, run the eval, read the
-   numbers. Add unit tests for the logic.
+   numbers. Add unit tests for the logic. Record the walk in `progress` (each scenario, what you saw, ids of what it
+   made, screenshot paths): the validator verifies it instead of walking it again.
 3. Commit on the brief's branch (the commit guard runs the checks). Append one `progress` line: what is done, what is
    next. Record choices in `decisions` (and `docs/APP.md` if they bind future work).
 

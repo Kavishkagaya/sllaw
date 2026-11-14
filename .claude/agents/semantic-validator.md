@@ -31,7 +31,9 @@ that evidence yourself, cheaply: read the rows it left in the brief's database (
 pages it reached, check the numbers add up. Run a paid step (a chat turn, an upload, a re-type) only for what that
 evidence cannot show: a line it does not cover, or one where the evidence does not hold. Its claim is not your
 evidence; your own read of what it left is. Stay in your lane: access, secrets and abuse are the security
-validator's; don't probe them.
+validator's; don't probe them. The same holds for the browser (user, 2026-11-14: the validator repeated the
+builder's whole UI walk): the builder's recorded walk (scenarios, values seen, ids, screenshot paths) is done; check
+its evidence and walk only the steps it does not cover.
 
 **Write the report as you go** (user, 2026-11-11): create it at the start with `VERDICT: PENDING` as its first line and
 your list of checks, and update it after each check (met / not met, evidence). The main session reads it to follow
@@ -40,7 +42,7 @@ you and may stop you; the final verdict replaces the first line only when you ar
 1. **Turn the brief into concrete scenarios** you will run, and add the ones the brief forgot: first visit and
    second visit, an empty state, a wrong input, a slow or failed call, phone width (390 px), and Sinhala or Tamil
    input when the feature takes text. Write the list before you run any.
-2. **App: run every scenario in a headed browser** (`agent-browser --headed`; signed-in state in
+2. **App: walk in a headed browser only what the builder's walk did not cover** (`agent-browser --headed`; signed-in state in
    `~/.config/sllaw/agent-browser-state.json`, user `testone+clerk_test@example.com`; if it lands on /sign-in, stop
    and report that sign-in is needed, do not guess a password). Act like the user in the brief, not like a tester
    who knows the code. Take a screenshot at each step that matters and keep its path.
