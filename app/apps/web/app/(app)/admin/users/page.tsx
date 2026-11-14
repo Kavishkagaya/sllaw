@@ -17,7 +17,7 @@ export default async function AdminUsersPage({ searchParams }: { searchParams: P
         <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
           <div className="flex flex-wrap items-end justify-between gap-3">
             <div>
-              <h1 className="font-serif text-3xl font-semibold tracking-tight">Users</h1>
+              <h1 className="text-3xl font-semibold tracking-tight">Users</h1>
               <p className="text-sm text-muted-foreground">
                 {users.length} {users.length === 1 ? "user" : "users"}. Cost and chats are for the period.
               </p>

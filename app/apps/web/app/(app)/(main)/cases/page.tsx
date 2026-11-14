@@ -22,7 +22,7 @@ export default async function CasesPage() {
       </PageHeader>
       <main className="flex-1 overflow-y-auto">
         <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6">
-          <h1 className="font-serif text-3xl font-semibold tracking-tight">Cases</h1>
+          <h1 className="text-3xl font-semibold tracking-tight">Cases</h1>
           <p className="mt-1 text-sm text-muted-foreground">Each case keeps its facts, chats and files together.</p>
           {cases.length === 0 ? (
             <div className="mt-10 flex flex-col items-center gap-3 rounded-xl border border-dashed px-6 py-16 text-center">
@@ -43,7 +43,7 @@ export default async function CasesPage() {
                 <Link key={c.id} href={`/cases/${c.id}`} className="group rounded-xl focus-visible:outline-none">
                   <Card className="h-full transition-colors group-hover:bg-accent/40 group-focus-visible:ring-2 group-focus-visible:ring-ring">
                     <CardHeader>
-                      <CardTitle className="font-serif text-lg leading-snug">{c.title}</CardTitle>
+                      <CardTitle className="text-lg leading-snug">{c.title}</CardTitle>
                       <CardDescription className="line-clamp-3">
                         {c.facts || <span className="italic">No facts written yet</span>}
                       </CardDescription>

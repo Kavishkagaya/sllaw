@@ -19,6 +19,8 @@ import { useChatStore } from "@/stores/chat-store";
 
 export type SidebarChat = { id: string; title: string; updatedAt: Date };
 export type SidebarCase = { id: string; title: string };
+/** The account's allowance today (or this month), as a share: the bar at the foot, linking to /usage. */
+export type SidebarMeter = { label: string; pct: number };
 
 /** The lists are rendered on the server: render them again when a chat was created or an answer stored. */
 export function useChatListRefresh() {
@@ -29,13 +31,13 @@ export function useChatListRefresh() {
   }, [listVersion, router]);
 }
 
-export function ChatItem({ chat, href }: { chat: SidebarChat; href: string }) {
+export function ChatItem({ chat, href, className }: { chat: SidebarChat; href: string; className?: string }) {
   const path = usePathname();
   const busy = useChatStore((s) => s.busy[chat.id]);
   const unread = useChatStore((s) => s.unread[chat.id]);
   return (
     <SidebarMenuItem>
-      <SidebarMenuButton asChild isActive={path === href}>
+      <SidebarMenuButton asChild isActive={path === href} className={className}>
         <Link href={href}>
           {busy && <Loader2 className="animate-spin text-muted-foreground" />}
           <span>{chat.title}</span>
@@ -43,7 +45,7 @@ export function ChatItem({ chat, href }: { chat: SidebarChat; href: string }) {
       </SidebarMenuButton>
       {unread && !busy && (
         <SidebarMenuBadge>
-          <span role="img" className="size-2 rounded-full bg-brass" aria-label="New answer" />
+          <span role="img" className="size-2 rounded-full bg-primary" aria-label="New answer" />
         </SidebarMenuBadge>
       )}
     </SidebarMenuItem>
@@ -76,20 +78,33 @@ export function Collapsed<T>({
   );
 }
 
-export function AccountFooter({ children }: { children?: React.ReactNode }) {
+export function AccountFooter({ children, meter }: { children?: React.ReactNode; meter?: SidebarMeter | null }) {
   const path = usePathname();
   return (
     <SidebarFooter className="gap-2 border-t p-3">
       {children}
-      <SidebarMenu>
-        <SidebarMenuItem>
-          <SidebarMenuButton asChild isActive={path === "/usage"}>
-            <Link href="/usage">
-              <Gauge /> <span>Usage</span>
-            </Link>
-          </SidebarMenuButton>
-        </SidebarMenuItem>
-      </SidebarMenu>
+      <Link
+        href="/usage"
+        aria-current={path === "/usage" ? "page" : undefined}
+        className="flex flex-col gap-1.5 rounded-md px-2 py-1.5 hover:bg-sidebar-accent aria-[current=page]:bg-sidebar-accent"
+      >
+        <span className="flex items-center justify-between gap-2 text-xs">
+          <span className="flex items-center gap-1.5 font-medium">
+            <Gauge className="size-3.5" /> Usage
+          </span>
+          {meter && <span className="text-muted-foreground tabular-nums">{Math.round(meter.pct)}%</span>}
+        </span>
+        {meter && (
+          <span className="block h-[3px] rounded-full bg-sidebar-border" title={meter.label}>
+            <span
+              className={
+                meter.pct >= 100 ? "block h-full rounded-full bg-destructive" : "block h-full rounded-full bg-primary"
+              }
+              style={{ width: `${Math.min(100, Math.max(2, meter.pct))}%` }}
+            />
+          </span>
+        )}
+      </Link>
       <OrganizationSwitcher
         hidePersonal
         appearance={{ elements: { rootBox: "w-full", organizationSwitcherTrigger: "w-full justify-between" } }}

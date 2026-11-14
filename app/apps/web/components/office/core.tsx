@@ -89,8 +89,8 @@ export function HeaderWidget({ widget, title }: { widget: Widget; title: string 
                 value={h.caseNumber}
                 placeholder="Add the case number"
                 onSave={(v) => set("caseNumber", v)}
-                className="font-serif text-2xl font-semibold tracking-tight tabular-nums sm:text-3xl"
-                inputClassName="h-10 font-serif text-xl"
+                className="text-2xl font-semibold tracking-tight tabular-nums sm:text-3xl"
+                inputClassName="h-10 text-xl"
               />
               <AiMark by={h.by.caseNumber} />
             </div>
@@ -171,7 +171,7 @@ function OutcomeSlip({ d }: { d: CourtDate }) {
   const [purpose, setPurpose] = useState("");
   return (
     <form
-      className="space-y-2 border-t border-dashed border-brass/60 bg-brass/[0.07] px-4 py-3"
+      className="space-y-2 border-t border-dashed border-unverified-border bg-unverified px-4 py-3"
       onSubmit={(e) => {
         e.preventDefault();
         if (outcome.trim())
@@ -222,7 +222,7 @@ export function NextDateWidget({ widget }: { widget: Widget }) {
   const n = next ? daysFrom(today, next.date) : null;
   return (
     <section aria-label="Next date" className="h-full overflow-hidden rounded-lg border bg-card shadow-2xs">
-      <div className="h-1.5 bg-brass" aria-hidden />
+      <div className="h-1.5 bg-primary" aria-hidden />
       <div className="flex items-center justify-between gap-1 pt-2 pr-2 pl-4">
         <h2 className="text-xs text-muted-foreground">Next date</h2>
         <div className="flex items-center">
@@ -243,11 +243,9 @@ export function NextDateWidget({ widget }: { widget: Widget }) {
         ) : next && l ? (
           <>
             <div className="flex items-start gap-4">
-              <div className="font-serif text-6xl leading-[0.85] font-semibold tracking-tight tabular-nums">
-                {l.day}
-              </div>
+              <div className="text-6xl leading-[0.85] font-semibold tracking-tight tabular-nums">{l.day}</div>
               <div className="min-w-0">
-                <div className="font-serif text-lg leading-tight font-semibold">
+                <div className="text-lg leading-tight font-semibold">
                   {l.month} {l.year}
                 </div>
                 <div className="text-sm text-muted-foreground">{l.weekday}</div>
@@ -270,7 +268,7 @@ export function NextDateWidget({ widget }: { widget: Widget }) {
           </>
         ) : (
           <div className="pt-1">
-            <p className="font-serif text-lg">No date ahead</p>
+            <p className="text-lg">No date ahead</p>
             <Button size="sm" variant="outline" className="mt-2" onClick={() => setAdding(true)}>
               <Plus /> Add the next date
             </Button>
@@ -304,7 +302,7 @@ export function JournalWidget({ widget }: { widget: Widget }) {
             return (
               <li key={d.id} className="group grid grid-cols-[4rem_1fr_auto] border-t">
                 <div className={cn("border-r py-2.5 pr-3 text-right", ahead && "text-primary")}>
-                  <div className="font-serif text-xl leading-none font-semibold tabular-nums">{l.day}</div>
+                  <div className="text-xl leading-none font-semibold tabular-nums">{l.day}</div>
                   <div className="mt-0.5 text-xs text-muted-foreground">
                     {l.month}
                     {l.year !== today.slice(0, 4) && ` ${l.year}`}
@@ -325,7 +323,10 @@ export function JournalWidget({ widget }: { widget: Widget }) {
                       value={d.outcome ?? ""}
                       placeholder={open ? "No outcome recorded yet" : "What happened?"}
                       onSave={(v) => run({ op: "date.update", id: d.id, set: { outcome: v || null } })}
-                      className={cn("mt-0.5 block leading-relaxed", open ? "text-brass-ink" : "text-foreground/80")}
+                      className={cn(
+                        "mt-0.5 block leading-relaxed",
+                        open ? "text-unverified-ink" : "text-foreground/80",
+                      )}
                     />
                   )}
                 </div>

@@ -35,3 +35,7 @@ export function fmtNum(n: number) {
   if (s && Math.abs(v) >= 1000) return fmtNum(Math.sign(n) * 1000 * d);
   return `${s ? v : Math.round(n)}${s}`;
 }
+
+/** A diary day ("2026-12-03") short, as on a docket: "3 Dec". */
+export const fmtDay = (day: string) =>
+  new Date(`${day}T00:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" });

@@ -155,7 +155,7 @@ function Board({ title }: { title: string }) {
           </AlertDescription>
         </Alert>
       )}
-      {!cover.some((w) => w.type === "header") && <h1 className="font-serif text-2xl font-semibold">{title}</h1>}
+      {!cover.some((w) => w.type === "header") && <h1 className="text-2xl font-semibold">{title}</h1>}
       <div className="flex flex-col gap-6 lg:grid lg:grid-cols-[minmax(0,1fr)_19rem] lg:items-start lg:gap-x-8 lg:gap-y-8">
         {cover.map((w) =>
           item(

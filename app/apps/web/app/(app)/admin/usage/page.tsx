@@ -26,7 +26,7 @@ export default async function AdminUsagePage({ searchParams }: { searchParams: P
         <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
           <div className="flex flex-wrap items-end justify-between gap-3">
             <div>
-              <h1 className="font-serif text-3xl font-semibold tracking-tight">Usage</h1>
+              <h1 className="text-3xl font-semibold tracking-tight">Usage</h1>
               <PeriodRange from={u.from} to={u.to} />
             </div>
             <PeriodTabs base="/admin/usage" current={period} />

@@ -3,7 +3,7 @@
 // vid (the same id as in the Zilliz `chunks` collection, under 2**53); its text is not in the database but in R2,
 // in the text part kb.docs.parts[part] names (./text.ts). Ids are stable across rebuilds (uuid5 of the chunk's
 // address), but the app database still stores doc_key + label + quote, never a chunk id alone.
-import { bigint, date, integer, jsonb, pgSchema, text, uuid } from "drizzle-orm/pg-core";
+import { bigint, date, integer, jsonb, pgSchema, text, timestamp, uuid } from "drizzle-orm/pg-core";
 
 const kb = pgSchema("kb");
 
@@ -19,6 +19,7 @@ export const docs = kb.table("docs", {
   sourceUrl: text("source_url"), // the official page or PDF the text was built from
   parts: text().array().notNull(), // R2 keys of the text parts, in order
   meta: jsonb(),
+  publishedAt: timestamp("published_at", { withTimezone: true }).notNull(),
 });
 
 export const chunks = kb.table("chunks", {

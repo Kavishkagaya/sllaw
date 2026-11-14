@@ -67,7 +67,7 @@ const citeOf = (m: RegExpMatchArray): Cite => {
   if (file) return { kind: "file", key: `f:${file}`, label: l || "case file", fileId: file, n: null };
   return { kind: "page", key: `p:${ref}:${page}|${l}`, label: l || `p. ${page}` };
 };
-/** Laws are brass, the user's own case files blue (an old page citation is a case file too). */
+/** Laws in the oxblood tint, the user's own case files neutral (an old page citation is a case file too). */
 const toneOf = (c: Cite): Tone => (c.kind === "law" ? "law" : "file");
 const toLinks = (s: string) =>
   s.replace(CITE, (...m) => {
@@ -292,7 +292,7 @@ export function Chat({
                 transition={{ duration: 0.2 }}
                 className="mx-auto w-full max-w-2xl space-y-2 px-4 pb-8 text-center"
               >
-                <h2 className="font-serif text-3xl font-semibold tracking-tight sm:text-4xl">
+                <h2 className="text-3xl font-semibold tracking-tight sm:text-4xl">
                   {caseId ? "What would you like to know about this case?" : "What would you like to research?"}
                 </h2>
                 <p className="text-muted-foreground">
@@ -634,7 +634,7 @@ function CitationPanel({
                         <Icon className="size-3.5" />
                       </span>
                       <div className="min-w-0">
-                        <h3 className="font-serif text-[15px] leading-snug font-semibold">{g.title}</h3>
+                        <h3 className="text-[15px] leading-snug font-semibold">{g.title}</h3>
                         {g.sub && <p className="text-xs text-muted-foreground">{g.sub}</p>}
                       </div>
                     </header>
@@ -666,7 +666,7 @@ function CitationPanel({
                                   )}
                                 </span>
                                 {snippet && (
-                                  <span className="mt-0.5 line-clamp-2 font-serif text-xs leading-snug text-muted-foreground">
+                                  <span className="mt-0.5 line-clamp-2 text-xs leading-snug text-muted-foreground">
                                     {snippet}
                                   </span>
                                 )}

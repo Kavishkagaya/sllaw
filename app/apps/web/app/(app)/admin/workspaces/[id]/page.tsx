@@ -36,7 +36,7 @@ export default async function AdminWorkspacePage({
         <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
           <div className="flex flex-wrap items-end justify-between gap-3">
             <div>
-              <h1 className="font-serif text-3xl font-semibold tracking-tight">{w.workspace.name}</h1>
+              <h1 className="text-3xl font-semibold tracking-tight">{w.workspace.name}</h1>
               <p className="text-sm text-muted-foreground">
                 Created {fmtDate(w.workspace.createdAt)} · {w.workspace.members} members · {w.workspace.cases} cases ·{" "}
                 {w.workspace.files} files ({fmtSize(w.workspace.storedBytes)} stored)

@@ -43,7 +43,7 @@ export default async function CaseFilePage({ params }: { params: Promise<{ id: s
       <main className="flex-1 overflow-y-auto">
         <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6">
           {f.category && <Badge variant="secondary">{docTypeLabel(f.category)}</Badge>}
-          <h1 className="mt-2 font-serif text-3xl leading-tight font-semibold tracking-tight">{m.title || f.name}</h1>
+          <h1 className="mt-2 text-3xl leading-tight font-semibold tracking-tight">{m.title || f.name}</h1>
           <p className="mt-2 text-sm text-muted-foreground">
             {[
               m.title && f.name,
@@ -85,7 +85,7 @@ export default async function CaseFilePage({ params }: { params: Promise<{ id: s
             <>
               <Separator className="my-8" />
               <h2 className="mb-2 text-sm font-medium">Summary</h2>
-              <p className="font-serif leading-relaxed">{v.summary}</p>
+              <p className="leading-relaxed">{v.summary}</p>
             </>
           )}
 

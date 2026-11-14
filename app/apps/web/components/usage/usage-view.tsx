@@ -32,7 +32,7 @@ export function UsageView({ s }: { s: Status }) {
     <div className="grid gap-4">
       <Card>
         <CardHeader>
-          <CardTitle className="font-serif text-xl">{s.money ? "Model spend" : "Allowance"}</CardTitle>
+          <CardTitle className="text-xl">{s.money ? "Model spend" : "Allowance"}</CardTitle>
           <p className="text-sm text-muted-foreground">
             {s.money
               ? "What the gateway billed for their model calls: chat, reading their files, re-typing a file."
@@ -76,7 +76,7 @@ export function UsageView({ s }: { s: Status }) {
       </Card>
       <Card>
         <CardHeader>
-          <CardTitle className="font-serif text-xl">Other limits</CardTitle>
+          <CardTitle className="text-xl">Other limits</CardTitle>
         </CardHeader>
         <CardContent className="grid gap-5 md:grid-cols-2">
           {rest.map((l) =>

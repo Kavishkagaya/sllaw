@@ -16,7 +16,7 @@ export default async function NewCasePage() {
       <PageHeader crumbs={[{ label: "Cases", href: "/cases" }, { label: "New case" }]} />
       <main className="flex-1 overflow-y-auto">
         <div className="mx-auto max-w-2xl px-4 py-8 sm:px-6">
-          <h1 className="font-serif text-3xl font-semibold tracking-tight">
+          <h1 className="text-3xl font-semibold tracking-tight">
             {first ? "Let's set up your first case" : "New case"}
           </h1>
           <p className="mt-1 mb-6 text-sm text-muted-foreground">

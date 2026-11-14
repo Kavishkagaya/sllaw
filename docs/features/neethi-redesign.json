@@ -1,0 +1,47 @@
+{
+  "title": "Neethi: new brand, public site and app redesign",
+  "slug": "neethi-redesign",
+  "status": "agreed",
+  "branch": "app/neethi-redesign",
+  "issue": 59,
+  "neon_branch": {"name": "agent/neethi-redesign", "id": "br-winter-mode-b7nx4lmf"},
+  "goal": "A proper professional lawyer UI and layout with a modern look, made more interesting with dot-matrix texture and drawn SVGs. Every page reworked (the sidebar navigation was confusing, the look generic, the chat cramped, the pages cluttered). A public site built now: the real home is the public page, the current home moves to /dashboard. The product is named Neethi. The main thing is the AI colleague; the second is the Case workspace, our moat.",
+  "for_whom": "A practising Sri Lankan lawyer: first as a visitor deciding whether to sign up, then every day in their cases, on a laptop and on a phone at court.",
+  "done_check": [
+    {"id": "d1", "check": "Brand: the product is Neethi everywhere a user sees a name (page titles, sidebar, public pages, sign-in and sign-up, emails we control); the logo is the single-stroke arch mark in oxblood with the lowercase wordmark 'neethi' in Instrument Sans 600; the favicon and app icon are the white arch on an oxblood or ink tile and read at 16 px. No 'sllaw' left in the UI."},
+    {"id": "d2", "check": "The look is the agreed Oxblood direction, as tokens in globals.css for light and dark: ink #16140f on paper #fbfaf7, oxblood #7d1d2c the one action colour, its soft tint for law citations, a neutral tint for case-file citations; Instrument Sans for the interface, Source Serif 4 only for statute text, Geist Mono for small labels; the dot-matrix texture and line-drawn SVGs used on the landing, empty states and page headers. Navy and brass are gone. Clerk's sign-in and sign-up match."},
+    {"id": "d3", "check": "Public landing at / in the agreed order: header (logo, Product, Coverage, Pricing, FAQ, Sign in, Start free); hero 'Introducing Neethi · Your AI colleague for Sri Lankan law' with a drawn chat preview citing real constitutional text; 'Introducing Case' as a split section (four points, fanned case papers), sharing with juniors marked Coming soon; 'Your colleague, at work' (four tiles); the law-as-it-stands band; Trust; Pricing; FAQ; closing banner; footer. Every quoted law is verbatim from our corpus."},
+    {"id": "d4", "check": "Public pages /pricing (Free Rs. 0, Lawyer and Chambers with prices to be announced), /coverage (live counts of Acts and Laws, Revised Edition chapters and amendments followed, and the last update date, from kb in one cached query of a few rows), /privacy and /terms (placeholder text, plainly marked for the user to replace). They open without a session; signed in, the header offers 'Open Neethi' to /dashboard."},
+    {"id": "d5", "check": "Today's Home is at /dashboard (greeting, a question box first, This week, Cases as docket cards); signing in lands there, and every in-app link to Home goes there."},
+    {"id": "d6", "check": "One sidebar replaces the two: Dashboard, Cases, the open case expanded in place (Overview, Files, its chats, Case settings), other recent cases, Quick chats, and the account with the usage meter at the foot. From any page a lawyer can see which case they are in and get back to the dashboard in one click."},
+    {"id": "d7", "check": "The chat, in a case and quick: the lawyer's message as an ink bubble, the answer as a card with law chips (oxblood tint) and file chips (neutral), its trail folded into one line; the sources panel shows the law in Source Serif with the cited text highlighted and its amendments on a timeline; the question box floats at the foot with attach and Playbooks. Streaming, stop, citations, the trail and playbooks behave as on main."},
+    {"id": "d8", "check": "Every other page is in the same system: cases list, new case and onboarding, case overview (the workspace: header with court and next date, files, diary, ask), files and file details, case settings, usage, the document viewer, admin, and the 404."},
+    {"id": "d9", "check": "Every page works at 390 px wide with no sideways scroll: the sidebar is a drawer, the sources panel a bottom sheet, tap targets at least 44 px; and every page reads in dark mode."},
+    {"id": "d11", "check": "The colleague at work, as on the board 'App · The colleague at work': while it works, steps appear live in a lawyer's words on a dotted thread, with the working arch, a timer and Stop; finished, the trail folds to one line and opens into sentences (what it looked for, what it found, chips that open in the panel), thinking as a short excerpt, a playbook as a tag on the message and as a step; three citation kinds look the same in the answer and the panel: law (read, in force), the lawyer's file (read, at the page), not verified (amber, dashed, with the warning); a law's amendments drawn as a timeline from the changes the panel already loads (enactment year from the key, undated changes listed without a dot). No change to what the agent does or costs."},
+    {"id": "d10", "check": "The app checks pass; a headed UI walk records a screenshot of each page in light, dark and at phone width (paths in progress), on the brief's own database."}
+  ],
+  "scenarios": [
+    {"id": "s1", "steps": "A lawyer who has never heard of Neethi opens /, reads down the page, opens Pricing and Coverage, then presses Start free and signs up.", "expect": "The landing reads as one story (colleague first, Case second); Coverage shows real counts; after sign-up the first-case setup opens, then the case, and later sign-ins land on /dashboard."},
+    {"id": "s2", "steps": "In a case, the lawyer asks 'Was he told why he was arrested?' and opens a citation; then does the same on a phone.", "expect": "The answer card cites the Article and the file page; the law opens beside the thread in serif, highlighted, with its amendments; on the phone it opens as a sheet and the sidebar as a drawer."},
+    {"id": "s3", "steps": "A signed-in lawyer types the bare domain.", "expect": "The landing shows with 'Open Neethi' in the header, which goes to /dashboard."}
+  ],
+  "out_of_scope": [
+    "Buying a domain (neethi.lk suggested); real prices; the legal wording of privacy and terms.",
+    "New features beyond the layout: search or a command palette, sharing cases with juniors (shown as Coming soon), reminders, a month calendar.",
+    "Any change to the agent, its prompts, tools or costs.",
+    "Translating the interface into Sinhala or Tamil.",
+    "Analytics, cookie banners, a blog or a waitlist."
+  ],
+  "decisions": [
+    {"date": "2026-11-14", "note": "Name Neethi (Sinhala නීති law, Tamil நீதி justice); no product of that name found; Kerala's 'Neeti' (Dharmabot AI) is the nearest. neethi.lk over .ai on price (user)."},
+    {"date": "2026-11-14", "note": "Logo: the arch (court doorway and lowercase n), minimal like Claude's mark; wordmark sans, not serif, which read as old firm (user)."},
+    {"date": "2026-11-14", "note": "Look: Oxblood over Ink & Emerald, Mono & Signal and Graphite & Saffron: the most Sri Lankan and the most legal while modern; navy and brass dropped (user)."},
+    {"date": "2026-11-14", "note": "Story: the AI colleague is the main thing; Case, the workspace, is the moat and comes second; one hero only (user)."},
+    {"date": "2026-11-14", "note": "Sign-up open (not a waitlist); pricing shows Free, Lawyer, Chambers without prices; coverage counts live; one brief and one PR built in stages (tokens and shell, chat, other app pages, public site) (user)."},
+    {"date": "2026-11-14", "note": "Reopened to add the chat's working parts (live steps, opened trail, playbooks, citation states, amendment timeline) after a board for them; the timeline is a drawing of corpus.chunk's changes, no new data (user)."},
+    {"date": "2026-11-14", "note": "Mockup agreed: claude.ai/artifact/4ghdf5b5xBRU7PvzfAHoKx (landing final; app boards give the direction, their sample content is not to be copied)."}
+  ],
+  "progress": [
+    {"date": "2026-11-14", "note": "Scoped with the user over a canvas mockup (landing final, app boards as direction); agreed; issue #59; branch app/neethi-redesign off origin/main; Neon branch agent/neethi-redesign, .env.local points at it (production kept in .env.main)."}
+  ]
+}

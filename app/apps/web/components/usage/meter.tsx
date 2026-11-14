@@ -62,7 +62,7 @@ export function Meter({
           <div
             className={cn(
               "h-full rounded-full transition-[width]",
-              share >= 1 ? "bg-destructive" : share >= 0.8 ? "bg-brass" : "bg-primary",
+              share >= 1 ? "bg-destructive" : share >= 0.8 ? "bg-unverified-border" : "bg-primary",
             )}
             style={{ width: used ? `max(4px, ${pct(used)})` : 0 }}
           />
