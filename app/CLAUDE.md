@@ -65,7 +65,11 @@ office: imported by db, ai, services, api, apps/web (pure: the case office's sch
   conditional on the turn's input. A new kind of chat or source is a new section and tool group with a `when`, not an
   edit to one string. Sections that change per chat (the case) go last, for the prompt cache. Guardrails
   (`prompt/guard.ts`): `groundRules` in every prompt, user and file text fenced with `data(tag, text)`, and tools only
-  for what the chat may use (no file tools outside a case).
+  for what the chat may use (no file tools outside a case). A flow beyond law research (files, a file's details, the
+  case page, hearing prep) is a **playbook** (`src/playbooks.ts`: name, when, where, text), not a prompt section: the
+  base prompt lists the chat's playbooks, the agent opens one with the `playbook` tool or the lawyer picks one (a
+  `data-playbook` part on their message), and its text lands at the end of the chat (docs/APP.md, Playbooks). A new
+  flow is a new playbook; tools stay fixed per kind of chat.
 - **`usage`**: the meter (docs/APP.md, Usage ledger): `meter(event)` where a paid call's size is known (model
   middleware, embed, Zilliz, OCR), `withUsage(scope, fn)` in services around a chat turn or a file step (who it is
   for), `flushUsage()` before the function ends, and the sink services sets (`services/src/usage.ts` ->
@@ -126,4 +130,5 @@ a retryable `StepTimeout`: 3 attempts, then failed with "Try again". Raise them 
 Vitest (`vitest.config.mts`): `*.test.ts` beside the code in `packages/*/src`, in memory only (no database, R2, model
 or Zilliz), run by `pnpm test`. The file pipelines: `services/src/files/{pipeline,errors}.test.ts`,
 `extract/src/extract.test.ts`, `search/src/chunk.test.ts`. Checks against real services stay scripts, run on
-purpose: `services check-accounts` and `services check-cases` (dev database), `services eval-chat` and `search eval` (model and Zilliz, cost).
+purpose: `services check-accounts` and `services check-cases` (dev database), `services eval-chat`, `services eval-details` (a file's details corrected when asked, in a
+case chat; writes that file's details) and `search eval` (model and Zilliz, cost).
