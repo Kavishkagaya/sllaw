@@ -1,0 +1,39 @@
+{
+  "title": "A landing that moves",
+  "slug": "landing-motion",
+  "status": "agreed",
+  "branch": "app/landing-motion",
+  "issue": 61,
+  "neon_branch": {"name": "agent/landing-motion", "id": "br-billowing-wave-b7tahs47"},
+  "goal": "The public landing (/) is too static, not even smooth scrolling: add liveness to it (user, 2026-11-14). Native smooth scrolling; the hero chat plays itself; sections reveal as they are scrolled to; nothing moves for someone who asked their OS to reduce motion.",
+  "for_whom": "A practising lawyer visiting the public landing before signing up, on a laptop or a phone.",
+  "done_check": [
+    {"id": "d1", "check": "Smooth scrolling: 'See it work on a case', 'Introducing Neethi' and every in-page anchor glide to their section (CSS scroll-behavior: smooth, no scroll library); the wheel and touch scroll as before."},
+    {"id": "d2", "check": "The hero chat keeps playing: three lawyers' questions in turn (an arrest with no reason given, Art. 13(1); custody with no Magistrate, Art. 13(2); a transfer refused for caste, Art. 12(2)), about 11 s each, forever. Each plays in about 4-5 s: the question appears, the trail ticks to 'Read 2 Articles · checked 2 citations', the answer arrives in pieces; only when the answer is done does the cited Article's card rise under the chat (its chip in the answer pulses, then the quoted text lights); then it fades out and the next plays. The card reads as the app: a 'New chat' header with three bars showing which question is playing, a blinking caret in 'Ask a follow-up…', a soft glow behind. Every quoted law is verbatim from the corpus; the card never changes size (all three are in the server HTML, layered)."},
+    {"id": "d3", "check": "Scroll reveals: each section's heading and body fade and rise into view the first time they enter the viewport (once, not on every pass); the 'at work' tiles and trust items come in staggered; the case's papers fan out to their angles; the amendment timeline on 'The law as it stands' draws from 1978 to TODAY."},
+    {"id": "d4", "check": "With prefers-reduced-motion: reduce, the page is exactly today's: everything visible at once, no playing hero, instant anchor jumps."},
+    {"id": "d5", "check": "Nothing breaks: all text is in the server-rendered HTML (readable with JavaScript off and by search engines), no horizontal scroll at 390 px, the page still renders the live coverage counts, and the checks pass."}
+  ],
+  "scenarios": [
+    {"id": "s1", "steps": "Open / on a laptop, watch the hero, then click 'See it work on a case' and scroll to the end.", "expect": "The question, trail and answer play in, Art. 13(1) lights; the click glides to the Case section; the papers fan out, the tiles stagger in, the timeline draws, pricing and FAQ rise in; nothing replays on scrolling back up."},
+    {"id": "s2", "steps": "Open / at 390 px wide and scroll through.", "expect": "The same motion, no horizontal scroll, no overlapping papers."},
+    {"id": "s3", "steps": "Turn on reduce motion (browser emulation) and open /.", "expect": "The page as it was before this change: still and complete."}
+  ],
+  "out_of_scope": [
+    "The signed-in Home (/dashboard) and other pages (/pricing, /coverage).",
+    "Inertial or 'buttery' scroll libraries (Lenis) and any new package: motion is already installed.",
+    "Parallax, hover effects, a replay button.",
+    "Changing the landing's copy or order, or its design beyond the hero's layout."
+  ],
+  "decisions": [
+    {"date": "2026-11-14", "note": "Round 1 with the user: the public landing only; hero plays + reveals (not reveals only, not parallax); native smooth scroll (not Lenis); reduced motion = everything still."},
+    {"date": "2026-11-14", "note": "After the preview (user): the hero needs recurring animation; chose cycling questions over replaying one exchange or ambient-only. The two new quotes (Art. 12(2), 13(2)) and Art. 126 read from the corpus (kb + R2 text parts) for verbatim text."},
+    {"date": "2026-11-14", "note": "After the preview (user): the hero side by side so the animation gets the eye: from lg (1024 px) the words left, the playing chat right, both above the fold at 1440x900; below lg it stays stacked and centred. The arch's dot drawing is hidden side by side (it showed as a stray row of dots)."},
+    {"date": "2026-11-14", "note": "After the preview (user): the citation panel must come after the answer; and a more appealing hero. The panel left the card's side and became a card rising under the chat at 3.8 s (chip pulse, then mark at 4.3 s); added the chat header with progress bars, caret and glow."},
+    {"date": "2026-11-14", "note": "Phone start (user: 'mobile is shit', 'too much content'): below 640 px the hero is the heading (34 px, two lines), one button, then the chat, which now starts about 350 px down at 390x844; the badge, intro paragraph, second button and language line show from sm up. The site header fits one row plus the nav row (it wrapped to three)."},
+    {"date": "2026-11-14", "note": "Phone, second pass (user: still ugly, congested nav, buttons too large, looks old): the pattern of current product landings: below 640 px the header is the logo, a slim Start free and a menu button (components/public/site-menu.tsx: the links, Sign in and the theme; closes on a pick, Escape or scroll); the hero is a small badge, a 38 px heading, one content-sized button, then the chat card at screenshot scale (13.5 px text, the follow-up line hidden). Questions 2 and 3 reworded shorter so the three are within 21 px of each other in height (248/269/268 px at 390 px; was 248/311/268), so the card has no empty band."},
+    {"date": "2026-11-14", "note": "Buttons uniform (user): one size for every public-site button, `btn` in components/public/site.tsx (40 px, 14 px text on a phone; 44 px, 15 px from sm; 8 px corners); cta, ctaQuiet, the Plans buttons and the closing banner's white button are that size in their own colours. Measured at 390 px: every button 40 px / 14 px."}
+  ],
+  "progress": [{"date": "2026-11-14", "note": "Scoped with the user in one round; issue #61; branch app/landing-motion off origin/main, database agent/landing-motion (.env.local points at it, production kept as .env.main)."},
+    {"date": "2026-11-14", "note": "Built as a preview the user steered over six rounds (decisions), then signed off. How: CSS does the moving (globals.css 'landing motion'), keyed on html[data-motion], which an inline script sets before first paint and components/public/landing-motion.tsx sets on client navigation, both only under prefers-reduced-motion: no-preference; one IntersectionObserver marks [data-reveal] blocks [data-shown] once. The hero is components/public/hero-chat.tsx (client): three exchanges layered in one grid cell (all in the server HTML), the active one gets .hero-play, an 11 s interval moves on. Quotes: Constitution Arts 12, 13, 126 read from the corpus (docWithChunks('constitution'), text from R2) on 2026-11-14; the hero quotes 12(2), 13(1), 13(2) verbatim (12(2), 13(2) cut with an ellipsis). Walked headed on localhost:3000: 1440x900, both columns above the fold, the citation card absent at 2 s and present at 6 s (scratchpad hero-2s.png, hero-6s.png); the three exchanges in turn at 0/12/23 s; scrolled to the end: 24/24 [data-reveal] shown, no horizontal scroll; 390x844: header one row + menu (m8.png), the hero (m7.png), every button 40 px/14 px, no horizontal scroll. d4: agent-browser's reduced-motion emulation did not take (matchMedia stayed false), so checked in two halves: with data-motion removed, 0 hidden blocks, 0 animations, scroll-behavior auto; and the only two starters (MOTION_FLAG/LandingMotion, HeroChat's interval) return early unless no-preference. NOT checked: a real device, Safari, the light theme's look, JS off (the CSS needs data-motion, which only JS sets, so everything shows)."}]
+}
