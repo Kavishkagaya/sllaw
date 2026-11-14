@@ -4,7 +4,7 @@
   "status": "merged",
   "branch": "app/case-office",
   "issue": 43,
-  "neon_branch": {"name": "agent/case-office", "id": "br-autumn-sea-b7s87tr0"},
+  "neon_branch": null,
   "goal": "The case page becomes the lawyer's office file, so they are never lost and can manage the case from it: a case header (court, case number, kind, our side, stage, client), the people in the case, a court diary (next date and a journal of every date), tasks with deadlines, and a diary across all cases on Home. The dashboard is JSON drawn from a fixed widget catalog, so the agent can change it (user: 'UI must be changeable by the agent ... json renderer'); the agent may change layout and data directly, every change marked 'by AI' with undo; core widgets stay pinned.",
   "for_whom": "A practising Sri Lankan lawyer running many cases in different courts, who needs each case's next date, what is due and who is involved at a glance, on a desktop in chambers and on a phone in the court corridor.",
   "done_check": [
