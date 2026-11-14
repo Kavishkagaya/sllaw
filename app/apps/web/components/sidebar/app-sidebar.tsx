@@ -173,7 +173,7 @@ function OpenCaseTree({ open, path }: { open: OpenCase; path: string }) {
         <Link
           href={`${base}/chats`}
           title="New chat in this case"
-          className="flex size-6 items-center justify-center rounded-md text-muted-foreground hover:bg-sidebar-accent hover:text-foreground"
+          className="flex size-11 items-center justify-center rounded-md text-muted-foreground hover:bg-sidebar-accent hover:text-foreground sm:size-6"
         >
           <MessageSquarePlus className="size-3.5" /> <span className="sr-only">New chat in this case</span>
         </Link>

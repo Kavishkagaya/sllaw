@@ -244,3 +244,15 @@
     stroke-dasharray: none;
   }
 }
+/* phones (d9): every control is at least 44 px to tap */
+@media (max-width: 639px) {
+  [data-slot="button"],
+  [data-slot="dropdown-menu-trigger"],
+  [data-sidebar="menu-button"],
+  [data-sidebar="menu-sub-button"],
+  [data-sidebar="group-action"],
+  [data-sidebar="trigger"] {
+    min-height: 44px;
+    min-width: 44px;
+  }
+}
