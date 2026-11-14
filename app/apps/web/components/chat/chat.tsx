@@ -109,7 +109,6 @@ export function Chat({
   // the chat lives in the store: this page only shows it, and leaving the page does not stop an answer
   const chat = useChatStore((s) => s.open)(id, initial, caseId);
   const send = useChatStore((s) => s.send);
-  const setDraft = useChatStore((s) => s.setDraft);
   const draftKey = fresh ? (caseId ? `new:${caseId}` : "new") : id;
   const stop = useChatStore((s) => s.stop);
   const { messages, status, error } = useChat<ChatMessage>({ chat });
@@ -329,7 +328,6 @@ export function Chat({
                           live={busy && m.id === messages.at(-1)?.id}
                           components={components}
                           caseId={caseId}
-                          onAsk={!busy && m.id === messages.at(-1)?.id ? (q) => setDraft(draftKey, q) : undefined}
                         />
                       </motion.div>
                     ),
@@ -472,13 +470,11 @@ function Answer({
   live,
   components,
   caseId,
-  onAsk,
 }: {
   parts: ChatMessage["parts"];
   live: boolean;
   components: Record<string, unknown>;
   caseId?: string;
-  onAsk?: (question: string) => void;
 }) {
   const { trail, answer } = splitAnswer(parts);
   // the agent's changes to the case office, (docs/APP.md, Case office)
@@ -486,10 +482,6 @@ function Answer({
     p.type === "tool-caseUpdate" && p.state === "output-available" && typeof p.output === "object" && p.output.summary
       ? [p.output]
       : [],
-  );
-  // the facts the agent asked for: each a chip that puts the question in the reply box
-  const questions = parts.flatMap((p) =>
-    p.type === "tool-ask" && p.state === "output-available" ? p.output.questions : [],
   );
   return (
     <div className="flex flex-col gap-3">
@@ -503,20 +495,6 @@ function Answer({
           ),
       )}
       {caseId && changes.map((c, i) => <CaseChange key={i} caseId={caseId} summary={c.summary} />)}
-      {onAsk && questions.length > 0 && (
-        <div className="flex flex-wrap gap-2">
-          {questions.map((q) => (
-            <button
-              type="button"
-              key={q}
-              onClick={() => onAsk(q)}
-              className="rounded-full border bg-card px-3 py-1.5 text-left text-sm shadow-xs transition-colors hover:bg-accent hover:text-accent-foreground"
-            >
-              {q}
-            </button>
-          ))}
-        </div>
-      )}
     </div>
   );
 }
