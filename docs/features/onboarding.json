@@ -1,0 +1,41 @@
+{
+  "title": "Onboarding and new case: tell it, check it, first brief",
+  "slug": "onboarding",
+  "status": "agreed",
+  "branch": "app/onboarding",
+  "issue": 51,
+  "neon_branch": {"name": "agent/onboarding", "id": "br-icy-scene-b7l82i7m"},
+  "goal": "A new lawyer gets from sign-up to a cited first brief on their own case in about a minute, and every new case after that starts the same way: describe it (type or drop files), check one card, land in the case with a first brief. Interactive, not time-exhausting, and every step makes sense to a lawyer.",
+  "for_whom": "A practising Sri Lankan lawyer: signing up for the first time, and every time they open a new case.",
+  "done_check": [
+    {"id": "d1", "check": "No profile screen. A new user with no cases lands after sign-up on the New case screen headed \"Let's set up your first case\"; a user with cases who clicks New case gets the same screen with its usual heading."},
+    {"id": "d2", "check": "New case is one box (\"Tell us about the case\", any language: Sinhala, Tamil, English or mixed) plus dropped files (PDF, .docx, phone photos of scans). At least one of text or a file is needed."},
+    {"id": "d3", "check": "While files are read each shows a live line (reading, page progress, then what it is, e.g. \"Plaint: Perera v. Silva, DC Colombo 12345/L\"), and what has been found so far (court, parties, dates) appears as it comes. The draft is made once every file is read."},
+    {"id": "d4", "check": "A check card shows title, court, case number, our side, stage, client and other parties, next date, and missing facts each with one line on why it matters. Fields come out in English, names as written; anything the text and files don't say is blank, never invented; every field is editable in place. Nothing is saved before \"Looks right\"."},
+    {"id": "d5", "check": "\"Looks right\" creates the case with its files and fills the case page (header, people, next date) through the same office operations the page and agent use, then opens the case."},
+    {"id": "d6", "check": "On landing, a first brief streams in the case chat by itself: the issues, the sections that apply as amended today (cited, opening in the viewer), and the missing facts, each with a reply chip that puts the question in the box. It counts as 1 message; over the daily limit the case is still created and the usual limit notice shows."},
+    {"id": "d7", "check": "The draft is a model call metered like any other (a usage event, priced, checked against the plan's spend). Sign-up to the brief streaming is 3 screens or fewer and works at 390 px."}
+  ],
+  "scenarios": [
+    {"id": "s1", "steps": "Sign up as a new lawyer; type three lines: client Perera, plaintiff, land in Kotte, DC Colombo 12345/L, Silva won't vacate, next date 3 December for trial.", "expect": "\"Let's set up your first case\"; the card has Perera v. Silva, DC Colombo, 12345/L, plaintiff, trial, 3 Dec; missing facts with reasons (e.g. the deed's date for prescription); the case opens and a cited first brief streams."},
+    {"id": "s2", "steps": "New case with no text, only a plaint PDF dropped (one a scan photographed on a phone).", "expect": "Live reading lines per file, findings appear while reading; the card is filled from the plaint alone; the files are in the case."},
+    {"id": "s3", "steps": "New case with notes in mixed Sinhala and English.", "expect": "The card comes out in English with the parties' names as written; nothing the notes don't say is filled."},
+    {"id": "s4", "steps": "An existing user with cases clicks New case, edits the court on the card, confirms.", "expect": "No first-case heading; the edited court is what the case page shows; the first brief uses it."}
+  ],
+  "out_of_scope": [
+    "A profile or onboarding questionnaire (courts, practice areas, role, years).",
+    "A sample case.",
+    "Bar number verification.",
+    "Case templates.",
+    "Inviting colleagues.",
+    "Filling the case page from files added after creation (#44)."
+  ],
+  "decisions": [
+    {"date": "2026-11-14", "note": "No profile screen (user): courts and practice areas add nothing a lawyer can see; onboarding is the first run of New case, headed \"Let's set up your first case\". Replaces APP.md's role/practice areas/courts step."},
+    {"date": "2026-11-14", "note": "The draft waits for every file to be read (user); OCR of scans is assumed to work (user), the reading is made interactive by live per-file lines and findings."},
+    {"date": "2026-11-14", "note": "Any input language, card in English with names as written; the first brief counts as 1 message, the draft is spend only (user)."}
+  ],
+  "progress": [
+    {"date": "2026-11-14", "note": "Scoped with the user; agreed; issue #51; branch app/onboarding off origin/main; Neon agent/onboarding (br-icy-scene-b7l82i7m), .env.local points at it, production kept in .env.main."}
+  ]
+}
