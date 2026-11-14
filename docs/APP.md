@@ -13,9 +13,11 @@ as much as from sections.
 
 ## Product
 
-**Onboarding** (2–3 minutes, ends inside the first case): role; practice areas and courts; create the first case
-(title, a few lines of facts, optional files). First result: the issues the AI sees, the sections that apply as
-amended today, what facts are missing.
+**Onboarding** (about a minute, ends inside the first case; changed 2026-11-14, brief onboarding, #51): no profile
+questions (user: courts and practice areas give the lawyer nothing they can see). It is the first run of New case,
+headed "Let's set up your first case": one box (any language) plus dropped files read live, a check card (court,
+number, side, parties, next date, missing facts with why), then the case opens with a first brief: the issues the
+AI sees, the sections that apply as amended today, what facts are missing. Every new case works the same way.
 
 **Case** (the core object): a chat scoped to the case, with every answer citing sections that open in a document
 viewer; files (the AI reads them as case context); pinned authorities with a note each; documents (markdown, the
