@@ -8,13 +8,14 @@ import { useEffect } from "react";
 import { create } from "zustand";
 import { trpcClient } from "@/trpc/client";
 
-export type Target = { kind: "case"; caseId: string } | { kind: "private" };
+export type Target = { kind: "case"; caseId: string } | { kind: "private" } | { kind: "draft" }; // draft: for a new case
 export type Phase = "starting" | "uploading" | "processing" | "finished" | "failed";
 
 export type Upload = {
   key: string; // the file id once there is one; a local id before
   fileId: string | null;
   caseId: string | null; // the case it was added to (a page lists the case's files again once it has an id)
+  draft: boolean; // dropped on New case before the case exists: that page shows it, not the tray
   name: string;
   size: number;
   sent: number; // bytes sent so far
@@ -116,6 +117,7 @@ export const useUploadStore = create<State>()((set, get) => {
             key: local,
             fileId: null,
             caseId: target.kind === "case" ? target.caseId : null,
+            draft: target.kind === "draft",
             name: file.name,
             size: file.size,
             sent: 0,
@@ -132,7 +134,9 @@ export const useUploadStore = create<State>()((set, get) => {
           const up =
             target.kind === "case"
               ? await trpcClient.case.addFile.mutate({ caseId: target.caseId, ...input })
-              : await trpcClient.file.startUpload.mutate(input);
+              : target.kind === "draft"
+                ? await trpcClient.case.draftFile.mutate(input)
+                : await trpcClient.file.startUpload.mutate(input);
           patch(local, { fileId: up.fileId, phase: "uploading" });
           // no direct upload (STORAGE=memory): through the app
           await send(local, up.uploadUrl ?? `/api/files/${up.fileId}`, file, up.headers);
@@ -155,6 +159,7 @@ export const useUploadStore = create<State>()((set, get) => {
             key: fileId,
             fileId,
             caseId: null,
+            draft: false,
             name,
             size: 0,
             sent: 0,
@@ -210,6 +215,7 @@ export function useFileStatus(fileId: string, initial?: FileStatus, name?: strin
     key: fileId,
     fileId,
     caseId: null,
+    draft: false,
     name: name ?? "",
     size: 0,
     sent: 0,
