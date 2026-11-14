@@ -92,6 +92,16 @@ in v1; an entity graph can be built later from the same per-file JSON.
 
 ## Decisions
 
+- **Neethi: brand, look and routes (2026-11-14, brief neethi-redesign, #59):** the product is Neethi (the arch mark,
+  lowercase wordmark in Instrument Sans 600). The look is Oxblood: tokens in `apps/web/app/globals.css` (shadcn names
+  with Oxblood values, light and dark) plus three citation kinds that look the same in the answer and the sources
+  panel: `law` (oxblood tint), `file` (neutral tint), `unverified` (amber, dashed). Instrument Sans for the interface,
+  Source Serif 4 only for statute text (`font-law`), Geist Mono for small labels (`label-mono`); the dot field
+  (`.dots`) under signed-in pages and on the landing; line drawings in `components/drawn.tsx`. `/` is the public
+  landing, with `/pricing`, `/coverage` (live kb counts: `corpus.coverage`, one query cached an hour per instance),
+  `/privacy`, `/terms` (placeholders); Home is `/dashboard`, where sign-in lands. One sidebar
+  (`components/sidebar/app-sidebar.tsx`) for every signed-in page: the open case expanded in place. Phones: 44 px
+  tap targets (globals.css), the sidebar a drawer, the sources panel a bottom sheet.
 - **Build order (2026-10-17):** M1 a law question answered with citations (scaffold #14, gateway #22, research tools
   #16, viewer #20, plain chat #21); M2 case workspace + main agent (#18, #17); M3 file ingestion (#19); M4 onboarding
   (#15). Judgments (#7) block release, not building.
