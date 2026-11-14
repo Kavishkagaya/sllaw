@@ -22,9 +22,12 @@ agreed (the guard refuses code edits under `app/` and `etl/` without one).
 3. **Write the brief** `docs/features/<slug>.json` in status `scoping` (shape: `docs/features/README.md`; size it to
    the work). Branch: `app/<slug>` for app work, `main` for ETL. Show the user a short summary: goal, done-check,
    scenarios, out of scope.
-4. **Sign-off:** set `status` to `agreed`. The guard asks the user on a permission prompt; their yes is the
+4. **Preview, when the user judges by eye** (a look, motion; user 2026-11-14): set `"preview": true` on the brief
+   (the guard asks the user), build it on the brief's branch uncommitted, run the dev server for them to see, and
+   adjust the brief from what they say. Commits wait for the sign-off.
+5. **Sign-off:** set `status` to `agreed`. The guard asks the user on a permission prompt; their yes is the
    agreement. A no means another round.
-5. **Issue and branch:** `gh issue create` with the summary (title = brief title, body = goal, done-check,
+6. **Issue and branch:** `gh issue create` with the summary (title = brief title, body = goal, done-check,
    scenarios, out of scope, a link to the brief path); put the number in `issue` and a first `progress` line. For app
    work: `git checkout -b app/<slug> origin/main` here in the main checkout (no worktree, user 2026-11-11);
    `pnpm install` if the lockfile changed. Then its database (ids in `.claude/agent-db.json`): Neon `create_branch` named `agent/<slug>` in project
@@ -33,4 +36,4 @@ agreed (the guard refuses code edits under `app/` and `etl/` without one).
    (the production one, put back at merge) and write the branch URL as its `DATABASE_URL`, every other variable
    unchanged. Never print the URL.
    Record `neon_branch` {name, id} in the brief. ETL work skips this.
-6. Tell the user it's agreed and that `/build` takes it from here.
+7. Tell the user it's agreed and that `/build` takes it from here.
