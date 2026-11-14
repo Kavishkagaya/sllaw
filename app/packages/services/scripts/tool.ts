@@ -10,6 +10,7 @@
 import { mainPrompt, mainTools, SourceMap, wrapTools } from "@sllaw/ai";
 import { caseById } from "@sllaw/db";
 import { agentCtx, caseFilesOf } from "../src/agent";
+import { readOffice } from "../src/office";
 
 const [name, input = "{}"] = process.argv.slice(2);
 const c = process.env.CASE ? await caseById(process.env.CASE) : null;
@@ -20,6 +21,7 @@ const ctx = agentCtx({
   caseId: c?.id ?? null,
   caseBrief: c && { title: c.title, facts: c.facts },
   caseFiles: c ? await caseFilesOf(c.id) : [],
+  caseOffice: c ? (await readOffice(c.id)).office : null,
   asOfDate: process.env.AS_OF,
 });
 const map = new SourceMap();

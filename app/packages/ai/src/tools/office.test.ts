@@ -48,16 +48,13 @@ function fake(office: Office) {
 }
 
 describe("case office in the agent", () => {
-  it("shows the office last in a case chat, fenced, with the ids the tools take", () => {
+  it("a case chat: the case page is not in the prompt; its tools and the Case diary playbook are", () => {
     const { ctx } = fake(withDate);
     const p = mainPrompt(ctx);
-    expect(p.indexOf("# The case office")).toBeGreaterThan(p.indexOf("# The case files"));
-    expect(p).toContain("<case_office>");
-    expect(p).toContain('"caseNumber":"1234/P"');
-    expect(p).toContain('"purpose":"trial"');
-    expect(p).toContain("never by an id or a citation like f2, c7");
-    expect(p).toContain('Never say "case office", "header", "widget" or "dashboard" to them');
-    expect(Object.keys(mainTools(ctx))).toEqual(expect.arrayContaining(["caseRead", "caseUpdate"]));
+    expect(p).not.toContain("<case_office>");
+    expect(p).not.toContain('"caseNumber":"1234/P"');
+    expect(p).toContain("- Case diary: the case page");
+    expect(Object.keys(mainTools(ctx))).toEqual(expect.arrayContaining(["caseRead", "caseUpdate", "playbook"]));
   });
 
   it("a plain chat has neither the section nor the tools", () => {

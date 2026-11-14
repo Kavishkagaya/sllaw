@@ -4,6 +4,7 @@
 // and read. No ids, modes or directions.
 import type { ChatMessage } from "@sllaw/api";
 import {
+  BookOpen,
   Brain,
   ChevronRight,
   FileSearch,
@@ -332,6 +333,15 @@ function Step({ p, name, active }: { p: Part; name: (key: string) => string; act
       </Row>
     );
   }
+  if (p.type === "tool-playbook")
+    return (
+      <Row icon={running ? Loader2 : BookOpen} spin={running}>
+        <p>
+          Opened <span className="font-mono text-foreground">playbook:{p.input?.name}</span>
+          {failed && <> — failed</>}
+        </p>
+      </Row>
+    );
   if (p.type === "tool-caseRead")
     return (
       <Row icon={running ? Loader2 : LayoutDashboard} spin={running}>

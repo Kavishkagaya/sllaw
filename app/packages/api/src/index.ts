@@ -43,6 +43,7 @@ import {
   openFile,
   openOffice,
   PERIODS,
+  playbookList,
   removeCaseFile,
   reprocessCaseFile,
   reprocessFile,
@@ -100,6 +101,8 @@ export const appRouter = router({
     move: workspaceUser
       .input(z.object({ chatId: z.uuid(), caseId: z.uuid() }))
       .mutation(async ({ ctx, input }) => found(await moveChat(ctx.account, input.chatId, input.caseId))),
+    // the playbooks the question box offers: case-only ones in a case chat only
+    playbooks: signedUser.input(z.object({ inCase: z.boolean() })).query(({ input }) => playbookList(input.inCase)),
   }),
   // Cases (the case service decides who may see and change one) and their files: the case service checks the case,
   // then hands the file to the file service. Upload is

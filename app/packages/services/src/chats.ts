@@ -1,4 +1,4 @@
-import { streamChat } from "@sllaw/ai";
+import { PLAYBOOKS, streamChat } from "@sllaw/ai";
 import { chatById, chatsOf, createChat, messagesOf, saveMessages, setChatCase, setChatSources } from "@sllaw/db";
 import { flushUsage, withUsage } from "@sllaw/usage";
 import type { Account } from "./accounts";
@@ -9,7 +9,16 @@ import { readOffice } from "./office";
 import "./usage"; // metered usage goes to the database
 
 type Signed = Account & { workspace: NonNullable<Account["workspace"]> };
-export type UserMessage = { id: string; role: "user"; parts: { type: "text"; text: string }[] };
+export type UserMessage = {
+  id: string;
+  role: "user";
+  // text, and at most one playbook the lawyer picked for the message (docs/APP.md, Playbooks)
+  parts: ({ type: "text"; text: string } | { type: "data-playbook"; data: { name: string } })[];
+};
+
+/** The playbooks a chat offers in its question box (name and when): case-only ones in a case chat only. */
+export const playbookList = (inCase: boolean) =>
+  PLAYBOOKS.filter((p) => p.where === "any" || inCase).map(({ name, when }) => ({ name, when }));
 
 /** The user's chats in a case (caseId), or their plain chats outside any case (null). null when the case is not
  *  theirs to see. */
@@ -66,7 +75,7 @@ export async function sendMessage(
   if (effective && !theCase) return null;
   await checkChat(a); // LimitReached: a daily or monthly counter is used up (the api answers 429)
   const title = message.parts
-    .map((p) => p.text)
+    .flatMap((p) => (p.type === "text" ? [p.text] : []))
     .join(" ")
     .slice(0, 80);
   const chat =

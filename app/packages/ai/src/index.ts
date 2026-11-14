@@ -17,6 +17,7 @@ export { type Draft, type DraftFile, draftCase, draftSchema } from "./agents/dra
 export * from "./agents/main";
 export { fileCount, type MainInput, mainSetup } from "./agents/main.setup";
 export * from "./models";
+export { PLAYBOOKS, type Playbook, playbooksFor, playbookText } from "./playbooks";
 export * from "./ports";
 export * from "./prompt/build";
 export { data, groundRules, inline } from "./prompt/guard";

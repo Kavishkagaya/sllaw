@@ -4,7 +4,8 @@ import { getHTTPStatusCodeFromError } from "@trpc/server/http";
 import { z } from "zod";
 import { createContext, signedAccount } from "./trpc";
 
-// Only the new user message, text only: history comes from the database, so a client cannot forge tool outputs.
+// Only the new user message, text and at most one picked playbook: history comes from the database, so a client
+// cannot forge tool outputs. A playbook name the chat does not have is ignored by the agent (ai/playbooks.ts).
 const body = z.object({
   id: z.uuid(),
   caseId: z.uuid().nullish(), // a new chat started in a case; a stored chat keeps its own
@@ -12,9 +13,15 @@ const body = z.object({
     id: z.string().min(1).max(100),
     role: z.literal("user"),
     parts: z
-      .array(z.object({ type: z.literal("text"), text: z.string().min(1).max(20_000) }))
+      .array(
+        z.discriminatedUnion("type", [
+          z.object({ type: z.literal("text"), text: z.string().min(1).max(20_000) }),
+          z.object({ type: z.literal("data-playbook"), data: z.object({ name: z.string().min(1).max(100) }) }),
+        ]),
+      )
       .min(1)
-      .max(10),
+      .max(10)
+      .refine((ps) => ps.some((p) => p.type === "text") && ps.filter((p) => p.type !== "text").length <= 1),
   }),
 });
 
