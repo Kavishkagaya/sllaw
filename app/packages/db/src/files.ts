@@ -206,3 +206,21 @@ export async function busyFilesOfCase(caseId: string) {
     .where(and(eq(caseFiles.caseId, caseId), busy()));
   return r?.n ?? 0;
 }
+
+/** A file read for a new case before the case existed (no scopes, no index step) joins that case: found under its
+ *  scopes and indexed (index pending). Only such a file: one already in a case or indexed is left alone (null). */
+export async function adoptFile(id: string, scopes: string[]) {
+  const [row] = await db
+    .update(files)
+    .set({ scopes, indexState: "pending", updatedAt: new Date() })
+    .where(
+      and(
+        eq(files.id, id),
+        eq(files.uploadState, "stored"),
+        sql`${files.indexState} is null`,
+        sql`cardinality(${files.scopes}) = 0`,
+      ),
+    )
+    .returning();
+  return row ?? null;
+}

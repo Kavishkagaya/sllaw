@@ -13,6 +13,7 @@ export {
   read,
   STEPS,
 } from "./agents/categorize";
+export { type Draft, type DraftFile, draftCase, draftSchema } from "./agents/draft";
 export * from "./agents/main";
 export { fileCount, type MainInput, mainSetup } from "./agents/main.setup";
 export * from "./models";

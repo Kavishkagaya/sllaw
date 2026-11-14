@@ -6,6 +6,7 @@ import type { CaseFile, Ctx } from "../ports";
 import { section, setup, toolGroup, when } from "../prompt/build";
 import { data, groundRules, inline } from "../prompt/guard";
 import type { SourceMap } from "../sources/map";
+import { askTools } from "../tools/ask";
 import { fileName, fileTools } from "../tools/files";
 import { lawTools } from "../tools/law";
 import { officeTools, officeView } from "../tools/office";
@@ -99,7 +100,8 @@ const caseBrief = section<MainInput>("The case", ({ ctx }) => {
     ? data("case_facts", c.facts.trim().slice(0, FACTS))
     : "(none written yet: ask for the facts that matter)";
   return `This chat is inside the lawyer's case "${inline(c.title)}". Read every question in its light: research the law that governs
-these facts, and say which facts the answer turns on and which are missing. The facts as the lawyer wrote them:
+these facts, and say which facts the answer turns on and which are missing. When you name missing facts, also call
+ask with each as a short question the lawyer can answer. The facts as the lawyer wrote them:
 ${facts}`;
 });
 
@@ -203,6 +205,7 @@ export const mainSetup = setup({
     toolGroup({ name: "law", tools: (ctx: Ctx) => lawTools(ctx) }),
     // outside a case there are no files: the tools are not offered at all, so they cannot be called
     toolGroup({ name: "caseFiles", when: (ctx: Ctx) => !!ctx.caseId, tools: (ctx: Ctx) => fileTools(ctx) }),
+    toolGroup({ name: "ask", when: (ctx: Ctx) => !!ctx.caseId, tools: () => askTools() }),
     toolGroup({
       name: "caseOffice",
       when: (ctx: Ctx) => !!ctx.caseId && !!ctx.caseOffice,

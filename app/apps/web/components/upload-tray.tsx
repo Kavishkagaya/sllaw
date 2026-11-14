@@ -19,10 +19,10 @@ const STATE: Record<string, string> = {
 
 export function UploadTray() {
   // a case's files pages list its own files with their states: the tray leaves those out there, except an upload
-  // refused before it had a row (a plan limit), which the page cannot list
+  // refused before it had a row (a plan limit), which the page cannot list; New case shows its own dropped files
   const onCase = usePathname().match(/^\/cases\/([0-9a-f-]{36})\/files/)?.[1];
   const uploads = Object.values(useUploadStore((s) => s.uploads)).filter(
-    (u) => u.name && (!onCase || u.caseId !== onCase || !u.fileId),
+    (u) => u.name && !u.draft && (!onCase || u.caseId !== onCase || !u.fileId),
   );
   if (!uploads.length) return null;
   return (

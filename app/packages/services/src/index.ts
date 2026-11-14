@@ -7,6 +7,7 @@ export * from "./chats";
 export * from "./corpus";
 export * from "./files";
 export * from "./limits";
+export * from "./new-case";
 export * from "./office";
 export { PERIODS, type PeriodName, periodOf } from "./periods";
 export * from "./usage";

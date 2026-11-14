@@ -122,6 +122,25 @@ export async function checkCaseUpload(a: Signed, caseId: string, size: number) {
     throw new LimitReached("storage", bytes, store!, mine.plan?.name ?? "current", null);
 }
 
+/** Before a file is read for a new case (no case yet): the uploader's spend and storage with this file's size. */
+export async function checkDraftUpload(a: Signed, size: number) {
+  if (a.user.isAdmin) return;
+  await checkSpend(a.user);
+  const [mine, bytes] = await Promise.all([limitsOf(a.user.id), ownedBytes(a.user.id)]);
+  const store = mine.maxes.storage.max;
+  if (over("storage", bytes, store, size))
+    throw new LimitReached("storage", bytes, store!, mine.plan?.name ?? "current", null);
+}
+
+/** Before a new case is made with `count` files: the case's file count against the user's plan. */
+export async function checkNewCaseFiles(a: Signed, count: number) {
+  if (a.user.isAdmin || !count) return;
+  const mine = await limitsOf(a.user.id);
+  const files = mine.maxes.case_files.max;
+  if (over("case_files", 0, files, count))
+    throw new LimitReached("case_files", count, files!, mine.plan?.name ?? "current", null);
+}
+
 /** A user's plan, each limit with what is used and when it resets, and their spend per day this month (every day up
  *  to today, 0 when none): the /usage page, and the user's row on /admin. Lawyers never see money (brief
  *  spend-limits): unless `money` (staff), spend is sent as percent of the allowance (max 100; unlimited: no numbers)

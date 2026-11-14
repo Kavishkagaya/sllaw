@@ -1,6 +1,7 @@
 import { opsSchema } from "@sllaw/office";
 import {
   addCaseFile,
+  addDraftFile,
   adminDashboard,
   adminDeletePlan,
   adminEndUserPlan,
@@ -23,6 +24,8 @@ import {
   deleteCase,
   deleteFile,
   diary,
+  draftNewCase,
+  draftSchema,
   editCaseFile,
   finishUpload,
   getChunk,
@@ -43,6 +46,7 @@ import {
   removeCaseFile,
   reprocessCaseFile,
   reprocessFile,
+  startNewCase,
   startUpload,
   updateCase,
   usageStatus,
@@ -66,6 +70,7 @@ const fileInput = {
   size: z.number().int().positive().max(MAX_SIZE),
 };
 const caseInput = { title: z.string().trim().min(1).max(200), facts: z.string().max(20_000) };
+const newCaseInput = { text: z.string().max(20_000), fileIds: z.array(z.uuid()).max(50) };
 const period = z.enum(PERIODS).optional();
 const metric = z.enum(METRIC_KEYS);
 const max = z.number().nonnegative().nullable(); // null: unlimited; spend in USD, so not whole
@@ -102,6 +107,13 @@ export const appRouter = router({
   case: router({
     list: workspaceUser.query(({ ctx }) => listCases(ctx.account)),
     create: workspaceUser.input(z.object(caseInput)).mutation(({ ctx, input }) => createCase(ctx.account, input)),
+    // a new case (docs/features/onboarding.json): files dropped before it exists, the draft of its card, then
+    // "Looks right" makes it with those files and fills its page
+    draftFile: workspaceUser.input(z.object(fileInput)).mutation(({ ctx, input }) => addDraftFile(ctx.account, input)),
+    draft: workspaceUser.input(z.object(newCaseInput)).mutation(({ ctx, input }) => draftNewCase(ctx.account, input)),
+    start: workspaceUser
+      .input(z.object({ ...newCaseInput, card: draftSchema }))
+      .mutation(({ ctx, input }) => startNewCase(ctx.account, input)),
     open: workspaceUser
       .input(z.object({ caseId: z.uuid() }))
       .query(async ({ ctx, input }) => found(await openCase(ctx.account, input.caseId))),
