@@ -1,0 +1,43 @@
+{
+  "title": "Playbooks",
+  "slug": "playbooks",
+  "status": "agreed",
+  "branch": "app/playbooks",
+  "issue": 57,
+  "neon_branch": {"name": "agent/playbooks", "id": "br-proud-smoke-b747q66n"},
+  "goal": "A skills system, called playbooks for lawyers: the base prompt is normal chat (who it is, ground rules, law research and citing); every other behaviour now written in the system prompt becomes a built-in playbook that the assistant opens on demand or the lawyer picks by hand. Simple words, nothing fancy.",
+  "for_whom": "A practising Sri Lankan lawyer working in a case chat or a quick chat; not a software engineer.",
+  "done_check": [
+    {"id": "d1", "check": "The base prompt holds only: who the assistant is, the ground rules, how to research and cite the law, the case facts (in a case), and the list of playbooks available there (name and one line on when to use it). Every other flow in today's prompt (the case files, correcting a file's details, the case page, ...) lives in a playbook. Tools stay as on main (law tools in every chat; file and case-page tools in a case chat), sent every time; a playbook is instructions only, saying which of those tools to use and how, added at the end of the conversation when opened. A case chat's first-step prompt is smaller than on main (both numbers recorded)."},
+    {"id": "d2", "check": "Built-in playbooks, named in a lawyer's office words: Case papers (working with the case files), Document details (correcting a file's details), Case diary (the case page: dates, tasks, people), Hearing prep (getting ready for the next date), and one for each other situational flow moved out of the prompt, named the same way. Each says where it can be used (case chats only, or any chat)."},
+    {"id": "d3", "check": "The assistant opens a playbook by itself when the request needs it; the trail shows 'playbook:<name>'; it stays open for the rest of that chat."},
+    {"id": "d4", "check": "A button in the question box lists the playbooks for where the lawyer is (case-only ones never in a quick chat); picking one shows 'playbook:<name>' on the message and the answer follows it."},
+    {"id": "d5", "check": "Asked in plain words to fix a file's details, the assistant makes the correction in at least 8 of 10 tries on the files model (2 of 4 on main, 2026-11-11)."},
+    {"id": "d6", "check": "No research regression: eval-chat and eval-agent score no lower than on main, and the mean cost a question rises by no more than 10%."},
+    {"id": "d7", "check": "docs/APP.md and app/CLAUDE.md describe playbooks as they are."}
+  ],
+  "scenarios": [
+    {"id": "s1", "steps": "In a case chat: \"The Perera Traders demand says Rs. 450,000 but its details say 45,000. Please fix that.\"", "expect": "Trail shows playbook:Document details; the file's details now say Rs. 450,000; the assistant says so only after it changed it."},
+    {"id": "s2", "steps": "In the same chat: \"We got 12 December for trial. Note it and add a task to file the list of witnesses.\"", "expect": "Trail shows playbook:Case diary; the case page shows the date and the task."},
+    {"id": "s3", "steps": "\"What do I need to get done before the next date?\"", "expect": "Trail shows playbook:Hearing prep; the answer draws on the case page and the files, cited."},
+    {"id": "s4", "steps": "Quick chat: \"What is the prescription period for a money claim on a written contract?\"", "expect": "No playbook opened; a cited answer as on main."},
+    {"id": "s5", "steps": "In a case chat, the lawyer opens the playbook button, picks Hearing prep, and asks \"Where are we?\"", "expect": "The message shows playbook:Hearing prep and the answer follows that playbook. In a quick chat the button does not list case-only playbooks."}
+  ],
+  "out_of_scope": [
+    "Playbooks a lawyer writes themselves (to come later: keep built-in playbooks as data, not code paths, so user ones can be added).",
+    "Sharing playbooks with the workspace.",
+    "New drafting playbooks (e.g. a letter of demand); drafting is 'later' in APP.md.",
+    "Closing a playbook mid-chat; editing built-in playbooks in admin."
+  ],
+  "decisions": [
+    {"date": "2026-11-14", "note": "Name: 'playbooks' (user). v1 is built-in ones only; lawyer-made and shared ones later (user)."},
+    {"date": "2026-11-14", "note": "Law research and citing stay in the base prompt: ~every message is a law question, so a load step on each would cost time and a missed load an uncited answer (user agreed)."},
+    {"date": "2026-11-14", "note": "An opened playbook stays open for the chat: its instructions are in the history anyway (user asked; recommended, as in other AI apps)."},
+    {"date": "2026-11-14", "note": "No on-demand tools (user): tools are kept as on main, by case or quick chat, and a playbook only says which tools to use. The tool list never changes mid-chat, and a playbook's text is appended at the end, so opening one never breaks the prompt cache. Playbooks are stored as data (name, when, where, text), so lawyer-written ones later have the same shape."},
+    {"date": "2026-11-14", "note": "Opened shows in the trail as 'playbook:<name>' (user's wording); manual pick by a button in the question box (user)."},
+    {"date": "2026-11-14", "note": "Playbook names are a lawyer's office words, short nouns: Case papers, Document details, Case diary, Hearing prep (user: the first names read like instructions). Brief reopened for this and agreed again."}
+  ],
+  "progress": [
+    {"date": "2026-11-14", "note": "Scoped with the user in 4 rounds; agreed; issue #57; branch app/playbooks; Neon branch agent/playbooks."}
+  ]
+}
