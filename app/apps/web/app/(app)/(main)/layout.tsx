@@ -8,7 +8,7 @@ export default async function MainLayout({ children }: { children: React.ReactNo
   return (
     <>
       <AppSidebar {...s} />
-      <SidebarInset className="h-svh overflow-hidden">{children}</SidebarInset>
+      <SidebarInset className="dots h-svh overflow-hidden">{children}</SidebarInset>
     </>
   );
 }

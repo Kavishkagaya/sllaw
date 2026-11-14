@@ -8,7 +8,7 @@ export type Crumb = { label: string; href?: string };
 /** A page's top bar: the sidebar toggle, where the page is (crumbs, the last one is this page), and its actions. */
 export function PageHeader({ crumbs, children }: { crumbs: Crumb[]; children?: React.ReactNode }) {
   return (
-    <header className="flex h-12 shrink-0 items-center gap-2 border-b px-3">
+    <header className="flex h-12 shrink-0 items-center gap-2 border-b bg-card px-3">
       <SidebarTrigger />
       <nav className="flex min-w-0 flex-1 items-center gap-1 text-sm" aria-label="Breadcrumb">
         {crumbs.map((c, i) => (

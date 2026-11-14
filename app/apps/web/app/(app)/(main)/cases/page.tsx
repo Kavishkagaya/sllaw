@@ -1,5 +1,6 @@
-import { Briefcase, FileText, Plus } from "lucide-react";
+import { FileText, Plus } from "lucide-react";
 import Link from "next/link";
+import { PapersDrawing } from "@/components/drawn";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -26,7 +27,7 @@ export default async function CasesPage() {
           <p className="mt-1 text-sm text-muted-foreground">Each case keeps its facts, chats and files together.</p>
           {cases.length === 0 ? (
             <div className="mt-10 flex flex-col items-center gap-3 rounded-xl border border-dashed px-6 py-16 text-center">
-              <Briefcase className="size-8 text-muted-foreground" />
+              <PapersDrawing />
               <p className="font-medium">No cases yet</p>
               <p className="max-w-sm text-sm text-muted-foreground">
                 Create a case with its facts, then add its plaints, affidavits, judgments and other files.

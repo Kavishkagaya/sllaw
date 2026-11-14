@@ -25,6 +25,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Streamdown } from "streamdown";
 import { BrandMark } from "@/components/brand";
 import { Composer } from "@/components/composer";
+import { PapersDrawing } from "@/components/drawn";
 import { SafeImg } from "@/components/safe-img";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -311,7 +312,7 @@ export function Chat({
             </Sheet>
           )}
         </header>
-        <div className={cn("dots flex min-h-0 flex-1 flex-col", empty && "justify-center pb-24")}>
+        <div className={cn("flex min-h-0 flex-1 flex-col", empty && "justify-center pb-24")}>
           <AnimatePresence mode="popLayout" initial={false}>
             {empty ? (
               <motion.div
@@ -664,7 +665,7 @@ function CitationPanel({
         <div className="flex-1 overflow-y-auto p-3">
           {!cites.length ? (
             <div className="flex flex-col items-center gap-2 px-6 py-16 text-center text-sm text-muted-foreground">
-              <BookMarked className="size-5" />
+              <PapersDrawing className="mb-2" />
               The law and the case papers an answer cites appear here.
             </div>
           ) : (
