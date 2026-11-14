@@ -1,10 +1,10 @@
 {
   "title": "Playbooks",
   "slug": "playbooks",
-  "status": "agreed",
+  "status": "merged",
   "branch": "app/playbooks",
   "issue": 57,
-  "neon_branch": {"name": "agent/playbooks", "id": "br-proud-smoke-b747q66n"},
+  "neon_branch": null,
   "goal": "A skills system, called playbooks for lawyers: the base prompt is normal chat (who it is, ground rules, law research and citing); every other behaviour now written in the system prompt becomes a built-in playbook that the assistant opens on demand or the lawyer picks by hand. Simple words, nothing fancy.",
   "for_whom": "A practising Sri Lankan lawyer working in a case chat or a quick chat; not a software engineer.",
   "done_check": [
@@ -44,6 +44,7 @@
     {"date": "2026-11-14", "note": "Scoped with the user in 4 rounds; agreed; issue #57; branch app/playbooks; Neon branch agent/playbooks."},
     {"date": "2026-11-14", "note": "Built d1-d5 (3f07acd + eval). d1: case-chat system prompt 11,674 chars on main -> 7,831 (Perera v. Silva, `CASE=... tool prompt`, now with the case page as a chat has it); quick chat identical to main. d5: `eval-details` 10/10 corrected (Rs. 51,000 -> 510,000 on the letter of demand, 5 phrasings x2), Document details opened 10/10, no false claim, $0.0046 total. Next: UI walk s1-s5, d6, docs."},
     {"date": "2026-11-14", "note": "UI walk (headed, localhost, case Perera v. Silva; the demand's details set to Rs. 51,000 first, the document says 510,000, so no invented facts). s1 chat 712c4319: trail 'Opened playbook:Document details' -> listed files -> read p.1 -> 'Corrected LETTER OF DEMAND...: amount'; stored amount Rs. 510,000 (tool fileCard RAW); answer said so after. s2 same chat: 'Opened playbook:Case diary' -> 'Read the case page' -> saved; case_offices has date 2026-12-12 Trial and task 'File the list of witnesses'. s3 same chat: Hearing prep + Case papers, case page and files cited, but no law search and 'found no provision' unchecked -> Hearing prep step 3 made mandatory; rerun in chat 132d7f5e: Hearing prep, Case papers, CPC s.121/s.175 read and asOf'd, Act 29/2023 read, answer cited. s5 chat 1c37e4d5: picked Hearing prep in the Playbooks menu (lists the four; screenshot scratch s5-menu.png), message shows 'playbook:Hearing prep', answer follows it (case page, files, CPC s.79B/121/175, tasks offered not added), 14 steps $0.0067; it read the case page 5 times -> 'caseRead, once' in both playbooks. s4 chat fe886c54 (quick chat): no Playbooks button, no playbook in trail, Prescription Ordinance s.6 six years cited. Costs of the case turns $0.0004-0.0067."},
-    {"date": "2026-11-14", "note": "d6 on 9a26072 vs main (bb3bc14), same day, same database: eval-agent 54/56 hits 58/59 facts 4.5 steps $0.103 vs main 55/56 58/59 4.6 $0.105 (misses differ: branch ta-13, repealed-fiscal; main repealed-fair-trading, none-indian-ipc); eval-chat current 16/20 $0.0368 vs main 16/20 $0.0431. A quick chat's system prompt (cmp) and tools (law tools untouched, no playbook group) are identical to main's, so the model gets the same input: the one-hit gap is run noise; cost a question -2% and -15%. d7: APP.md (Playbooks), app/CLAUDE.md. All done-checks and scenarios checked: next /validate."}
+    {"date": "2026-11-14", "note": "d6 on 9a26072 vs main (bb3bc14), same day, same database: eval-agent 54/56 hits 58/59 facts 4.5 steps $0.103 vs main 55/56 58/59 4.6 $0.105 (misses differ: branch ta-13, repealed-fiscal; main repealed-fair-trading, none-indian-ipc); eval-chat current 16/20 $0.0368 vs main 16/20 $0.0431. A quick chat's system prompt (cmp) and tools (law tools untouched, no playbook group) are identical to main's, so the model gets the same input: the one-hit gap is run noise; cost a question -2% and -15%. d7: APP.md (Playbooks), app/CLAUDE.md. All done-checks and scenarios checked: next /validate."},
+    {"date": "2026-11-14", "note": "Round 1 on 8022178: semantic PASS (d6 caveat: one eval-agent hit lower, judged run noise; not checked: DB rows, phone width, citation opening), security PASS (no critical/high; not checked: cross-account reads, live injection). PR #58 rebase-merged; Neon branch agent/playbooks deleted; .env.main back as .env.local. No migration."}
   ]
 }
