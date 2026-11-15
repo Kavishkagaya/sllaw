@@ -17,6 +17,7 @@ export const docs = kb.table("docs", {
   commencement: jsonb(),
   longTitle: text("long_title"),
   sourceUrl: text("source_url"), // the official page or PDF the text was built from
+  sourceKey: text("source_key"), // that file as we stored it (R2 source/<sha256>.pdf|html): the viewer shows it
   parts: text().array().notNull(), // R2 keys of the text parts, in order
   meta: jsonb(),
   publishedAt: timestamp("published_at", { withTimezone: true }).notNull(),

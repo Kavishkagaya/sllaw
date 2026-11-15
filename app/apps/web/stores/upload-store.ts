@@ -1,9 +1,9 @@
 "use client";
 // Uploads live here, not in a page, so a file keeps uploading and its processing stays followed while the user moves
 // around the app. One entry per file: start (the service that adds it: a case, or the user's own files) -> the bytes
-// to the store with progress -> finish -> its states as server-sent events (/api/files/<id>/events) until it is
+// to the store with progress -> finish -> its states from the file.events tRPC subscription until it is
 // finished. A page shows an entry with useFileStatus(fileId); the tray (components/upload-tray.tsx) shows them all.
-import type { FileEvent, FileStatus, StepStatus } from "@sllaw/api";
+import type { FileEvent, FileStatus, FileStreamEvent, StepStatus } from "@sllaw/api";
 import { useEffect } from "react";
 import { create } from "zustand";
 import { trpcClient } from "@/trpc/client";
@@ -36,8 +36,8 @@ type State = {
   dismiss: (key: string) => void;
 };
 
-// open EventSources, by key: not state (nothing renders them)
-const sources = new Map<string, EventSource>();
+// open subscriptions, by key: not state (nothing renders them)
+const sources = new Map<string, { unsubscribe: () => void }>();
 const REOPEN = 3; // a stream that ends while steps are still open (a newer run took over) is opened again, this many times
 
 export const useUploadStore = create<State>()((set, get) => {
@@ -69,13 +69,9 @@ export const useUploadStore = create<State>()((set, get) => {
   const follow = (key: string, reopens = REOPEN) => {
     const fileId = get().uploads[key]?.fileId;
     if (!fileId || typeof window === "undefined") return;
-    sources.get(key)?.close();
-    const es = new EventSource(`/api/files/${fileId}/events`);
-    sources.set(key, es);
-    es.addEventListener("snapshot", (m) => settle(key, JSON.parse(m.data) as FileStatus));
-    es.addEventListener("state", (m) => apply(key, JSON.parse(m.data) as FileEvent));
-    es.addEventListener("end", () => {
-      es.close();
+    sources.get(key)?.unsubscribe();
+    const end = () => {
+      sources.get(key)?.unsubscribe();
       sources.delete(key);
       const status = get().uploads[key]?.status;
       const open = status?.steps.some((s) => s.state === "pending" || s.state === "running");
@@ -84,14 +80,25 @@ export const useUploadStore = create<State>()((set, get) => {
       else if (open)
         patch(key, { phase: "failed", retryable: true, error: "Processing stopped before it finished. Try again." });
       else if (status) settle(key, { ...status, finished: true });
-    });
-    // a dropped connection reconnects by itself (with Last-Event-ID); a refused one (404, 401) is closed
-    es.onerror = () => {
-      if (es.readyState === EventSource.CLOSED) {
-        sources.delete(key);
-        patch(key, { phase: "failed", error: "lost the file's status" });
-      }
     };
+    // a dropped connection reconnects by itself with the last tracked id; a refused one (not found, signed out) errors
+    const sub = trpcClient.file.events.subscribe(
+      { fileId },
+      {
+        onData: (m) => {
+          // a state comes tracked ({ id, data }: its id resumes a reconnect); the snapshot and the end come bare
+          const e: FileStreamEvent = "data" in m ? m.data : m;
+          if (e.type === "snapshot") settle(key, e.status);
+          else if (e.type === "state") apply(key, e.event);
+          else end();
+        },
+        onError: () => {
+          sources.delete(key);
+          patch(key, { phase: "failed", error: "lost the file's status" });
+        },
+      },
+    );
+    sources.set(key, sub);
   };
 
   const send = (key: string, url: string, file: File, headers: Record<string, string>) =>
@@ -138,8 +145,7 @@ export const useUploadStore = create<State>()((set, get) => {
                 ? await trpcClient.case.draftFile.mutate(input)
                 : await trpcClient.file.startUpload.mutate(input);
           patch(local, { fileId: up.fileId, phase: "uploading" });
-          // no direct upload (STORAGE=memory): through the app
-          await send(local, up.uploadUrl ?? `/api/files/${up.fileId}`, file, up.headers);
+          await send(local, up.uploadUrl, file, up.headers);
           patch(local, { sent: file.size });
           settle(local, await trpcClient.file.finishUpload.mutate({ fileId: up.fileId }));
           follow(local);
@@ -187,7 +193,7 @@ export const useUploadStore = create<State>()((set, get) => {
     },
 
     dismiss: (key) => {
-      sources.get(key)?.close();
+      sources.get(key)?.unsubscribe();
       sources.delete(key);
       set((s) => {
         const { [key]: _, ...rest } = s.uploads;

@@ -8,7 +8,7 @@ import { caseFilesFrom, chunksReader, summaryReader } from "./case-files";
 import { type CardPatch, editCard } from "./files/card";
 import { OfficeError, readOffice, writeOffice } from "./office";
 
-const asChunk = (c: {
+export const asChunk = (c: {
   id: number;
   docKey: string;
   title?: string | null;

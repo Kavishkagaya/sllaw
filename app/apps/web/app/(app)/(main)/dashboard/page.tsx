@@ -40,7 +40,7 @@ export default async function Dashboard() {
               </h1>
             </div>
             <div className="flex-[1_1_380px]">
-              <StartChat placeholder="A quick question on the law…" />
+              <StartChat placeholder="A quick question on the law…" picker />
             </div>
           </div>
 

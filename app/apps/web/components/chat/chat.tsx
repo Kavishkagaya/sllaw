@@ -1,60 +1,41 @@
 "use client";
 import { useChat } from "@ai-sdk/react";
 import type { ChatMessage } from "@sllaw/api";
-import { useMutation, useQueries, useQuery } from "@tanstack/react-query";
+import { useQueries, useQuery } from "@tanstack/react-query";
 import {
   ArrowDown,
   ArrowLeft,
   BookMarked,
   BookOpen,
-  Briefcase,
   Check,
   ChevronLeft,
   ChevronRight,
   FileText,
-  FolderInput,
   Gauge,
   Landmark,
-  Loader2,
-  Plus,
   TriangleAlert,
 } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createContext, memo, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { Streamdown } from "streamdown";
 import { BrandMark } from "@/components/brand";
+import { CasePicker } from "@/components/chat/case-picker";
 import { Composer } from "@/components/composer";
 import { PapersDrawing } from "@/components/drawn";
 import { SafeImg } from "@/components/safe-img";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { lawName, shortPin, titleCase } from "@/lib/law";
 import { cn } from "@/lib/utils";
-import { useChatStore } from "@/stores/chat-store";
+import { type Cite, useChatStore } from "@/stores/chat-store";
 import { useTRPC } from "@/trpc/client";
 import { CaseChange } from "./case-change";
-import { FileSource, LawSource, lawName, shortPin, TONE, type Tone } from "./source-view";
+import { FileSource, LawSource, TONE, type Tone } from "./source-view";
 import { splitAnswer, Trail, type TrailSource } from "./trail";
-
-/** A citation as the client gets it (real ids; the server maps the model's handles): a law chunk, a case file's
- *  chunk, a whole case file, or an old chat's file page ([[ref:pN|label]], before chunk citations). key is the same
- *  for every citation of one source, which keeps one number in the chat. */
-type Cite =
-  | { kind: "law"; key: string; label: string; chunkId: number }
-  | { kind: "file"; key: string; label: string; fileId: string; n: number | null }
-  | { kind: "page"; key: string; label: string };
 
 // [[81234|label]], [[f:<fileId>:<n>|label]], [[file:<fileId>|label]], old [[3fa2b1c0:p4|label]]. Each becomes a link
 // Streamdown renders through `a` below, as a numbered chip; clicking it opens the source in the sidebar.
@@ -73,8 +54,10 @@ const citeOf = (m: RegExpMatchArray): Cite => {
 };
 /** Laws in the oxblood tint, the user's own case files neutral (an old page citation is a case file too). */
 const toneOf = (c: Cite): Tone => (c.kind === "law" ? "law" : "file");
-const toLinks = (s: string) =>
-  s.replace(CITE, (...m) => {
+// while an answer streams, a citation the model has not closed yet ("[[8123|s. 2") is a "citing…" chip, never raw text
+const PARTIAL = /\[\[[^\]\n]*\]?$|\[$/;
+const toLinks = (s: string, live = false) =>
+  (live ? s.replace(PARTIAL, "[citing…](#citing)") : s).replace(CITE, (...m) => {
     const c = citeOf(m as unknown as RegExpMatchArray);
     return `[${c.label}](#cite:${encodeURIComponent(JSON.stringify(c))})`;
   });
@@ -126,15 +109,19 @@ export function Chat({
   useEffect(() => {
     if (chat.status === "ready" && initial.length > chat.messages.length) chat.messages = initial;
   }, [chat, initial]);
-  const [open, setOpen] = useState<Cite | null>(null);
+  const open = useChatStore((s) => s.cite[id] ?? null);
+  const pick = useChatStore((s) => s.pick);
   const [sheet, setSheet] = useState(false);
   const [side, setSide] = useState<"right" | "bottom">("right");
   // below xl the panel is a sheet (from the bottom on a phone); at xl it is always beside the thread
-  const show = useCallback((c: Cite) => {
-    setOpen(c);
-    setSide(matchMedia("(min-width: 40rem)").matches ? "right" : "bottom");
-    setSheet(!matchMedia("(min-width: 80rem)").matches);
-  }, []);
+  const show = useCallback(
+    (c: Cite) => {
+      pick(id, c);
+      setSide(matchMedia("(min-width: 40rem)").matches ? "right" : "bottom");
+      setSheet(!matchMedia("(min-width: 80rem)").matches);
+    },
+    [id, pick],
+  );
   // a step's chip in the trail opens its source like a citation does
   const openSource = useCallback(
     (t: TrailSource) =>
@@ -147,14 +134,24 @@ export function Chat({
   );
   // what the agent read in full (a citation of anything else is unverified), and every source the answers cite, in
   // order of first citation: its place is its number
-  const { loaded, cites } = useMemo(() => {
+  // `known`: every law section the agent's tools returned (search, read, amendment check), with its law and text, so the
+  // Sources list groups a citation the moment it lands, with no request (a request per citation made each one late)
+  const { loaded, cites, known } = useMemo(() => {
     const loaded = new Set<string>();
     const cites: Cite[] = [];
+    const known = new Map<number, Known>();
+    const add = (c: Known) => known.set(c.chunkId, { ...known.get(c.chunkId), ...c });
     for (const m of messages)
       for (const p of m.parts) {
+        if (p.type === "tool-search" && p.state === "output-available" && Array.isArray(p.output))
+          for (const c of p.output) add(c);
         if (p.type === "tool-read" && p.state === "output-available" && Array.isArray(p.output))
-          for (const c of p.output) loaded.add(`s:${c.chunkId}`);
+          for (const c of p.output) {
+            loaded.add(`s:${c.chunkId}`);
+            add(c);
+          }
         if (p.type === "tool-asOf" && p.state === "output-available" && p.output) {
+          add(p.output.chunk);
           loaded.add(`s:${p.output.chunk.chunkId}`);
           for (const ch of p.output.changes) if (ch.byChunk != null) loaded.add(`s:${ch.byChunk}`); // its clause was shown
         }
@@ -169,7 +166,7 @@ export function Chat({
             if (!cites.some((y) => y.key === c.key)) cites.push(c);
           }
       }
-    return { loaded, cites };
+    return { loaded, cites, known };
   }, [messages]);
   const numbers = useMemo(() => new Map(cites.map((c, i) => [c.key, i + 1])), [cites]);
 
@@ -199,14 +196,34 @@ export function Chat({
     onTouchMove: letGo,
     onKeyDown: (e: React.KeyboardEvent) => ["ArrowUp", "PageUp", "Home"].includes(e.key) && letGo(),
   };
+  // glide to the end instead of jumping: each frame closes a fifth of the distance, so new text and "Jump to latest"
+  // scroll smoothly; one loop at a time; it stops when the lawyer scrolls up (stick off) and is instant under reduced motion
+  const glide = useRef(0);
+  const follow = useCallback(() => {
+    const s = scroller.current;
+    if (!s) return;
+    cancelAnimationFrame(glide.current);
+    if (matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      s.scrollTop = s.scrollHeight;
+      return;
+    }
+    const step = () => {
+      const left = s.scrollHeight - s.clientHeight - s.scrollTop;
+      if (left < 1 || !stick.current) return;
+      s.scrollTop += Math.max(1, left * 0.2);
+      glide.current = requestAnimationFrame(step);
+    };
+    glide.current = requestAnimationFrame(step);
+  }, []);
+  useEffect(() => () => cancelAnimationFrame(glide.current), []);
   const toEnd = () => {
     stick.current = true;
     setAway(false);
-    if (scroller.current) scroller.current.scrollTop = scroller.current.scrollHeight;
+    follow();
   };
   // biome-ignore lint/correctness/useExhaustiveDependencies: messages is the trigger, not an input
   useEffect(() => {
-    if (stick.current && scroller.current) scroller.current.scrollTop = scroller.current.scrollHeight;
+    if (stick.current) follow();
   }, [messages]);
 
   const busy = status === "submitted" || status === "streaming";
@@ -223,59 +240,17 @@ export function Chat({
     if (fresh && !location.pathname.endsWith(id)) history.pushState(null, "", `${location.pathname}/${id}`); // /chats → /chats/<id>
   };
 
-  const components = useMemo(
-    () => ({
-      img: SafeImg,
-      a: ({ href, children }: { href?: string; children?: React.ReactNode }) => {
-        if (!href?.startsWith("#cite:"))
-          return (
-            <a href={href} target="_blank" rel="noreferrer" className="text-primary underline underline-offset-2">
-              {children}
-            </a>
-          );
-        let c: Cite;
-        try {
-          c = JSON.parse(decodeURIComponent(href.slice(6)));
-        } catch {
-          return <>{children}</>;
-        }
-        const ok = c.kind === "page" || loaded.has(c.key);
-        const tone = toneOf(c);
-        const chip = (
-          <button
-            type="button"
-            onClick={() => show(c)}
-            aria-label={`Citation ${numbers.get(c.key)}: ${c.label}${ok ? "" : ", not verified"}`}
-            className={cn(
-              "mx-0.5 inline-flex max-w-72 cursor-pointer items-center gap-1 rounded-[5px] border px-1.5 align-[1px] font-sans text-[12.5px] leading-5 font-medium transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
-              !ok
-                ? "border-dashed border-unverified-border bg-unverified text-unverified-ink"
-                : open?.key === c.key
-                  ? TONE[tone].on
-                  : TONE[tone].chip,
-            )}
-          >
-            <span className="shrink-0 tabular-nums opacity-80">
-              {!ok ? <TriangleAlert className="inline size-3 -translate-y-px" /> : tone === "file" ? "▤" : "§"}{" "}
-              {numbers.get(c.key)}
-            </span>
-            <span aria-hidden className="opacity-50">
-              ·
-            </span>
-            <span className="truncate">{c.label}</span>
-          </button>
-        );
-        return ok ? (
-          chip
-        ) : (
-          <Tooltip>
-            <TooltipTrigger asChild>{chip}</TooltipTrigger>
-            <TooltipContent>Not verified: Hulft did not read this in this chat</TooltipContent>
-          </Tooltip>
-        );
-      },
-    }),
-    [loaded, numbers, open, show],
+  // what the citation chips read (their numbers, whether read, the open action): a context, so the renderers Streamdown
+  // gets stay the same object for the whole stream and its blocks (and their word fade) are not redrawn per word
+  // loaded and numbers are rebuilt per streamed token but only ever grow: keep one object until they do, so the chips
+  // (context consumers) in earlier answers are not re-rendered per token
+  const stable = useRef({ loaded, numbers });
+  if (loaded.size !== stable.current.loaded.size || numbers.size !== stable.current.numbers.size)
+    stable.current = { loaded, numbers };
+  const grown = stable.current;
+  const citeInfo = useMemo(
+    () => ({ chatId: id, loaded: grown.loaded, numbers: grown.numbers, show }),
+    [id, grown, show],
   );
 
   const panel = (
@@ -283,290 +258,275 @@ export function Chat({
       open={open}
       cites={cites}
       loaded={loaded}
+      known={known}
       caseId={caseId}
       onPick={show}
-      onBack={() => setOpen(null)}
+      onBack={() => pick(id, null)}
     />
   );
 
   return (
-    <div className="flex h-full">
-      <div className="flex min-w-0 flex-1 flex-col">
-        <header
-          className="flex h-12 shrink-0 items-center gap-2 bg-card px-3"
-          style={{ borderBottomWidth: empty ? 0 : 1 }}
-        >
-          <SidebarTrigger />
-          {caseId && caseTitle && (
-            <>
-              <Link
-                href={`/cases/${caseId}`}
-                className="max-w-48 shrink-0 truncate text-sm text-muted-foreground hover:text-foreground"
-              >
-                {caseTitle}
-              </Link>
-              {!empty && <ChevronRight className="size-3.5 shrink-0 text-muted-foreground" />}
-            </>
-          )}
-          {!empty && (
-            <motion.h1
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="min-w-0 flex-1 truncate text-sm font-medium"
-            >
-              {title ??
-                messages.find((m) => m.role === "user")?.parts.find((p) => p.type === "text")?.text ??
-                "New chat"}
-            </motion.h1>
-          )}
-          {!empty && !caseId && !busy && <MoveToCase chatId={id} />}
-          {!empty && (
-            <Sheet open={sheet} onOpenChange={setSheet}>
-              <SheetTrigger asChild>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="rounded-full border-law-border bg-law text-law-ink hover:bg-law-mark xl:hidden"
+    <CiteInfo.Provider value={citeInfo}>
+      <div className="flex h-full">
+        <div className="flex min-w-0 flex-1 flex-col">
+          <header
+            className="flex h-12 shrink-0 items-center gap-2 bg-card px-3"
+            style={{ borderBottomWidth: empty ? 0 : 1 }}
+          >
+            <SidebarTrigger />
+            {caseId && caseTitle && (
+              <>
+                <Link
+                  href={`/cases/${caseId}`}
+                  className="max-w-48 shrink-0 truncate text-sm text-muted-foreground hover:text-foreground"
                 >
-                  <BookMarked /> Sources {cites.length > 0 && <span className="tabular-nums">{cites.length}</span>}
-                </Button>
-              </SheetTrigger>
-              <SheetContent
-                side={side}
-                className={cn(
-                  "gap-0 p-0 xl:hidden",
-                  side === "bottom" ? "max-h-[85svh] rounded-t-2xl" : "w-full sm:max-w-xl",
-                )}
-              >
-                {side === "bottom" && (
-                  <span aria-hidden className="mx-auto mt-2.5 h-1 w-9 shrink-0 rounded-full bg-input" />
-                )}
-                <SheetTitle className="sr-only">Sources</SheetTitle>
-                {panel}
-              </SheetContent>
-            </Sheet>
-          )}
-        </header>
-        <div className={cn("flex min-h-0 flex-1 flex-col", empty && "justify-center pb-24")}>
-          <AnimatePresence mode="popLayout" initial={false}>
-            {empty ? (
-              <motion.div
-                key="welcome"
-                exit={{ opacity: 0, y: -12 }}
-                transition={{ duration: 0.2 }}
-                className="mx-auto w-full max-w-2xl space-y-2 px-4 pb-8 text-center"
-              >
-                <BrandMark className="mx-auto mb-4 size-9" />
-                <h2 className="text-3xl font-semibold tracking-[-0.03em] sm:text-4xl">
-                  {caseId ? "What would you like to know about this case?" : "What would you like to research?"}
-                </h2>
-                <p className="text-muted-foreground">
-                  {caseId
-                    ? "Answers read in the light of the case's facts, drawn from the Constitution and Acts of Sri Lanka."
-                    : "Answers drawn from the Constitution and Acts of Sri Lanka, each with its citation."}
-                </p>
-              </motion.div>
-            ) : (
-              <motion.div
-                key="thread"
+                  {caseTitle}
+                </Link>
+                {!empty && <ChevronRight className="size-3.5 shrink-0 text-muted-foreground" />}
+              </>
+            )}
+            {!empty && (
+              <motion.h1
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
-                transition={{ duration: 0.3, delay: 0.1 }}
-                ref={scroller}
-                {...scrollIntent}
-                className="min-h-0 flex-1 overflow-y-auto"
+                className="min-w-0 flex-1 truncate text-sm font-medium"
               >
-                <div className="mx-auto flex max-w-3xl flex-col gap-6 px-4 py-6">
-                  {messages.map((m) =>
-                    m.role === "user" ? (
-                      <motion.div
-                        key={m.id}
-                        initial={{ opacity: 0, y: 12 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={SPRING}
-                        className="ml-auto flex max-w-[85%] flex-col items-end gap-1.5"
-                      >
-                        {m.parts.map((p, i) =>
-                          p.type === "data-playbook" ? (
-                            <span
-                              key={i}
-                              className="inline-flex items-center gap-1.5 rounded-full bg-law px-2.5 py-0.5 text-[11.5px] text-law-ink"
-                            >
-                              <BookOpen className="size-3" /> {p.data.name}
-                            </span>
-                          ) : null,
-                        )}
-                        <div className="rounded-[12px_12px_4px_12px] bg-ink px-4 py-3 text-[15px] leading-normal whitespace-pre-wrap text-paper">
-                          {m.parts.map((p, i) => (p.type === "text" ? <span key={i}>{p.text}</span> : null))}
-                        </div>
-                      </motion.div>
-                    ) : (
-                      // no fade: it takes the place of the placeholder below, which looks the same (chat-stable)
-                      <div key={m.id}>
-                        <Answer
-                          parts={m.parts}
-                          live={busy && m.id === messages.at(-1)?.id}
-                          components={components}
-                          caseId={caseId}
-                          loaded={loaded}
-                          onOpen={openSource}
-                          since={since}
-                        />
-                      </div>
-                    ),
-                  )}
-                  {/* until the answer's own message arrives; then that one shows it (one working box, chat-stable) */}
-                  {busy && messages.at(-1)?.role === "user" && (
-                    <Answer
-                      parts={[]}
-                      live
-                      components={components}
-                      caseId={caseId}
-                      loaded={loaded}
-                      onOpen={openSource}
-                      since={since}
-                    />
-                  )}
-                  {error &&
-                    (isLimit(error.message) ? (
-                      <Alert>
-                        <Gauge />
-                        <AlertDescription>
-                          {error.message}{" "}
-                          <Link href="/usage" className="font-medium underline underline-offset-4">
-                            See your usage
-                          </Link>
-                        </AlertDescription>
-                      </Alert>
-                    ) : (
-                      <Alert variant="destructive">
-                        <TriangleAlert />
-                        <AlertDescription>Something went wrong: {error.message}</AlertDescription>
-                      </Alert>
-                    ))}
-                </div>
-              </motion.div>
+                {title ??
+                  messages.find((m) => m.role === "user")?.parts.find((p) => p.type === "text")?.text ??
+                  "New chat"}
+              </motion.h1>
             )}
-          </AnimatePresence>
-          {/* the same box in both states: layout animates it from the middle to the bottom */}
-          <motion.div
-            layout
-            transition={SPRING}
-            className={cn("relative mx-auto w-full px-4", empty ? "max-w-2xl" : "max-w-3xl pb-4")}
-          >
-            {!empty && away && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={toEnd}
-                className="absolute -top-11 left-1/2 -translate-x-1/2 rounded-full bg-card shadow-sm"
-              >
-                <ArrowDown /> Jump to latest
-              </Button>
+            {!empty && (
+              <Sheet open={sheet} onOpenChange={setSheet}>
+                <SheetTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="rounded-full border-law-border bg-law text-law-ink hover:bg-law-mark xl:hidden"
+                  >
+                    <BookMarked /> Sources {cites.length > 0 && <span className="tabular-nums">{cites.length}</span>}
+                  </Button>
+                </SheetTrigger>
+                <SheetContent
+                  side={side}
+                  className={cn(
+                    "gap-0 p-0 xl:hidden",
+                    side === "bottom" ? "max-h-[85svh] rounded-t-2xl" : "w-full sm:max-w-xl",
+                  )}
+                >
+                  {side === "bottom" && (
+                    <span aria-hidden className="mx-auto mt-2.5 h-1 w-9 shrink-0 rounded-full bg-input" />
+                  )}
+                  <SheetTitle className="sr-only">Sources</SheetTitle>
+                  {panel}
+                </SheetContent>
+              </Sheet>
             )}
-            <UsageHint status={status} />
-            <Composer
-              draftKey={draftKey}
-              placeholder={caseId ? "Ask about this case…" : undefined}
-              inCase={!!caseId}
-              caseId={caseId}
-              onSend={ask}
-              onStop={() => stop(id)}
-              busy={busy}
-              autoFocus={empty}
-            />
-            <AnimatePresence initial={false}>
+          </header>
+          <div className={cn("flex min-h-0 flex-1 flex-col", empty && "justify-center pb-24")}>
+            <AnimatePresence mode="popLayout" initial={false}>
               {empty ? (
                 <motion.div
-                  key="examples"
-                  exit={{ opacity: 0, height: 0 }}
+                  key="welcome"
+                  exit={{ opacity: 0, y: -12 }}
                   transition={{ duration: 0.2 }}
-                  className="grid gap-2 overflow-hidden pt-4 sm:grid-cols-3"
+                  className="mx-auto w-full max-w-2xl space-y-2 px-4 pb-8 text-center"
                 >
-                  {(caseId ? CASE_EXAMPLES : EXAMPLES).map((q) => (
-                    <button
-                      type="button"
-                      key={q}
-                      onClick={() => ask(q)}
-                      className="rounded-lg border bg-card p-3 text-left shadow-xs text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
-                    >
-                      {q}
-                    </button>
-                  ))}
+                  <BrandMark className="mx-auto mb-4 size-9" />
+                  <h2 className="text-3xl font-semibold tracking-[-0.03em] sm:text-4xl">
+                    {caseId ? "What would you like to know about this case?" : "What would you like to research?"}
+                  </h2>
+                  <p className="text-muted-foreground">
+                    {caseId
+                      ? "Answers read in the light of the case's facts, drawn from the Constitution and Acts of Sri Lanka."
+                      : "Answers drawn from the Constitution and Acts of Sri Lanka, each with its citation."}
+                  </p>
                 </motion.div>
               ) : (
-                <motion.p
-                  key="note"
+                <motion.div
+                  key="thread"
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
-                  className="mt-2 text-center text-[11px] text-muted-foreground"
+                  transition={{ duration: 0.3, delay: 0.1 }}
+                  ref={scroller}
+                  {...scrollIntent}
+                  className="min-h-0 flex-1 overflow-y-auto"
                 >
-                  Research aid, not legal advice. Check the cited text before relying on it.
-                </motion.p>
+                  <div className="mx-auto flex max-w-3xl flex-col gap-6 px-4 py-6">
+                    {messages.map((m) =>
+                      m.role === "user" ? (
+                        <Question key={m.id} parts={m.parts} />
+                      ) : (
+                        // no fade: it takes the place of the placeholder below, which looks the same (chat-stable)
+                        <div key={m.id}>
+                          <Answer
+                            parts={m.parts}
+                            live={busy && m.id === messages.at(-1)?.id}
+                            components={components}
+                            caseId={caseId}
+                            loaded={loaded}
+                            onOpen={openSource}
+                            since={since}
+                          />
+                        </div>
+                      ),
+                    )}
+                    {/* until the answer's own message arrives; then that one shows it (one working box, chat-stable) */}
+                    {busy && messages.at(-1)?.role === "user" && (
+                      <Answer
+                        parts={[]}
+                        live
+                        components={components}
+                        caseId={caseId}
+                        loaded={loaded}
+                        onOpen={openSource}
+                        since={since}
+                      />
+                    )}
+                    {error &&
+                      (isLimit(error.message) ? (
+                        <Alert>
+                          <Gauge />
+                          <AlertDescription>
+                            {error.message}{" "}
+                            <Link href="/usage" className="font-medium underline underline-offset-4">
+                              See your usage
+                            </Link>
+                          </AlertDescription>
+                        </Alert>
+                      ) : (
+                        <Alert variant="destructive">
+                          <TriangleAlert />
+                          <AlertDescription>Something went wrong: {error.message}</AlertDescription>
+                        </Alert>
+                      ))}
+                  </div>
+                </motion.div>
               )}
             </AnimatePresence>
-          </motion.div>
+            {/* the same box in both states: layout animates it from the middle to the bottom */}
+            <motion.div
+              layout
+              transition={SPRING}
+              className={cn("relative mx-auto w-full px-4", empty ? "max-w-2xl" : "max-w-3xl pb-4")}
+            >
+              {!empty && away && (
+                <Button
+                  size="icon"
+                  onClick={toEnd}
+                  aria-label="Jump to latest"
+                  title="Jump to latest"
+                  className="absolute -top-14 left-1/2 size-11 -translate-x-1/2 rounded-full shadow-lg ring-4 ring-background sm:size-10"
+                >
+                  <ArrowDown className="size-5" />
+                </Button>
+              )}
+              <UsageHint status={status} />
+              <Composer
+                draftKey={draftKey}
+                placeholder={caseId ? "Ask about this case…" : undefined}
+                inCase={!!caseId}
+                caseId={caseId}
+                onSend={ask}
+                onStop={() => stop(id)}
+                busy={busy}
+                autoFocus={empty}
+                chip={
+                  <CasePicker
+                    caseId={caseId}
+                    caseTitle={caseTitle}
+                    draftKey={empty && fresh ? draftKey : undefined}
+                    chatId={empty && fresh ? undefined : id}
+                    disabled={busy}
+                  />
+                }
+              />
+              <AnimatePresence initial={false}>
+                {empty ? (
+                  <motion.div
+                    key="examples"
+                    exit={{ opacity: 0, height: 0 }}
+                    transition={{ duration: 0.2 }}
+                    className="grid gap-2 overflow-hidden pt-4 sm:grid-cols-3"
+                  >
+                    {(caseId ? CASE_EXAMPLES : EXAMPLES).map((q) => (
+                      <button
+                        type="button"
+                        key={q}
+                        onClick={() => ask(q)}
+                        className="rounded-lg border bg-card p-3 text-left shadow-xs text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+                      >
+                        {q}
+                      </button>
+                    ))}
+                  </motion.div>
+                ) : (
+                  <motion.p
+                    key="note"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    className="mt-2 text-center text-[11px] text-muted-foreground"
+                  >
+                    Research aid, not legal advice. Check the cited text before relying on it.
+                  </motion.p>
+                )}
+              </AnimatePresence>
+            </motion.div>
+          </div>
         </div>
+        {!empty && (
+          <aside
+            className={cn(
+              "hidden shrink-0 border-l bg-sidebar transition-[width] xl:block",
+              open ? "w-[34rem]" : "w-96",
+            )}
+          >
+            {panel}
+          </aside>
+        )}
       </div>
-      {!empty && (
-        <aside
-          className={cn("hidden shrink-0 border-l bg-sidebar transition-[width] xl:block", open ? "w-[34rem]" : "w-96")}
-        >
-          {panel}
-        </aside>
-      )}
-    </div>
+    </CiteInfo.Provider>
   );
 }
 
-/** "Move to case": a quick chat goes into one of the user's cases and opens there (the agent gets the case's facts
- *  from the next question on). */
-function MoveToCase({ chatId }: { chatId: string }) {
-  const trpc = useTRPC();
-  const router = useRouter();
-  const [open, setOpen] = useState(false);
-  const cases = useQuery(trpc.case.list.queryOptions(undefined, { enabled: open }));
-  const move = useMutation(
-    trpc.chat.move.mutationOptions({
-      onSuccess: ({ caseId }) => {
-        router.push(`/cases/${caseId}/chats/${chatId}`);
-        router.refresh();
-      },
-    }),
-  );
+/** The lawyer's message: rendered once (memo on its parts, which the SDK keeps for every message but the newest). */
+const Question = memo(function Question({ parts }: { parts: ChatMessage["parts"] }) {
   return (
-    <DropdownMenu open={open} onOpenChange={setOpen}>
-      <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="sm" disabled={move.isPending}>
-          {move.isPending ? <Loader2 className="animate-spin" /> : <FolderInput />}
-          <span className="hidden sm:inline">Move to case</span>
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-64">
-        <DropdownMenuLabel>Move this chat to a case</DropdownMenuLabel>
-        <DropdownMenuSeparator />
-        {cases.isPending && <DropdownMenuItem disabled>Loading cases…</DropdownMenuItem>}
-        {cases.isError && <DropdownMenuItem disabled>Could not load your cases</DropdownMenuItem>}
-        {cases.data?.length === 0 && <DropdownMenuItem disabled>No cases yet</DropdownMenuItem>}
-        <div className="max-h-72 overflow-y-auto">
-          {cases.data?.map((c) => (
-            <DropdownMenuItem key={c.id} onSelect={() => move.mutate({ chatId, caseId: c.id })}>
-              <Briefcase /> <span className="truncate">{c.title}</span>
-            </DropdownMenuItem>
-          ))}
-        </div>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem asChild>
-          <Link href="/cases/new">
-            <Plus /> New case
-          </Link>
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
+    <motion.div
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={SPRING}
+      className="ml-auto flex max-w-[85%] flex-col items-end gap-1.5"
+    >
+      {parts.map((p, i) =>
+        p.type === "data-playbook" ? (
+          <span
+            key={i}
+            className="inline-flex items-center gap-1.5 rounded-full bg-law px-2.5 py-0.5 text-[11.5px] text-law-ink"
+          >
+            <BookOpen className="size-3" /> {p.data.name}
+          </span>
+        ) : null,
+      )}
+      <div className="rounded-[12px_12px_4px_12px] bg-ink px-4 py-3 text-[15px] leading-normal whitespace-pre-wrap text-paper">
+        {parts.map((p, i) => (p.type === "text" ? <span key={i}>{p.text}</span> : null))}
+      </div>
+    </motion.div>
   );
-}
+});
 
-function Answer({
+// new words fade in while an answer streams (Streamdown's animate plugin; its keyframes come from streamdown/styles.css)
+const ANIMATE = { animation: "fadeIn", sep: "word", duration: 200 } as const;
+
+/** An earlier answer never renders again (its parts are the same object, it is not live): props that change per token
+ *  (loaded, since) are ignored for it. Only the streaming answer updates. */
+const Answer = memo(AnswerView, (a, b) =>
+  !a.live && !b.live
+    ? a.parts === b.parts && a.caseId === b.caseId && a.onOpen === b.onOpen
+    : a.parts === b.parts && a.live === b.live && a.loaded === b.loaded && a.since === b.since && a.caseId === b.caseId,
+);
+
+function AnswerView({
   parts,
   live,
   components,
@@ -613,13 +573,19 @@ function Answer({
       {answer.map(
         (p, i) =>
           p.type === "text" && (
-            <Streamdown key={i} className="md text-[15px]" components={components as never} isAnimating={live}>
-              {toLinks(p.text)}
+            <Streamdown
+              key={i}
+              className="md text-[15px]"
+              components={components as never}
+              isAnimating={live}
+              animated={live ? ANIMATE : false}
+            >
+              {toLinks(p.text, live)}
             </Streamdown>
           ),
       )}
       {caseId && changes.map((c, i) => <CaseChange key={i} caseId={caseId} summary={c.summary} />)}
-      {!live && keys.size > 0 && (
+      {keys.size > 0 && (
         <div className="flex flex-wrap items-center gap-3 border-t border-dashed pt-3 text-[12.5px] text-muted-foreground">
           {keys.size - unread > 0 && (
             <span className="flex items-center gap-1.5 text-ok">
@@ -640,6 +606,16 @@ function Answer({
 }
 
 /** A citation's group in the list: its law or case file, named once, with each cited place under it. */
+/** A law section as the agent's tools returned it (search hit, read, amendment check). */
+type Known = {
+  chunkId: number;
+  docKey: string;
+  title: string | null;
+  label: string | null;
+  path: string | null;
+  text: string;
+};
+
 type Group = {
   key: string;
   law: boolean;
@@ -655,11 +631,15 @@ const placeOf = (label: string, law: boolean) => {
   return law ? bits[0]! : bits[bits.length - 1]!;
 };
 
-function useGroups(cites: Cite[], caseId?: string): Group[] {
+function useGroups(cites: Cite[], known: Map<number, Known>, caseId?: string): Group[] {
   const trpc = useTRPC();
+  // only a citation the agent's tools never returned (unverified) is looked up
   const laws = useQueries({
     queries: cites.map((c) =>
-      trpc.corpus.chunk.queryOptions({ chunkId: c.kind === "law" ? c.chunkId : 0 }, { enabled: c.kind === "law" }),
+      trpc.corpus.chunk.queryOptions(
+        { chunkId: c.kind === "law" ? c.chunkId : 0 },
+        { enabled: c.kind === "law" && !known.has(c.chunkId) },
+      ),
     ),
   });
   const hasFiles = cites.some((c) => c.kind === "file");
@@ -668,10 +648,18 @@ function useGroups(cites: Cite[], caseId?: string): Group[] {
   cites.forEach((c, i) => {
     let key: string, title: string, sub: string | null, where: string, snippet: string | undefined;
     if (c.kind === "law") {
-      const v = laws[i]?.data;
+      const k = known.get(c.chunkId);
+      const d = laws[i]?.data;
+      const v = k
+        ? { chunk: k, doc: null }
+        : d
+          ? { chunk: { ...d.chunk, title: d.doc?.title ?? d.chunk.title }, doc: d.doc }
+          : undefined;
+      // not known yet: it joins its law's group once the law is known (a group of its own first made the count jump)
+      if (!v && laws[i]?.isPending) return;
       key = v ? `d:${v.chunk.docKey}` : c.key;
       title = v
-        ? (v.doc?.title ?? v.chunk.title ?? v.chunk.docKey)
+        ? titleCase(v.doc?.title ?? v.chunk.title ?? v.chunk.docKey)
         : c.label.split(",").slice(1).join(",").trim() || "Law";
       sub = v ? lawName(v.chunk.docKey) : null;
       where = (v && shortPin(v.chunk.path, v.chunk.label)) || placeOf(c.label, true);
@@ -695,10 +683,91 @@ function useGroups(cites: Cite[], caseId?: string): Group[] {
   return [...groups.values()];
 }
 
+/** What a citation chip needs from its chat (Chat provides it). */
+const CiteInfo = createContext<{
+  chatId: string;
+  loaded: Set<string>;
+  numbers: Map<string, number>;
+  show: (c: Cite) => void;
+}>({ chatId: "", loaded: new Set(), numbers: new Map(), show: () => {} });
+
+/** A link in an answer: a citation becomes its numbered chip (it opens the source in the panel), anything else an
+ *  ordinary link out. */
+function CiteLink({ href, children }: { href?: string; children?: React.ReactNode }) {
+  const { chatId: id, loaded, numbers, show } = useContext(CiteInfo);
+  if (href === "#citing")
+    return (
+      <span className="mx-0.5 inline-flex animate-pulse items-center rounded-[5px] border border-dashed px-1.5 align-[1px] font-sans text-[12.5px] leading-5 text-muted-foreground">
+        citing…
+      </span>
+    );
+  if (!href?.startsWith("#cite:"))
+    return (
+      <a href={href} target="_blank" rel="noreferrer" className="text-primary underline underline-offset-2">
+        {children}
+      </a>
+    );
+  let c: Cite;
+  try {
+    c = JSON.parse(decodeURIComponent(href.slice(6)));
+  } catch {
+    return <>{children}</>;
+  }
+  const ok = c.kind === "page" || loaded.has(c.key);
+  const tone = toneOf(c);
+  const chip = (
+    <CiteButton
+      chatId={id}
+      citeKey={c.key}
+      on={ok ? TONE[tone].on : undefined}
+      onClick={() => show(c)}
+      aria-label={`Citation ${numbers.get(c.key)}: ${c.label}${ok ? "" : ", not verified"}`}
+      className={cn(
+        "mx-0.5 inline-flex max-w-72 cursor-pointer items-center gap-1 rounded-[5px] border px-1.5 align-[1px] font-sans text-[12.5px] leading-5 font-medium transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
+        !ok ? "border-dashed border-unverified-border bg-unverified text-unverified-ink" : TONE[tone].chip,
+      )}
+    >
+      <span className="shrink-0 tabular-nums opacity-80">
+        {!ok ? <TriangleAlert className="inline size-3 -translate-y-px" /> : tone === "file" ? "▤" : "§"}{" "}
+        {numbers.get(c.key)}
+      </span>
+      <span aria-hidden className="opacity-50">
+        ·
+      </span>
+      <span className="truncate">{c.label}</span>
+    </CiteButton>
+  );
+  return ok ? (
+    chip
+  ) : (
+    <Tooltip>
+      <TooltipTrigger asChild>{chip}</TooltipTrigger>
+      <TooltipContent>Not verified: Hulft did not read this in this chat</TooltipContent>
+    </Tooltip>
+  );
+}
+
+// Streamdown's renderers: one object for every answer, never rebuilt (a new one redraws every block)
+const components = { img: SafeImg, a: CiteLink };
+
+/** A citation chip in an answer: solid while its source is open in this chat's panel. It reads the open citation from
+ *  the store itself, so it updates even where Streamdown keeps a rendered block. */
+function CiteButton({
+  chatId,
+  citeKey,
+  on,
+  className,
+  ...props
+}: React.ComponentProps<"button"> & { chatId: string; citeKey: string; on?: string }) {
+  const open = useChatStore((s) => s.cite[chatId]?.key === citeKey);
+  return <button type="button" aria-pressed={open} className={cn(className, open && on)} {...props} />;
+}
+
 function CitationPanel({
   open,
   cites,
   loaded,
+  known,
   caseId,
   onPick,
   onBack,
@@ -706,11 +775,12 @@ function CitationPanel({
   open: Cite | null;
   cites: Cite[];
   loaded: Set<string>;
+  known: Map<number, Known>;
   caseId?: string;
   onPick: (c: Cite) => void;
   onBack: () => void;
 }) {
-  const groups = useGroups(cites, caseId);
+  const groups = useGroups(cites, known, caseId);
   if (!open)
     return (
       <div className="flex h-full flex-col">

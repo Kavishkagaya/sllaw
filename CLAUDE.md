@@ -61,7 +61,9 @@ Each came from a correction or a costly mistake. Guarded = `.claude/hooks/guard.
 - **Agents test on their own database** (2026-11-10): each app brief gets a Neon branch `agent/<slug>` of
   `sllaw-app` (ids in `.claude/agent-db.json`); while on the brief's branch, `app/apps/web/.env.local` points at it
   (the production one is kept as `.env.main`, put back at merge), and it is deleted at merge or drop. A checkout on a
-  brief's branch pointing at production can't run the app, evals or migrations. *Guarded.*
+  brief's branch pointing at production can't run the app, evals or migrations. The user may skip it for a brief
+  (`"neon_branch": false`, e.g. UI-only, user 2026-11-15): setting it asks the user, and only an agreed brief's
+  branch then runs the app on main; migrations still can't. *Guarded.*
 - **Branches** (2026-10-06, 2026-10-26): ETL work commits on `main`; app features on their brief's branch off
   `origin/main`, checked out here in `~/sllaw`, never a separate worktree (user, 2026-11-11). Commits on the brief's branch are part of /build; outside the loop, commit only when
   asked (2026-11-10).
@@ -88,6 +90,13 @@ Each came from a correction or a costly mistake. Guarded = `.claude/hooks/guard.
   No agent redoes another's work (user, 2026-11-12, 2026-11-14): validators verify the builder's recorded runs (the
   brief's `progress`, the rows it left, its UI walk with screenshot paths) instead of re-running paid steps or
   re-walking the UI, walk only what the record does not cover, and each validator stays in its own lane.
+- **Walk a preview before handing it over** (user, 2026-11-15): after a UI change, open it in the headed browser and
+  check each changed thing as a lawyer would (click it, read the result with a targeted eval) before telling the user
+  it is ready; "typecheck passes" is not "it works". The user looks second, not first. Walk every kind of case the
+  view can show, not one example (a law citation: an amended section, an amending section, a never-amended one; 2026-11-15).
+- **Only the streaming message renders** (user, 2026-11-15): earlier messages in a chat get stable props (memo on their
+  parts, no `animated`/`isAnimating`) and never re-render while an answer streams; data the chips read through context
+  keeps its identity until it changes. A per-token re-render of the thread made stalls grow with chat length.
 - **Test the app the way a lawyer talks** (user, 2026-11-11): plain questions about the case and its people
   ("the Perera Traders demand"), never file names, ids or our own terms ("card", "field", "fileEdit"), and no
   invented facts that contradict the documents just to provoke the agent.
@@ -95,6 +104,9 @@ Each came from a correction or a costly mistake. Guarded = `.claude/hooks/guard.
   undo, history or other "just in case" extras (they come back when a user asks). The smallest change that works:
   one line where one line does it, not a new module, option or abstraction. One path for one kind of thing: a model
   call is a model call wherever it starts (metered, priced and checked the same way), no per-caller special case.
+- **Shared UI state lives in a zustand store** (`apps/web/stores/`, user 2026-11-15): state another component reads
+  or that must survive leaving the page (a chat's draft, playbook, open citation; uploads) goes in a store, keyed per
+  chat or upload; a menu's open, a hover or a form being typed stays in `useState`.
 - **Never repeat an investigation:** read `docs/SOURCES.md` before probing a site, `docs/PIPELINE_V2.md` before
   changing the pipeline. Findings get written down in the same session (see "Writing things down").
 
@@ -181,4 +193,9 @@ one, and record dead ends and what was *not* checked.
   `NODE_OPTIONS` for scripts.
 - **`pkill -f "next dev"` kills its own shell** (its command line matches, exit 144, the rest of the command never
   runs; 2026-11-15): use `pkill -f "[n]ext dev"`.
+- **Streamdown redraws every block when a renderer's identity changes** (2026-11-15): a `components` object rebuilt
+  per streamed chunk restarted the word fade on every word. Pass one module-level `components`; chat data the
+  renderers need comes through a context (`CiteInfo` in `components/chat/chat.tsx`).
+- **`:target` never matches after a Next `Link` navigation** (pushState sets no target, 2026-11-15): mark and scroll to
+  a `#hash` in an effect (`/doc`'s `DocView` sets `data-cited`).
 - **Legacy-font Sinhala listed as English** (act:54/2007, act:7/2006): nothing flags it yet.

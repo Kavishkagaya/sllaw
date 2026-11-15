@@ -31,6 +31,8 @@ import {
   finishUpload,
   getChunk,
   getDoc,
+  getDocSource,
+  getHistory,
   listCaseFiles,
   listCases,
   listChats,
@@ -38,6 +40,7 @@ import {
   MAX_SIZE,
   METRIC_KEYS,
   moveChat,
+  myFileEvents,
   openCase,
   openCaseFile,
   openChat,
@@ -54,7 +57,7 @@ import {
   usageStatus,
   workspaceUsage,
 } from "@sllaw/services";
-import { TRPCError } from "@trpc/server";
+import { TRPCError, tracked } from "@trpc/server";
 import { z } from "zod";
 import {
   createCallerFactory,
@@ -107,7 +110,7 @@ export const appRouter = router({
   }),
   // Cases (the case service decides who may see and change one) and their files: the case service checks the case,
   // then hands the file to the file service. Upload is
-  // case.addFile -> PUT the bytes to uploadUrl -> file.finishUpload; the browser then follows /api/files/<id>/events.
+  // case.addFile -> PUT the bytes to uploadUrl -> file.finishUpload; the browser then subscribes to file.events.
   case: router({
     list: workspaceUser.query(({ ctx }) => listCases(ctx.account)),
     create: workspaceUser.input(z.object(caseInput)).mutation(({ ctx, input }) => createCase(ctx.account, input)),
@@ -189,6 +192,17 @@ export const appRouter = router({
     delete: workspaceUser
       .input(z.object({ fileId: z.uuid() }))
       .mutation(async ({ ctx, input }) => removed(await deleteFile(ctx.account, input.fileId))),
+    // the file's processing states (stores/upload-store.ts follows it): a snapshot, each step's state, then end.
+    // Over server-sent events; a reconnect sends the last tracked id and the stream resumes after it.
+    events: workspaceUser
+      .input(z.object({ fileId: z.uuid(), lastEventId: z.string().nullish() }))
+      .subscription(async function* ({ ctx, input, signal }) {
+        const last = Number(input.lastEventId ?? Number.NaN);
+        const events = found(
+          await myFileEvents(ctx.account, input.fileId, Number.isInteger(last) ? last : undefined, signal),
+        );
+        for await (const e of events) yield e.type === "state" ? tracked(String(e.id), e) : e;
+      }),
   }),
   // What the workspace used and what it cost us (usage_events), for its admins: this month, or [from, to)
   usage: router({
@@ -252,11 +266,18 @@ export const appRouter = router({
   }),
   corpus: router({
     doc: publicProcedure.input(z.object({ key: z.string() })).query(({ input }) => getDoc(input.key)),
+    // the stored PDF or HTML beside the law's text (/doc): a signed R2 link, for signed-in users only
+    source: signedUser.input(z.object({ key: z.string() })).query(({ input }) => getDocSource(input.key)),
     // the public Coverage page: a few counts, cached an hour
     coverage: publicProcedure.query(() => coverage()),
+    // a cited section for the source panel and the Sources list: light, no clauses
     chunk: signedUser
-      .input(z.object({ chunkId: z.number().int().positive(), date: z.iso.date().optional() }))
-      .query(({ input }) => getChunk(input.chunkId, input.date)),
+      .input(z.object({ chunkId: z.number().int().positive() }))
+      .query(({ input }) => getChunk(input.chunkId)),
+    // a section's full history (the /history page): every change with the amending section's whole text
+    history: signedUser
+      .input(z.object({ chunkId: z.number().int().positive() }))
+      .query(({ input }) => getHistory(input.chunkId)),
   }),
 });
 
@@ -278,8 +299,7 @@ function removed(r: "removed" | "busy" | null, busy = FILE_BUSY) {
 
 export type AppRouter = typeof appRouter;
 export const createCaller = createCallerFactory(appRouter);
-export type { ChatMessage, FileEvent, FileStatus, StepStatus } from "@sllaw/services";
+export type { ChatMessage, FileEvent, FileStatus, FileStreamEvent, StepStatus } from "@sllaw/services";
 export { chatRoute } from "./chat";
-export { fileEventsRoute, fileUploadRoute } from "./files";
 export { createContext } from "./trpc";
 export { clerkWebhook } from "./webhooks";

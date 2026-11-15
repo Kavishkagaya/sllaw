@@ -10,7 +10,16 @@ export const createContext = async (opts: { headers: Headers }) => {
 };
 
 type Context = Awaited<ReturnType<typeof createContext>>;
-const t = initTRPC.context<Context>().create({ transformer: superjson });
+// subscriptions (file.events) run over server-sent events: the server closes a stream before the function's 300 s and
+// the browser reconnects with the last tracked id; pings keep proxies from closing a quiet one
+const t = initTRPC.context<Context>().create({
+  transformer: superjson,
+  sse: {
+    maxDurationMs: 280_000,
+    ping: { enabled: true, intervalMs: 15_000 },
+    client: { reconnectAfterInactivityMs: 30_000 },
+  },
+});
 export const router = t.router;
 
 /** A plan limit reached in a service (LimitReached) is TOO_MANY_REQUESTS (429), an OfficeError BAD_REQUEST (400),
