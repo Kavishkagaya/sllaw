@@ -1,7 +1,7 @@
 "use client";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowUp, BookOpen, Paperclip, X } from "lucide-react";
-import { useRef, useState } from "react";
+import { useRef } from "react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -15,7 +15,7 @@ import { useChatStore } from "@/stores/chat-store";
 import { useUploadStore } from "@/stores/upload-store";
 import { useTRPC } from "@/trpc/client";
 
-// The question box. Its text is a draft in the chat store (draftKey: the chat id, "new" on the home page), so it
+// The question box. Its text and its picked playbook are in the chat store (draftKey: the chat id, "new" on the home page), so it
 // survives moving around the app. Enter sends, Shift+Enter is a new line. While an answer runs, send becomes stop.
 // The book button picks a playbook for the next message (docs/APP.md, Playbooks): only those of where the lawyer is
 // (case-only ones in a case), and no button when there are none. In a case, the clip adds files to the case (the upload
@@ -28,9 +28,12 @@ export function Composer({
   autoFocus,
   inCase = false,
   caseId,
+  chip,
   placeholder = "Ask about Sri Lankan law…",
 }: {
   caseId?: string;
+  /** the case chip (chat/case-picker), first in the tool row */
+  chip?: React.ReactNode;
   placeholder?: string;
   draftKey: string;
   onSend: (text: string, playbook?: string) => void;
@@ -43,7 +46,9 @@ export function Composer({
   const setDraft = useChatStore((s) => s.setDraft);
   const trpc = useTRPC();
   const playbooks = useQuery(trpc.chat.playbooks.queryOptions({ inCase }, { staleTime: Infinity })).data ?? [];
-  const [picked, setPicked] = useState<string | null>(null);
+  const picked = useChatStore((s) => s.playbook[draftKey] ?? null);
+  const setPlaybook = useChatStore((s) => s.setPlaybook);
+  const setPicked = (name: string | null) => setPlaybook(draftKey, name);
   const upload = useUploadStore((s) => s.upload);
   const files = useRef<HTMLInputElement>(null);
   const send = (e: React.FormEvent) => {
@@ -86,7 +91,8 @@ export function Composer({
         rows={2}
         className="max-h-60 min-h-16 resize-none border-0 bg-transparent px-4 pt-3 pb-1 text-[15px] shadow-none focus-visible:ring-0 md:text-[15px] dark:bg-transparent"
       />
-      <div className="flex items-center gap-2 px-3 pb-2.5">
+      <div className="flex min-w-0 items-center gap-2 px-3 pb-2.5">
+        {chip}
         {caseId && (
           <>
             <Button

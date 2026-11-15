@@ -239,8 +239,12 @@ in v1; an entity graph can be built later from the same per-file JSON.
   `case.addFile` checks the case, creates the file with every step under `case:<id>`, links `case_files`); a
   private file through `file.startUpload` (`user:<id>`). Every upload ends with `file.finishUpload`, which starts a
   workflow run (`files.run_id`). The UI follows the states live: each phase gets a `StateWriter` and writes every
-  state it sets to the run's stream (Workflow `getWritable`); `GET /api/files/<id>/events` sends a snapshot of the
-  row, then each state as a server-sent event, then `end`; a reconnect resumes after Last-Event-ID. The client keeps
+  state it sets to the run's stream (Workflow `getWritable`); the tRPC subscription `file.events` (server-sent events
+  through `httpSubscriptionLink`; was `GET /api/files/<id>/events` until 2026-11-15, user: everything through tRPC) sends a
+  snapshot of the row, then each state (`tracked` with its index in the run's stream), then `end`; a reconnect resumes
+  after the last id. The server closes a stream at 280 s (`sse.maxDurationMs`, under the 300 s function) and the browser
+  reconnects. Plain routes left, each because tRPC can't carry it: `/api/chat` (the AI SDK's own stream protocol for
+  `useChat`, with stop) and `/api/webhooks/clerk` (Clerk calls a fixed URL with a Svix-signed body). The client keeps
   uploads in one global zustand store (`apps/web/stores/upload-store.ts`: start, PUT with progress, finish, follow),
   shown in a tray on every page and per file with `useFileStatus`. Vercel has no ready-made client hook for a run
   (checked 2026-10-26, workflow 5.2.1: only `WorkflowChatTransport`, for chats). No sweep and no cron (user, 2026-10-26: a file

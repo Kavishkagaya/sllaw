@@ -24,7 +24,7 @@ export function memoryStore(): BlobStore & { keys(): string[] } {
       for (const k of ks) m.delete(k);
       return ks.length;
     },
-    uploadUrl: async () => null,
+    uploadUrl: async (key) => `memory://${key}`,
     downloadUrl: async () => null,
   };
 }

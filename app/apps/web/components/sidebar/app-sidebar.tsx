@@ -14,6 +14,7 @@ import {
   SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
+  SidebarMenuAction,
   SidebarMenuBadge,
   SidebarMenuButton,
   SidebarMenuItem,
@@ -58,10 +59,10 @@ export function AppSidebar({
           <Brand />
         </Link>
         <Link
-          href="/cases/new"
+          href={open ? `/cases/${open.id}/chats` : "/chats"}
           className="flex h-9 items-center justify-center gap-2 rounded-md bg-primary text-sm font-medium text-primary-foreground hover:bg-primary/90"
         >
-          <Plus className="size-4" /> New case
+          <MessageSquarePlus className="size-4" /> New chat
         </Link>
       </SidebarHeader>
       <SidebarContent>
@@ -80,6 +81,11 @@ export function AppSidebar({
                   <Folder /> <span>Cases</span>
                 </Link>
               </SidebarMenuButton>
+              <SidebarMenuAction asChild title="New case" className="after:-inset-3">
+                <Link href="/cases/new">
+                  <Plus /> <span className="sr-only">New case</span>
+                </Link>
+              </SidebarMenuAction>
             </SidebarMenuItem>
           </SidebarMenu>
           {open && <OpenCaseTree open={open} path={path} />}

@@ -10,3 +10,5 @@ const handler = (req: Request) =>
   });
 
 export { handler as GET, handler as POST };
+// a subscription (file.events) streams up to 280 s (sse.maxDurationMs in api/trpc.ts), then the browser reconnects
+export const maxDuration = 300;

@@ -13,7 +13,18 @@ const chats = new Map<string, Chat<ChatMessage>>();
 // the case a new chat is started in, sent with its first message (a stored chat keeps its own: the server decides)
 const caseOf = new Map<string, string>();
 
+/** A citation as the client gets it (real ids; the server maps the model's handles): a law chunk, a case file's
+ *  chunk, a whole case file, or an old chat's file page ([[ref:pN|label]], before chunk citations). key is the same
+ *  for every citation of one source, which keeps one number in the chat. */
+export type Cite =
+  | { kind: "law"; key: string; label: string; chunkId: number }
+  | { kind: "file"; key: string; label: string; fileId: string; n: number | null }
+  | { kind: "page"; key: string; label: string };
+
 type State = {
+  /** the citation open in each chat's source panel; its chip in the answer reads this to show it is open */
+  cite: Record<string, Cite | null>;
+  pick: (id: string, c: Cite | null) => void;
   drafts: Record<string, string>; // per chat id; "new" for a new chat, "home" / "case:<id>" for those pages' boxes
   busy: Record<string, boolean>; // chats with an answer in flight
   unread: Record<string, boolean>; // answers that finished while their chat was not on screen
@@ -24,6 +35,9 @@ type State = {
    *  that case. */
   open: (id: string, initial?: ChatMessage[], caseId?: string | null) => Chat<ChatMessage>;
   setDraft: (key: string, text: string) => void;
+  /** the playbook picked for a box's next message, by the same key as its draft (docs/APP.md, Playbooks) */
+  playbook: Record<string, string | null>;
+  setPlaybook: (key: string, name: string | null) => void;
   /** playbook: one the lawyer picked for this message (a data-playbook part; docs/APP.md, Playbooks). */
   send: (id: string, text: string, caseId?: string | null, playbook?: string) => void;
   /** The stop button: aborts the request, and the server aborts the agent with it (the answer so far is kept). */
@@ -59,6 +73,8 @@ export const useChatStore = create<State>()((set, get) => {
     });
 
   return {
+    cite: {},
+    pick: (id, c) => set((s) => ({ cite: { ...s.cite, [id]: c } })),
     drafts: {},
     busy: {},
     unread: {},
@@ -73,6 +89,8 @@ export const useChatStore = create<State>()((set, get) => {
       return chat;
     },
     setDraft: (key, text) => set((s) => ({ drafts: { ...s.drafts, [key]: text } })),
+    playbook: {},
+    setPlaybook: (key, name) => set((s) => ({ playbook: { ...s.playbook, [key]: name } })),
     send: (id, text, caseId, playbook) => {
       if (!text.trim() || get().busy[id]) return;
       set((s) => ({ busy: { ...s.busy, [id]: true } }));

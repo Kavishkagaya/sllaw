@@ -21,9 +21,21 @@ function client() {
   return aws;
 }
 
+const objectUrl = (key: string) =>
+  `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com/${process.env.R2_LAW_BUCKET || "sllaw"}/${key.split("/").map(encodeURIComponent).join("/")}`;
+
+/** A law's stored source file (kb.docs.source_key) for a while: a signed GET that the browser shows inline. */
+export async function sourceFileUrl(key: string, expiresIn = 900) {
+  const url = new URL(objectUrl(key));
+  url.searchParams.set("X-Amz-Expires", String(expiresIn));
+  url.searchParams.set("response-content-disposition", "inline");
+  url.searchParams.set("response-content-type", key.endsWith(".pdf") ? "application/pdf" : "text/html; charset=utf-8");
+  const signed = await client().sign(url.toString(), { method: "GET", aws: { signQuery: true } });
+  return signed.url;
+}
+
 async function load(key: string) {
-  const bucket = process.env.R2_LAW_BUCKET || "sllaw";
-  const url = `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com/${bucket}/${key.split("/").map(encodeURIComponent).join("/")}`;
+  const url = objectUrl(key);
   const r = await client().fetch(url);
   if (!r.ok) throw new Error(`etl_db: text part ${key}: r2 ${r.status}`);
   const part = (await r.json()) as { chunks: { id: string; text: string }[] };

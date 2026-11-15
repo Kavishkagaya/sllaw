@@ -43,8 +43,7 @@ export type FileInput = { name: string; mime: string; size: number };
 
 // ---- for other services: by id, no access check ----
 
-/** Step 1 of upload: the row (upload pending) and where the browser sends the bytes. uploadUrl null means the store
- *  has no direct upload (memory): PUT the bytes to /api/files/<id> instead. */
+/** Step 1 of upload: the row (upload pending) and the signed URL the browser PUTs the bytes to. */
 export async function createUpload(owner: { workspaceId: string; userId: string }, input: FileInput, need: Need) {
   if (input.size > MAX_SIZE) throw new Error(`file too large: ${input.size} bytes (max ${MAX_SIZE})`);
   const pending = Object.fromEntries(withExtract(need.steps).map((s) => [`${s}State`, "pending"]));
@@ -137,42 +136,40 @@ export function fileStatus(f: FileRow): FileStatus {
   return { fileId: f.id, at: f.updatedAt.getTime(), steps, finished };
 }
 
-/** The file's status as server-sent events: `snapshot` (the row now), then a `state` event per change the run
- *  writes (id = its index in the run's stream; a reconnect sends Last-Event-ID and resumes after it), then `end`
- *  when the run is over. A finished file gets its snapshot and `end` at once. */
-export function fileEvents(f: FileRow, lastEventId?: number): ReadableStream<Uint8Array> {
-  const enc = new TextEncoder();
-  const sse = (event: string, data: unknown, id?: number) =>
-    enc.encode(`${id != null ? `id: ${id}\n` : ""}event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
-  const status = fileStatus(f);
-  const live = !status.finished && f.uploadState === "stored" && f.runId;
-  let reader: ReadableStreamDefaultReader<FileEvent> | null = null;
-  let next = lastEventId != null && lastEventId >= 0 ? lastEventId + 1 : 0;
+/** A file's processing states: its status now, then (while its run is live) each step's state as the run writes
+ *  it, numbered by its index in the run's stream so a reconnect resumes after lastEventId; then "end". The file
+ *  router's `events` subscription yields these (tRPC over server-sent events). */
+export type FileStreamEvent =
+  | { type: "snapshot"; status: FileStatus }
+  | { type: "state"; id: number; event: FileEvent }
+  | { type: "end"; fileId: string };
 
-  return new ReadableStream<Uint8Array>({
-    async start(c) {
-      c.enqueue(sse("snapshot", status));
-      if (!live) {
-        c.enqueue(sse("end", { fileId: f.id }));
-        c.close();
-        return;
-      }
-      reader = getRun(f.runId!).getReadable<FileEvent>({ startIndex: next }).getReader();
-    },
-    async pull(c) {
-      if (!reader) return;
+export async function* fileEvents(
+  f: FileRow,
+  lastEventId?: number,
+  signal?: AbortSignal,
+): AsyncGenerator<FileStreamEvent> {
+  const status = fileStatus(f);
+  yield { type: "snapshot", status };
+  if (status.finished || f.uploadState !== "stored" || !f.runId) {
+    yield { type: "end", fileId: f.id };
+    return;
+  }
+  let next = lastEventId != null && lastEventId >= 0 ? lastEventId + 1 : 0;
+  const reader = getRun(f.runId).getReadable<FileEvent>({ startIndex: next }).getReader();
+  const stop = () => void reader.cancel();
+  signal?.addEventListener("abort", stop);
+  try {
+    while (!signal?.aborted) {
       const { value, done } = await reader.read();
-      if (done) {
-        c.enqueue(sse("end", { fileId: f.id }));
-        c.close();
-        return;
-      }
-      c.enqueue(sse("state", value, next++));
-    },
-    async cancel() {
-      await reader?.cancel();
-    },
-  });
+      if (done) break;
+      yield { type: "state", id: next++, event: value };
+    }
+    if (!signal?.aborted) yield { type: "end", fileId: f.id };
+  } finally {
+    signal?.removeEventListener("abort", stop);
+    await reader.cancel().catch(() => {});
+  }
 }
 
 // ---- a user's own files (the file router): owner only ----
@@ -191,15 +188,6 @@ export const startUpload = async (a: Signed, input: FileInput) => {
     scopes: [`user:${a.user.id}`],
   });
 };
-
-/** The bytes through the app, for a store without direct upload (and small files). Only while the upload is pending. */
-export async function putUpload(a: Signed, id: string, bytes: Uint8Array) {
-  const f = await own(a, id);
-  if (!f || f.uploadState !== "pending") return false;
-  if (bytes.byteLength > MAX_SIZE) throw new Error("file too large");
-  await appDeps().store.put(keys.original(id), bytes, f.mime);
-  return true;
-}
 
 /** Step 2 of upload, for every file whoever started it: the browser says the bytes are sent; checked in the store,
  *  then the steps the file needs start as a workflow run. The uploader is the owner. null when not this user's. */
@@ -236,9 +224,9 @@ export async function openFile(a: Signed, id: string) {
 }
 
 /** The live status of the user's own file (the events route); null when it is not theirs. */
-export async function myFileEvents(a: Signed, id: string, lastEventId?: number) {
+export async function myFileEvents(a: Signed, id: string, lastEventId?: number, signal?: AbortSignal) {
   const f = await own(a, id);
-  return f ? fileEvents(f, lastEventId) : null;
+  return f ? fileEvents(f, lastEventId, signal) : null;
 }
 
 export async function reprocessFile(a: Signed, id: string, steps?: Step[]) {

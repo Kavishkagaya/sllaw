@@ -47,7 +47,7 @@ office: imported by db, ai, services, api, apps/web (pure: the case office's sch
   index was built with): it takes text, not vectors. Changing the vector DB or the embedding model is a change here
   alone.
 - **`storage`**: the blob store (`BlobStore`: put, get, head, deletePrefix, signed upload/download URLs). R2 (the
-  `R2_FILES_BUCKET`, apart from the ETL's bucket) or memory (`STORAGE=memory`, tests and local runs).
+  `R2_FILES_BUCKET`, apart from the ETL's bucket); `memoryStore` is a fake for unit tests only (no memory mode in the app, user 2026-11-15).
 - **`extract`**: a file's bytes -> its text, page by page. One `Extractor` per format (unpdf for text-layer PDFs,
   mammoth for .docx, plain text and HTML); OCR through an `OcrProvider`: the endpoint gets a signed URL to the
   whole file and returns its pages as JSON (`ocrFromEnv`: `mistralOcr` with `OCR_PROVIDER=mistral` + `MISTRAL_API_KEY`,
@@ -108,7 +108,8 @@ only by the row's step states and the file's folder in the store (`files/<id>/`)
 vectors under the row's `scopes`). `runStep` is the only writer of step state, for the workflow and the tests alike, and writes every state it sets to a `StateWriter`: in a workflow, the run's stream. A step's state is
 null when the file does not need it (an asset: stored and done). No file content in Postgres.
 
-Live status: `GET /api/files/<id>/events` (server-sent events: `snapshot`, `state`..., `end`) reads the run's stream.
+Live status: the tRPC subscription `file.events` (server-sent events: `snapshot`, tracked `state`..., `end`) reads the
+run's stream. Everything the browser asks goes through tRPC except `/api/chat` (AI SDK stream) and the Clerk webhook.
 The client keeps every upload in `apps/web/stores/upload-store.ts` (zustand, global: start, PUT with progress,
 finish, follow); `components/upload-tray.tsx` shows them on every page, `useFileStatus(fileId, initial)` on a page.
 

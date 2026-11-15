@@ -1,7 +1,7 @@
-import { aliasedTable, and, asc, eq, ilike, inArray, like, ne, sql } from "drizzle-orm";
+import { aliasedTable, and, asc, eq, ilike, inArray, like, ne, or, sql } from "drizzle-orm";
 import { db } from "./client";
 import { chunks, docs, links } from "./schema";
-import { partTexts } from "./text";
+import { partTexts, sourceFileUrl } from "./text";
 
 const docCols = { key: docs.key, kind: docs.kind, title: docs.title, year: docs.year, commenced: docs.commenced };
 // uuid and part find a chunk's text in R2 (withText); callers get `text` in their place
@@ -49,6 +49,28 @@ export async function docWithChunks(key: string) {
   if (!doc) return null;
   const parts = await db.select(chunkCols).from(chunks).where(eq(chunks.docKey, key)).orderBy(asc(chunks.seq));
   return { ...doc, chunks: await withText(parts) };
+}
+
+/** The law's stored source file, signed for the viewer: a PDF, or the HTML page it was built from. null when none. */
+export async function docSource(key: string) {
+  const [d] = await db.select({ sourceKey: docs.sourceKey }).from(docs).where(eq(docs.key, key));
+  if (!d?.sourceKey) return null;
+  return {
+    kind: d.sourceKey.endsWith(".pdf") ? ("pdf" as const) : ("html" as const),
+    url: await sourceFileUrl(d.sourceKey),
+  };
+}
+
+/** Every law that changed this one (any part of it, or the whole law), with its earliest date, oldest first: the
+ *  law's timeline. One small row per amending law; the join stays in the database. */
+export async function lawChanges(key: string) {
+  return db
+    .select({ by: links.srcDoc, title: docs.title, date: sql<string | null>`min(${links.date})` })
+    .from(links)
+    .leftJoin(docs, eq(docs.key, links.srcDoc))
+    .where(and(eq(links.dstDoc, key), inArray(links.kind, [...CHANGE_KINDS, "amends_act", "repeals_act"])))
+    .groupBy(links.srcDoc, docs.title)
+    .orderBy(sql`min(${links.date})`);
 }
 
 /** A law's title, key and source link, for the viewer. */
@@ -177,6 +199,39 @@ async function withHeads(chunkIds: number[]) {
   const head = new Map(chunkIds.map((id) => [id, id]));
   for (const r of rows) if (r.head) head.set(r.id, r.head);
   return head;
+}
+
+/** Which laws changed a section, and when (one row per amending law, earliest date): the source panel's marks on the
+ *  timeline. No texts: the clauses are the history page's (changesInto). */
+export async function changedBy(chunkId: number) {
+  // a "(cont.)" chunk's changes are its section's: its head chunk, found inside the same statement (one round trip)
+  const head = sql`(select h.id from kb.chunks h join kb.chunks c on c.id = ${chunkId} where c.path like '% (cont.)'
+    and h.doc_key = c.doc_key and h.seq < c.seq and h.path = left(c.path, -8) order by h.seq desc limit 1)`;
+  return db
+    .select({ by: links.srcDoc, date: sql<string | null>`min(${links.date})` })
+    .from(links)
+    .where(and(or(eq(links.dstChunk, chunkId), eq(links.dstChunk, head)), inArray(links.kind, CHANGE_KINDS)))
+    .groupBy(links.srcDoc)
+    .orderBy(sql`min(${links.date})`);
+}
+
+/** Where an amending section lands: the first section of another law it changes, with that law's title (one
+ *  statement); null for an ordinary section. */
+export async function amendsOf(docKey: string, chunkId: number) {
+  const [t] = await db
+    .select({
+      docKey: links.dstDoc,
+      title: docs.title,
+      label: links.dstLabel,
+      chunkId: links.dstChunk,
+      kind: links.kind,
+    })
+    .from(links)
+    .leftJoin(docs, eq(docs.key, links.dstDoc))
+    .where(and(eq(links.srcChunk, chunkId), ne(links.dstDoc, docKey), inArray(links.kind, CHANGE_KINDS)))
+    .orderBy(asc(links.id))
+    .limit(1);
+  return t ?? null;
 }
 
 /** The changes made to chunks' sections: each change link with its amending chunk (label, text) and law title,

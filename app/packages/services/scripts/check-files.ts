@@ -107,7 +107,7 @@ try {
     // 1. the row and a signed upload URL; 2. the bytes to R2 as the browser sends them
     const up = await startUpload(a, { name, mime, size: bytes.byteLength });
     made.push(up.fileId);
-    assert.ok(up.uploadUrl, "no signed upload URL: is STORAGE=memory set?");
+    assert.ok(up.uploadUrl, "no signed upload URL");
     const put = await fetch(up.uploadUrl, { method: "PUT", body: bytes, headers: up.headers });
     assert.equal(put.status, 200, `upload ${put.status}: ${await put.text()}`);
     // 3. finishUpload without the workflow: checked in the store, stored, then the steps here

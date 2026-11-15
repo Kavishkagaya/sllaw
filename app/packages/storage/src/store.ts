@@ -11,9 +11,8 @@ export interface BlobStore {
   head(key: string): Promise<Head | null>;
   /** Removes every key under a prefix (a file's folder). */
   deletePrefix(prefix: string): Promise<number>;
-  /** A URL the browser PUTs the file to directly (Vercel caps request bodies at 4.5 MB). null when the store has
-   *  none (memory): the client then sends the bytes through the app. */
-  uploadUrl(key: string, contentType: string, expiresIn: number): Promise<string | null>;
+  /** A URL the browser PUTs the file to directly (Vercel caps request bodies at 4.5 MB). */
+  uploadUrl(key: string, contentType: string, expiresIn: number): Promise<string>;
   /** A URL to read the file for a while (download, preview). */
   downloadUrl(key: string, expiresIn: number, filename?: string): Promise<string | null>;
 }

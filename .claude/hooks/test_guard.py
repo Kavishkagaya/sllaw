@@ -164,6 +164,10 @@ with tempfile.TemporaryDirectory() as d:
         ("progress may grow", edit("Write", bp, content=json.dumps({**agreed, "progress": [{"note": "n"}]})), None),
         ("reopen asks", edit("Write", bp, content=json.dumps({**agreed, "status": "scoping"})), "ask"),
         ("merged ok", edit("Write", bp, content=json.dumps({**agreed, "status": "merged"})), None),
+        ("no database branch asks", edit("Write", bp, content=json.dumps({**agreed, "neon_branch": False})), "ask"),
+        ("new brief without db asks",
+         edit("Write", os.path.join(d, "docs", "features", "y.json"), content=json.dumps({**brief, "neon_branch": False})),
+         "ask"),
     ]
     put({**brief, "status": "merged"})
     checks.append(("code edit after merge", edit("Write", code, content="x"), "deny"))
@@ -197,6 +201,15 @@ with tempfile.TemporaryDirectory() as d:
     subprocess.run(["git", "-C", d, "checkout", "-q", "-b", "app/x"], check=True)
     cases += [("brief: dev on prod", run("pnpm dev"), "deny"),
               ("brief: eval on prod", run("cd app && pnpm --filter @sllaw/services eval-agent"), "deny")]
+    os.makedirs(os.path.join(d, "docs", "features"))
+    with open(os.path.join(d, "docs", "features", "x.json"), "w") as f:
+        json.dump({"branch": "app/x", "neon_branch": False, "status": "scoping"}, f)
+    cases += [("unagreed brief without db: dev on prod", run("pnpm dev"), "deny")]
+    with open(os.path.join(d, "docs", "features", "x.json"), "w") as f:
+        json.dump({"branch": "app/x", "neon_branch": False, "status": "agreed"}, f)
+    cases += [("brief without db: dev on prod", run("pnpm dev"), None),
+              ("brief without db: migrate on prod", run("pnpm --filter @sllaw/db migrate"), "deny")]
+    os.remove(os.path.join(d, "docs", "features", "x.json"))
     setenv(other)
     cases += [("brief: dev on branch", run("pnpm dev"), None),
               ("brief: migrate on branch", run("pnpm --filter @sllaw/db migrate"), None),

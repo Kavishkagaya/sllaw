@@ -1,43 +1,16 @@
 "use client";
 // A cited source in the chat's sidebar: what it is, the cited text first, then the whole document with that text
-// marked. A law by its chunk id (corpus.chunk for the chunk and its changes, corpus.doc for the law around it); a case
+// marked. A law by its chunk id (corpus.chunk: the chunk, which laws changed it, its law's timeline; corpus.doc, the law around it, only when opened); a case
 // file by its id and chunk number (case.fileChunks: the same chunks the agent read).
 import { useQuery } from "@tanstack/react-query";
-import { ChevronDown, ExternalLink, FileText, History, Landmark, LocateFixed } from "lucide-react";
+import { BookOpenText, ExternalLink, FileText, History, Landmark, LocateFixed } from "lucide-react";
+import Link from "next/link";
 import { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Skeleton } from "@/components/ui/skeleton";
+import { lawName, pinpoint, textAs, titleCase } from "@/lib/law";
 import { cn } from "@/lib/utils";
 import { useTRPC } from "@/trpc/client";
-
-/** A law's key as people cite it: act:9/2023 → "Act No. 9 of 2023", cap:107 → "Chapter 107". */
-export function lawName(key: string) {
-  const [kind, rest = ""] = key.split(":");
-  const [n, year] = rest.split("/");
-  if (kind === "act" && year) return `Act No. ${n} of ${year}`;
-  if (kind === "law" && year) return `Law No. ${n} of ${year}`;
-  if (kind === "ord" && year) return `Ordinance No. ${n} of ${year}`;
-  if (kind === "cap" || kind === "cap1956") return `Chapter ${rest}${kind === "cap1956" ? " (1956 ed.)" : ""}`;
-  if (kind === "constitution") return "Constitution of Sri Lanka";
-  return key;
-}
-
-/** The last step of a chunk's breadcrumb ("Part II › section 13 — Notice (cont.)" → "section 13 — Notice"). */
-export const pinpoint = (path: string | null, label: string | null) =>
-  (path
-    ?.split("›")
-    .pop()
-    ?.replace(/\s*\(cont\.\)\s*$/, "")
-    .trim() ||
-    label) ??
-  null;
-
-/** pinpoint, short, for lists: "section 22 — Proceedings for ejectment." → "s. 22 — Proceedings for ejectment". */
-export const shortPin = (path: string | null, label: string | null) =>
-  pinpoint(path, label)
-    ?.replace(/^section\s+/i, "s. ")
-    .replace(/\.$/, "") ?? null;
 
 function Loading() {
   return (
@@ -158,108 +131,100 @@ function useJump() {
   return [at, () => at.current?.scrollIntoView({ block: "start", behavior: "smooth" })] as const;
 }
 
-function Changes({
-  changes,
-  date,
+/** The law's timeline, oldest first: enacted, every law that changed any part of it, today; the ones that changed the
+ *  cited section marked. A list, not a scaled line: amendments cluster in a few years and a line overlaps them. A long
+ *  history shows its first and last entries and folds the middle (never a marked one). What each change did, clause
+ *  by clause, is on the Full history page (/history/<law>?c=<section>), linked from the header. */
+export function AmendmentLine({
+  docKey,
+  chunkId,
+  law,
+  section,
+  current,
 }: {
-  changes: {
-    date: string | null;
-    kind: string;
-    by: string;
-    byTitle: string | null;
-    byLabel: string | null;
-    clause: string;
-  }[];
-  date: string;
+  docKey: string;
+  /** the cited section: with it, the header links to its full history */
+  chunkId?: number;
+  law: { by: string; title: string | null; date: string | null }[];
+  section: { by: string; date: string | null }[];
+  /** the cited section is an amendment from this law: its row is marked "this amendment" */
+  current?: string;
 }) {
-  const [open, setOpen] = useState(false);
-  const years = [...new Set(changes.map((c) => c.date?.slice(0, 4)).filter(Boolean))];
-  return (
-    <Collapsible open={open} onOpenChange={setOpen} className="rounded-lg border bg-card shadow-xs">
-      <CollapsibleTrigger className="flex w-full items-center gap-2 px-4 py-3 text-left text-sm hover:bg-accent/50">
-        <History className="size-4 shrink-0 text-primary" />
-        <span className="flex-1">
-          <span className="font-medium">
-            Amended {changes.length} {changes.length === 1 ? "time" : "times"}
-          </span>
-          <span className="text-muted-foreground">
-            {years.length ? ` · ${years.join(", ")}` : ""} · up to {date}
-          </span>
-        </span>
-        <ChevronDown
-          className={cn("size-4 shrink-0 text-muted-foreground transition-transform", open && "rotate-180")}
-        />
-      </CollapsibleTrigger>
-      <CollapsibleContent>
-        <ol className="relative space-y-4 border-t px-4 py-4">
-          {changes.map((ch, i) => (
-            <li key={i} className="relative pl-5">
-              {ch.date ? (
-                <span className="absolute top-1.5 left-0 size-2 rounded-full bg-primary" />
-              ) : (
-                <span className="absolute top-1.5 left-0 size-2 rounded-full border border-dashed border-muted-foreground" />
-              )}
-              {i < changes.length - 1 && (
-                <span className="absolute top-4 bottom-[-1.25rem] left-[3.5px] w-px bg-border" />
-              )}
-              <div className="flex flex-wrap items-baseline gap-x-2 text-sm">
-                <span className="font-medium">{ch.byTitle ?? ch.by}</span>
-                {ch.byLabel && <span className="text-muted-foreground">s. {ch.byLabel}</span>}
-              </div>
-              <p className="text-xs text-muted-foreground">
-                <span className="capitalize">{ch.kind}</span>
-                {ch.date && ` · ${ch.date}`}
-              </p>
-              {ch.clause && (
-                <p className="mt-1.5 line-clamp-4 font-law text-[13px] leading-relaxed text-muted-foreground">
-                  {ch.clause}
-                </p>
-              )}
-            </li>
-          ))}
-        </ol>
-      </CollapsibleContent>
-    </Collapsible>
-  );
-}
-
-/** A law's line from enactment to today: its year from the key (the Constitution 1978), a dot for each dated change,
- *  today at the end. Undated changes are not drawn (the list under it has them). */
-export function AmendmentLine({ docKey, changes }: { docKey: string; changes: { date: string | null }[] }) {
-  const thisYear = new Date().getFullYear();
+  const [all, setAll] = useState(false);
   const enacted =
     docKey === "constitution" || docKey.startsWith("constitution:") ? 1978 : Number(docKey.split("/")[1]) || null;
-  const years = changes.flatMap((c) => (c.date ? [Number(c.date.slice(0, 4))] : []));
-  const from = Math.min(enacted ?? thisYear, ...years, thisYear - 1);
-  const x = (y: number) => 14 + ((y - from) / Math.max(1, thisYear - from)) * 312;
-  const label = `Amendment timeline: ${[enacted ? `enacted ${enacted}` : null, ...years.map(String), "today"].filter(Boolean).join(", ")}`;
+  const mine = new Set(section.map((c) => c.by));
+  const rows = [...law, ...section.filter((c) => !law.some((l) => l.by === c.by)).map((c) => ({ ...c, title: null }))]
+    .map((c) => ({ ...c, name: titleCase(c.title ?? lawName(c.by)), mine: mine.has(c.by) || c.by === current }))
+    .sort((p, q) => (p.date ?? "9").localeCompare(q.date ?? "9"));
+  const FOLD = 6;
+  const hidden = !all && rows.length > FOLD ? rows.length - 4 : 0;
+  const keep = (i: number) => i < 2 || i >= rows.length - 2 || rows[i]!.mine;
+  const shown = hidden ? rows.flatMap((r, i) => (keep(i) ? [r] : !keep(i - 1) ? [] : [null])) : rows;
+  const hiddenCount = rows.filter((_, i) => !keep(i)).length;
+  const dot = "relative z-10 mt-1.5 size-2.5 shrink-0 rounded-full border-2";
   return (
-    <svg viewBox="0 0 340 40" role="img" aria-label={label} className="h-auto w-full">
-      <path d="M8 14H332" className="stroke-input" />
-      {enacted && <circle cx={x(enacted)} cy="14" r="5" className="fill-card stroke-foreground" />}
-      {years.map((y, i) => (
-        <circle key={i} cx={x(y)} cy="14" r="4" className="fill-card stroke-primary" strokeWidth="1.5" />
-      ))}
-      <circle cx="326" cy="14" r="6" className="fill-primary" />
-      {enacted && (
-        <text
-          x={Math.max(14, x(enacted))}
-          y="35"
-          textAnchor="middle"
-          className="fill-muted-foreground font-mono text-[9px]"
-        >
-          {enacted}
-        </text>
-      )}
-      {[...new Set(years)].slice(-3).map((y) => (
-        <text key={y} x={x(y)} y="35" textAnchor="middle" className="fill-muted-foreground font-mono text-[9px]">
-          {Math.abs(x(y) - 326) < 30 || (enacted && Math.abs(x(y) - x(enacted)) < 30) ? "" : y}
-        </text>
-      ))}
-      <text x="326" y="35" textAnchor="middle" className="fill-primary font-mono text-[9px]">
-        TODAY
-      </text>
-    </svg>
+    <section aria-label="The law's timeline" className="space-y-2">
+      <div className="flex items-baseline justify-between gap-3">
+        <p className="label-mono text-[10px] text-muted-foreground">
+          {rows.length
+            ? `${current ? `${lawName(docKey)}: ` : ""}Amended by ${rows.length} ${rows.length === 1 ? "law" : "laws"}${current ? "" : ` · ${mine.size ? `${mine.size} changed this section` : "none changed this section"}`}`
+            : "Never amended"}
+        </p>
+        {chunkId != null && (
+          <Link
+            href={`/history/${docKey}?c=${chunkId}`}
+            className="flex shrink-0 items-center gap-1 text-xs font-medium text-primary hover:underline"
+          >
+            Full history <History className="size-3.5" />
+          </Link>
+        )}
+      </div>
+      <ol className="relative space-y-1.5 before:absolute before:top-2 before:bottom-2 before:left-[4.5rem] before:w-px before:bg-border">
+        {enacted && (
+          <li className="flex gap-3 text-[13px]">
+            <span className="w-14 shrink-0 text-right font-mono text-xs text-muted-foreground tabular-nums">
+              {enacted}
+            </span>
+            <span className={cn(dot, "border-foreground bg-card")} />
+            <span>Enacted</span>
+          </li>
+        )}
+        {shown.map((r, i) =>
+          r ? (
+            <li key={r.by} className="flex gap-3 text-[13px]">
+              <span className="w-14 shrink-0 text-right font-mono text-xs text-muted-foreground tabular-nums">
+                {r.date?.slice(0, 4) ?? "—"}
+              </span>
+              <span className={cn(dot, r.mine ? "border-primary bg-primary" : "border-muted-foreground/60 bg-card")} />
+              <span className="min-w-0 flex-1">
+                <span className={r.mine ? "font-medium" : "text-muted-foreground"}>{r.name}</span>
+                {r.by === current ? (
+                  <span className="ml-1.5 text-xs font-medium text-primary">this amendment</span>
+                ) : (
+                  r.mine && <span className="ml-1.5 text-xs text-primary">changed this section</span>
+                )}
+              </span>
+            </li>
+          ) : (
+            <li key={`more-${i}`} className="flex gap-3 text-[13px]">
+              <span className="w-14 shrink-0" />
+              <span className="w-2.5 shrink-0" />
+              <button type="button" onClick={() => setAll(true)} className="text-xs text-primary hover:underline">
+                {hiddenCount} more
+              </button>
+            </li>
+          ),
+        )}
+        <li className="flex gap-3 text-[13px]">
+          <span className="w-14 shrink-0 text-right font-mono text-xs text-primary">TODAY</span>
+          <span className={cn(dot, "border-primary bg-primary")} />
+          <span className="text-muted-foreground">
+            {mine.size ? "In force as amended (Full history)" : "The text in force"}
+          </span>
+        </li>
+      </ol>
+    </section>
   );
 }
 
@@ -273,44 +238,67 @@ export function LawSource({ chunkId, read }: { chunkId: number; read?: boolean }
   const trpc = useTRPC();
   const view = useQuery(trpc.corpus.chunk.queryOptions({ chunkId }));
   const key = view.data?.chunk.docKey;
-  const doc = useQuery(trpc.corpus.doc.queryOptions({ key: key ?? "" }, { enabled: !!key }));
+  // the whole law is every chunk's text: loaded only when the lawyer opens it
+  const [whole, setWhole] = useState(false);
+  const doc = useQuery(trpc.corpus.doc.queryOptions({ key: key ?? "" }, { enabled: !!key && whole }));
   const [at, jump] = useJump();
   if (view.isPending) return <Loading />;
   if (view.isError) return <Problem>Could not load it: {view.error.message}</Problem>;
   if (!view.data) return <Problem>This provision is no longer in the corpus.</Problem>;
-  const { chunk: c, doc: info, changes, later, date } = view.data;
+  const { chunk: c, doc: info, changed, timeline, amends } = view.data;
   const where = pinpoint(c.path, c.label);
   let last: string | null = null;
   return (
     <div className="space-y-5 p-5">
-      <ReadMark read={read}>{later.length ? `as at ${date}` : "the text in force"}</ReadMark>
+      {/* the stored text is as enacted (or as in its edition): "in force" only when nothing changed it since */}
+      <ReadMark read={read}>
+        {amends
+          ? "an amending provision"
+          : changed.length
+            ? `the text ${textAs(c.docKey)} · amended since`
+            : "the text in force"}
+      </ReadMark>
       <Head icon={Landmark} kind={lawName(c.docKey)} title={info?.title ?? c.title ?? c.docKey} sub={where} law>
         <Button asChild variant="outline" size="sm">
-          <a href={`/doc/${c.docKey}#c${c.chunkId}`} target="_blank" rel="noopener">
-            Open the law <ExternalLink />
-          </a>
+          {/* the same tab: the chat keeps its answer running in the store, Back returns to it */}
+          <Link href={`/doc/${c.docKey}#c${c.chunkId}`}>
+            Open the law <BookOpenText />
+          </Link>
         </Button>
-        {info?.sourceUrl && (
-          <Button asChild variant="ghost" size="sm">
-            <a href={info.sourceUrl} target="_blank" rel="noreferrer">
-              Official PDF <ExternalLink />
-            </a>
-          </Button>
-        )}
       </Head>
-      <AmendmentLine docKey={c.docKey} changes={changes} />
-      <Quote label="Cited text" tone="law">
+      <Quote label={changed.length ? `Cited text, ${textAs(c.docKey)}` : "Cited text"} tone="law">
         {c.text}
       </Quote>
-      {changes.length > 0 && <Changes changes={changes} date={date} />}
-      {later.length > 0 && (
-        <p className="rounded-lg border border-dashed px-4 py-3 text-xs text-muted-foreground">
-          <span className="font-medium text-foreground">Changed after {date}: </span>
-          {later.map((l) => `${l.by} ${l.kind} (${l.date})`).join("; ")}
-        </p>
+      {amends ? (
+        <>
+          {/* an amending section: what it changes, and that law's timeline with this change marked */}
+          <p className="text-sm">
+            <span className="text-muted-foreground">
+              {amends.kind[0]?.toUpperCase()}
+              {amends.kind.slice(1)}{" "}
+            </span>
+            {amends.label ? `s. ${amends.label} of ` : ""}
+            <span className="font-medium">{titleCase(amends.title ?? lawName(amends.docKey))}</span>
+            <span className="text-muted-foreground"> ({lawName(amends.docKey)})</span>
+          </p>
+          <AmendmentLine
+            docKey={amends.docKey}
+            chunkId={amends.chunkId ?? undefined}
+            law={timeline}
+            section={[]}
+            current={c.docKey}
+          />
+        </>
+      ) : (
+        <AmendmentLine docKey={c.docKey} chunkId={c.chunkId} law={timeline} section={changed} />
       )}
       <Whole title="The whole law" onJump={doc.isSuccess ? jump : undefined}>
-        {doc.isPending && <Skeleton className="h-64 w-full" />}
+        {!whole && (
+          <Button variant="outline" size="sm" onClick={() => setWhole(true)}>
+            <BookOpenText /> Read the whole law here
+          </Button>
+        )}
+        {whole && doc.isPending && <Skeleton className="h-64 w-full" />}
         {doc.isError && <Problem>Could not load the law: {doc.error.message}</Problem>}
         {doc.data?.chunks.map((x) => {
           // one heading per provision: its continuation chunks go under it

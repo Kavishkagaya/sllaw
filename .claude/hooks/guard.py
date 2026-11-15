@@ -190,6 +190,22 @@ def db_url_of(top):
     return ""
 
 
+def no_db_branch(top, branch):
+    # 2026-11-15 (user): a brief can go without its own database ("neon_branch": false, the user's choice, e.g. a
+    # UI-only change); its branch may then run the app on the main database. Migrations still ask.
+    feats = os.path.join(top, "docs", "features")
+    for name in os.listdir(feats) if os.path.isdir(feats) else []:
+        try:
+            with open(os.path.join(feats, name)) as f:
+                b = json.load(f)
+        except (OSError, ValueError):
+            continue
+        # only an agreed brief: setting the flag asks the user (brief_edit), and the sign-off prompt shows it
+        if b.get("branch") == branch and b.get("neon_branch") is False and b.get("status") == "agreed":
+            return True
+    return False
+
+
 def app_db(cmd, cwd):
     runs, migrates = has(cmd, RUNS_APP), has(cmd, MIGRATES)
     if not (runs or migrates):
@@ -206,7 +222,7 @@ def app_db(cmd, cwd):
     url = inline.group(1) if inline else db_url_of(top)
     prod = cfg["main_endpoint"] in url
     branch = git_out(top, "branch", "--show-current") or ""
-    if prod and branch != "main":
+    if prod and branch != "main" and not (runs and not migrates and no_db_branch(top, branch)):
         return "deny", (f"This worktree ({branch or 'detached'}) points at the production database "
                         f"({cfg['neon_project']} main). Agents test on their brief's Neon branch: create "
                         f"`{cfg['branch_prefix']}<slug>` from main and put its URL in app/apps/web/.env.local (/scope).")
@@ -347,11 +363,15 @@ def brief_edit(tool, inp):
     if was != "scoping" and any(old.get(k) != new.get(k) for k in FROZEN):
         return "deny", ("This scope was agreed with the user and is frozen (goal, for_whom, done_check, scenarios, "
                         "out_of_scope). To change it, ask the user, then set status back to \"scoping\" first.")
+    if new.get("neon_branch") is False and old.get("neon_branch") is not False:
+        return "ask", (f"\"{new.get('title')}\" without its own database: its branch would run the app on the main "
+                       "(production) database (migrations stay refused). Allow?")
     if new.get("preview") and not old.get("preview"):
         return "ask", f"Build a preview of \"{new.get('title')}\" for the user to see before agreeing its scope?"
     if was == "scoping" and status == "agreed":
         checks = "; ".join(str(c.get("check", c)) for c in new.get("done_check", []))
-        return "ask", f"USER SIGN-OFF: agree the scope of \"{new.get('title')}\"? Done when: {checks}"
+        db = " Runs on the MAIN database (no branch of its own)." if new.get("neon_branch") is False else ""
+        return "ask", f"USER SIGN-OFF: agree the scope of \"{new.get('title')}\"?{db} Done when: {checks}"
     if was != "scoping" and status == "scoping":
         return "ask", f"Reopen the agreed scope of \"{new.get('title')}\" for changes? (needs the user's yes)"
     return None

@@ -171,6 +171,5 @@ export function memoryFileIndex(): FileIndex & { rows(): (FileChunk & Attrs)[] }
 }
 
 let current: FileIndex | null = null;
-/** The app's file index, picked by FILE_INDEX (zilliz | memory; default zilliz), made on first use. */
-export const fileIndex = () =>
-  (current ??= process.env.FILE_INDEX === "memory" ? memoryFileIndex() : zillizFileIndex());
+/** The app's file index (Zilliz; memoryFileIndex is a fake for unit tests only), made on first use. */
+export const fileIndex = () => (current ??= zillizFileIndex());
