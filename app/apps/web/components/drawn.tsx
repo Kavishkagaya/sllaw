@@ -1,5 +1,6 @@
 // Line drawings for empty states and the 404 (d2): one stroke weight in ink, the oxblood for one accent, over a patch
 // of the dot field. Decorative: hidden from screen readers.
+import { MarkParts } from "@/components/brand";
 import { cn } from "@/lib/utils";
 
 /** Fanned papers with a law chip: no cases, no files, no sources yet. */
@@ -23,19 +24,21 @@ export function PapersDrawing({ className }: { className?: string }) {
   );
 }
 
-/** The arch, drawn large and dotted: nothing here (the 404). */
-export function ArchDrawing({ className }: { className?: string }) {
+/** The temple H, drawn large and dotted: nothing here (the 404). */
+export function TempleDrawing({ className }: { className?: string }) {
   return (
-    <svg viewBox="0 0 96 96" aria-hidden className={cn("size-32 text-primary", className)}>
-      <path
-        d="M24 82V46a24 24 0 0 1 48 0v36"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="5"
-        strokeLinecap="round"
-        strokeDasharray="2 7"
-      />
-      <path d="M12 82h72" className="stroke-foreground" strokeWidth="1.6" strokeLinecap="round" />
+    <svg
+      viewBox="0 0 96 96"
+      aria-hidden
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeDasharray="0.5 4"
+      className={cn("size-32 text-primary", className)}
+    >
+      <MarkParts />
     </svg>
   );
 }

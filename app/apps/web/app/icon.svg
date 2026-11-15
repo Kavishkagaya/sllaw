@@ -1,5 +1,10 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <title>Neethi</title>
+  <title>Hulft</title>
   <rect width="64" height="64" rx="14" fill="#7d1d2c"/>
-  <path d="M19 50V30a13 13 0 0 1 26 0v20" fill="none" stroke="#ffffff" stroke-width="9" stroke-linecap="round"/>
+  <g fill="#ffffff" transform="translate(8 8) scale(0.5)">
+    <path d="M16 31 38 21.1V75H16Z"/>
+    <path d="M58 21.1 80 31V75H58Z"/>
+    <path d="M38 48H58V52H38Z"/>
+    <path d="M48 40 53 48H43Z"/>
+  </g>
 </svg>

@@ -11,9 +11,9 @@ const serif = Source_Serif_4({ subsets: ["latin"], variable: "--" });
 const mono = Geist_Mono({ subsets: ["latin"], variable: "--font-mono" });
 
 export const metadata = {
-  title: { default: "Neethi · Your AI colleague for Sri Lankan law", template: "%s · Neethi" },
-  description: "Neethi answers from the Constitution and Acts of Sri Lanka as they stand, cited to the section.",
-  applicationName: "Neethi",
+  title: { default: "Hulft · Your AI colleague for Sri Lankan law", template: "%s · Hulft" },
+  description: "Hulft answers from the Constitution and Acts of Sri Lanka as they stand, cited to the section.",
+  applicationName: "Hulft",
 };
 
 // Clerk's forms take the theme's CSS variables, so they follow light and dark with the rest of the app.

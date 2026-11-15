@@ -1,12 +1,12 @@
 import Link from "next/link";
 import { Brand } from "@/components/brand";
-import { ArchDrawing } from "@/components/drawn";
+import { TempleDrawing } from "@/components/drawn";
 
 // Any page that is not there (and a case or chat that is not the user's: the server answers not found).
 export default function NotFound() {
   return (
     <main className="dots flex min-h-svh flex-col items-center justify-center gap-6 bg-background px-4 text-center">
-      <ArchDrawing />
+      <TempleDrawing />
       <div>
         <p className="label-mono text-[11px] text-primary">404 · Not found</p>
         <h1 className="mt-2 text-3xl font-semibold tracking-[-0.03em]">This page is not here.</h1>

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { MarkParts } from "@/components/brand";
 import { CoverageStats } from "@/components/public/coverage-stats";
 import { HeroChat } from "@/components/public/hero-chat";
 import { LandingMotion, MOTION_FLAG } from "@/components/public/landing-motion";
@@ -8,7 +9,7 @@ import { serverApi } from "@/trpc/server";
 // The public landing (neethi-redesign d3), in the agreed order: hero (the colleague), Introducing Case, the colleague at
 // work, the law as it stands, trust, pricing, FAQ, the closing banner. Every quoted law is verbatim from the corpus
 // (the Constitution, Article 12(1) here; the hero's in hero-chat.tsx).
-export const metadata = { title: { absolute: "Neethi · Your AI colleague for Sri Lankan law" } };
+export const metadata = { title: { absolute: "Hulft · Your AI colleague for Sri Lankan law" } };
 
 const ART_12_1 = "All persons are equal before the law and are entitled to the equal protection of the law.";
 
@@ -39,7 +40,7 @@ export default async function Landing() {
             <Eyebrow className="text-[#e6a9b3]!">The law as it stands</Eyebrow>
             <h2 className={`${h2} max-w-[560px]`}>The version in force. Not the one in your old copy.</h2>
             <p className="mt-5 max-w-[500px] text-[17px] leading-relaxed text-[#b8b1a4]">
-              Sri Lankan Acts are amended section by section, over decades. Neethi follows every section of the
+              Sri Lankan Acts are amended section by section, over decades. Hulft follows every section of the
               Constitution, the Acts and the Revised Editions through each amendment, so the text you cite is the text
               in force, and you can see what changed and when.
             </p>
@@ -124,7 +125,7 @@ function Hero() {
             <span className="label-mono rounded-full bg-primary px-2.5 py-1 text-[10px] text-primary-foreground">
               New
             </span>
-            Introducing Neethi<span className="text-primary">→</span>
+            Introducing Hulft<span className="text-primary">→</span>
           </Link>
           <h1 className="mt-5 max-w-[960px] text-[38px] leading-[1.02] font-semibold tracking-[-0.045em] text-balance sm:mt-7 sm:text-7xl sm:leading-[0.95] sm:tracking-[-0.055em] lg:text-[64px] xl:text-[76px]">
             Your AI colleague
@@ -158,18 +159,12 @@ function Hero() {
               <pattern id="hero-dots" width="11" height="11" patternUnits="userSpaceOnUse">
                 <circle cx="5.5" cy="5.5" r="2.4" className="fill-primary" />
               </pattern>
-              <mask id="hero-arch">
+              <mask id="hero-pediment">
                 <rect width="1040" height="360" fill="black" />
-                <path
-                  d="M290 400V300a230 230 0 0 1 460 0v100"
-                  fill="none"
-                  stroke="white"
-                  strokeWidth="90"
-                  strokeLinecap="round"
-                />
+                <path d="M100 340 520 190 940 340Z" fill="white" />
               </mask>
             </defs>
-            <rect width="1040" height="360" fill="url(#hero-dots)" mask="url(#hero-arch)" opacity=".5" />
+            <rect width="1040" height="360" fill="url(#hero-dots)" mask="url(#hero-pediment)" opacity=".5" />
           </svg>
           <HeroChat />
         </div>
@@ -290,16 +285,15 @@ function CaseSection() {
           <svg
             viewBox="0 0 96 96"
             aria-hidden
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeDasharray="0.5 4"
             className="absolute right-10 bottom-10 size-[120px] text-primary opacity-90 max-sm:hidden"
           >
-            <path
-              d="M24 78V46a24 24 0 0 1 48 0v32"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="5"
-              strokeLinecap="round"
-              strokeDasharray="2 7"
-            />
+            <MarkParts />
           </svg>
         </div>
       </div>
@@ -310,7 +304,7 @@ function CaseSection() {
 const TILES = [
   {
     title: "Reads the brief",
-    text: "Drop in the plaint, affidavits, letters and notes. Neethi pulls out the parties, the dates and the court, and tells you which facts are still missing.",
+    text: "Drop in the plaint, affidavits, letters and notes. Hulft pulls out the parties, the dates and the court, and tells you which facts are still missing.",
     icon: (
       <>
         <rect x="8" y="6" width="22" height="30" rx="3" fill="none" stroke="currentColor" strokeWidth="2" />
@@ -335,9 +329,21 @@ const TILES = [
     text: "Before the next date: what the step is, the law on it, what is in your file and what is not. Walk in prepared.",
     icon: (
       <>
-        <path d="M10 36V20a12 12 0 0 1 24 0v16" fill="none" stroke="currentColor" strokeWidth="2" />
-        <path d="M6 36h32" stroke="currentColor" strokeWidth="2" />
-        <path d="M17 26l4 4 7-8" fill="none" className="stroke-primary" strokeWidth="2.4" strokeLinecap="round" />
+        <path
+          d="M7 36V17.5l9-4.2V36M37 36V17.5l-9-4.2V36"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinejoin="round"
+        />
+        <path d="M4 36h36" stroke="currentColor" strokeWidth="2" />
+        <path
+          d="M18.5 25l2.5 2.5 4.5-5.5"
+          fill="none"
+          className="stroke-primary"
+          strokeWidth="2.4"
+          strokeLinecap="round"
+        />
       </>
     ),
   },
@@ -418,7 +424,7 @@ function Timeline() {
 const TRUST = [
   [
     "Every citation is verified",
-    "Neethi may only cite text it has read in that chat. Anything else is marked unverified, in plain sight.",
+    "Hulft may only cite text it has read in that chat. Anything else is marked unverified, in plain sight.",
   ],
   ["Your files stay in your case", "Only you can see a case's files and chats."],
   ["Sri Lankan law only", "Answers come from Sri Lankan statutes, not from the internet or another country's law."],
@@ -452,7 +458,7 @@ function Trust() {
 const FAQ = [
   [
     "Is this legal advice?",
-    "No. Neethi is a research and preparation tool for lawyers. You read the cited text and make the call.",
+    "No. Hulft is a research and preparation tool for lawyers. You read the cited text and make the call.",
   ],
   [
     "Which laws does it cover?",

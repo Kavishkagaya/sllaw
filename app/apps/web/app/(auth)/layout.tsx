@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Brand } from "@/components/brand";
+import { Brand, MarkParts } from "@/components/brand";
 import { ThemeToggle } from "@/components/theme-toggle";
 
 const points = [
@@ -8,7 +8,7 @@ const points = [
   "A workspace for each case: its papers, its dates, its chats.",
 ];
 
-// Sign-in and sign-up: the Clerk form on paper, beside an ink panel with the arch drawn large over the dot field.
+// Sign-in and sign-up: the Clerk form on paper, beside an ink panel with the temple H drawn large over the dot field.
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="grid min-h-svh bg-background lg:grid-cols-[1fr_1.1fr]">
@@ -20,10 +20,12 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
         <svg
           aria-hidden
           viewBox="0 0 96 96"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="0.6"
           className="pointer-events-none absolute -right-16 -bottom-24 size-[30rem] text-[#7d1d2c]"
         >
-          <path d="M24 78V46a24 24 0 0 1 48 0v32" fill="none" stroke="currentColor" strokeWidth="3" />
-          <path d="M33 78V46a15 15 0 0 1 30 0v32" fill="none" stroke="currentColor" strokeWidth="1" opacity=".6" />
+          <MarkParts />
         </svg>
         <Link href="/" className="relative w-fit [&_span]:text-[#f3f1ec] [&_svg]:text-[#d06a7a]">
           <Brand size="lg" />

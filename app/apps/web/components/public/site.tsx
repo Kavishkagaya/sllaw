@@ -4,7 +4,7 @@ import { SiteMenu } from "@/components/public/site-menu";
 import { ThemeToggle } from "@/components/theme-toggle";
 
 // The public site's frame (neethi-redesign d3, d4): the header and the footer every public page shares. Signed in,
-// the header offers "Open Neethi" (to /dashboard) in place of Sign in and Start free.
+// the header offers "Open Hulft" (to /dashboard) in place of Sign in and Start free.
 const NAV = [
   { href: "/#product", label: "Product" },
   { href: "/coverage", label: "Coverage" },
@@ -22,7 +22,7 @@ export function SiteHeader({ signedIn }: { signedIn: boolean }) {
   return (
     <header className="relative border-b bg-background">
       <div className="mx-auto flex max-w-[1200px] items-center gap-x-7 px-4 py-2 sm:px-6 sm:py-3">
-        <Link href="/" aria-label="Neethi, home" className="py-2">
+        <Link href="/" aria-label="Hulft, home" className="py-2">
           <Brand />
         </Link>
         <nav aria-label="Site" className="-mx-2 flex flex-1 gap-1 text-[14.5px] max-sm:hidden">
@@ -42,7 +42,7 @@ export function SiteHeader({ signedIn }: { signedIn: boolean }) {
           </span>
           {signedIn ? (
             <Link href="/dashboard" className={cta}>
-              Open Neethi
+              Open Hulft
             </Link>
           ) : (
             <>

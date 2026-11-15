@@ -92,7 +92,17 @@ in v1; an entity graph can be built later from the same per-file JSON.
 
 ## Decisions
 
-- **Neethi: brand, look and routes (2026-11-14, brief neethi-redesign, #59):** the product is Neethi (the arch mark,
+- **Hulft: name and mark (2026-11-15, brief hulft-rebrand, #64):** the product is **Hulft** (renamed from Neethi,
+  which another product uses), after Hulftsdorp, the courts' district in Aluthkade, Colombo. The mark is the **gabled H
+  with the scales** (`components/brand.tsx`, `MarkParts`; `app/icon.svg` white on oxblood): two solid stems cut to a
+  gable, together a courthouse roof with the gap its door, and the crossbar a balance beam on a pivot. Wordmark
+  "Hulft" in Instrument Sans 600. At work (`BrandMark working`) the beam rocks on its pivot; still under reduced
+  motion. Decorative drawings (sign-in panel, landing, 404) outline the same `MarkParts`; no arch shapes remain. Chosen
+  on the design board after serifed temple H's were rejected as busy (user: minimal, then "more law"). Out of code: the
+  Clerk app name and the Vercel project are renamed in their dashboards. HULFT is also Saison Technology's
+  file-transfer product (noted, accepted: different market).
+- **Neethi: brand, look and routes (2026-11-14, brief neethi-redesign, #59):** the brand is now Hulft (above); the look
+  and routes here stand. The product was Neethi (the arch mark,
   lowercase wordmark in Instrument Sans 600). The look is Oxblood: tokens in `apps/web/app/globals.css` (shadcn names
   with Oxblood values, light and dark) plus three citation kinds that look the same in the answer and the sources
   panel: `law` (oxblood tint), `file` (neutral tint), `unverified` (amber, dashed). Instrument Sans for the interface,
