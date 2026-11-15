@@ -1,7 +1,7 @@
 {
   "title": "New chat first, with a case picker",
   "slug": "new-chat-first",
-  "status": "agreed",
+  "status": "merged",
   "branch": "app/new-chat-first",
   "issue": 68,
   "neon_branch": false,
@@ -47,6 +47,7 @@
     {"date": "2026-11-15", "note": "Added during the preview: the open citation's chip highlight was broken; the selection now lives in the zustand chat store (user), and each chip subscribes to it, so a block Streamdown keeps still updates."}
   ],
   "progress": [
+    {"date": "2026-11-15", "note": "Merged: PR #69 (rebase, validated head 575c98b; semantic and security PASS in 2 rounds). ampere: downstream.py matched the base, copied the new one (sha 4861b9e7), Dagster restarted with no run active; the next publish keeps filling kb.docs.source_key. No database branch (neon_branch false), nothing to delete."},
     {"date": "2026-11-15", "note": "Committed on app/new-chat-first: the ETL publish change, then the app (checks: biome, typecheck, 134 unit tests, 4 ETL suites, guards 81/81). Every done-check was walked in the headed browser during the preview (see the lines below); not walked: a never-amended section's panel, a foreign/wrong history id (404 by code), the fold of a law with more than 6 amendments, the streaming glide. Next: /validate."},
     {"date": "2026-11-15", "note": "Agreed with the user after the preview; issue #68. Built during the preview on app/new-chat-first (uncommitted); /build commits it."},
     {"date": "2026-11-15", "note": "Streaming jank grew with chat length (rent chat: longest block 439 ms, worst frame gap 467 ms; a fresh chat 166/183 ms). Earlier answers and questions memoized on their parts (the SDK keeps them), animation only on the live one, cite context kept until loaded/numbers grow (user). Same rent chat, 33 s stream: 0 DOM changes in the 4 earlier answers, longest block 124 ms, none over 200, worst frame gap 133 ms, 56 fps. Dev server."},
