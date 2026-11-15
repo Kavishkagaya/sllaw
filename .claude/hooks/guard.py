@@ -342,7 +342,7 @@ def brief_edit(tool, inp):
     if old is None:
         if status != "scoping":
             return "deny", "A new brief starts in status \"scoping\"; the user agrees it on the permission prompt."
-        return None
+        old = {"status": "scoping"}
     was = old.get("status")
     if was != "scoping" and any(old.get(k) != new.get(k) for k in FROZEN):
         return "deny", ("This scope was agreed with the user and is frozen (goal, for_whom, done_check, scenarios, "
