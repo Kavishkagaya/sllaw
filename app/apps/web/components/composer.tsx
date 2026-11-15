@@ -80,7 +80,7 @@ export function Composer({
         value={input}
         onChange={(e) => setDraft(draftKey, e.target.value)}
         onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && send(e)}
-        placeholder={busy ? "Neethi is working… you can keep typing" : placeholder}
+        placeholder={busy ? "Hulft is working… you can keep typing" : placeholder}
         aria-label={placeholder}
         autoFocus={autoFocus}
         rows={2}

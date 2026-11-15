@@ -1,0 +1,37 @@
+{
+  "title": "Rebrand to Hulft",
+  "slug": "hulft-rebrand",
+  "status": "agreed",
+  "preview": true,
+  "branch": "app/hulft-rebrand",
+  "issue": 64,
+  "neon_branch": {"name": "agent/hulft-rebrand", "id": "br-restless-cloud-b7i36epg"},
+  "goal": "Rename the product from Neethi to Hulft: Neethi is used by someone else (user, 2026-11-15). Hulft is after Hulftsdorp, the courts' district in Aluthkade, Colombo. The mark becomes a capital H drawn as an old Roman temple front (the columned shape of the old Parliament and of courts), minimal and plainly about law.",
+  "for_whom": "A practising Sri Lankan lawyer seeing the product on the public site, at sign-in and in the app.",
+  "done_check": [
+    {"id": "d1", "check": "No 'Neethi' is left in app/ (a case-insensitive grep finds none outside comments that cite the old brief by its slug): page titles and description, the landing, coverage, terms and privacy pages, the header's 'Open Hulft', the sidebar label, the composer's 'Hulft is working…', and chat's 'Hulft did not read this in this chat'."},
+    {"id": "d2", "check": "The mark is the gabled H with the scales, as agreed on the board ('Hulft · more law'): two solid stems cut to a gable (together a courthouse roof, the gap its door), the crossbar a balance beam on a small pivot, in the theme's oxblood (lighter in dark). It reads at 16 px (the tab) and 18 px (in chat). The wordmark beside it is 'Hulft' in Instrument Sans, as today. app/icon.svg is the same mark, white on the oxblood tile."},
+    {"id": "d3", "check": "Every place the old arch was drawn shows the new mark instead: the sign-in panel's large outline, the landing's dotted drawing by the case card, the 404's dotted drawing, and the hero's dot field (a pediment, not an arch). No arch path is left in app/."},
+    {"id": "d4", "check": "While an answer is being researched, the beam rocks on its pivot like scales weighing (the colleague at work); with reduce motion, it holds still."},
+    {"id": "d5", "check": "brand.tsx and docs/APP.md say what the name and mark mean (Hulftsdorp; the courthouse and the scales), and the checks pass."}
+  ],
+  "scenarios": [
+    {"id": "s1", "steps": "Open the landing, then sign in and ask a question in a case.", "expect": "Hulft and the new mark in the header, the tab's title and icon, the sidebar, the composer while it works, and beside the answer; no Neethi anywhere."},
+    {"id": "s2", "steps": "Switch to dark mode and look at the header and the chat at 390 px wide.", "expect": "The H is still legible and on-brand in both themes and at phone width."}
+  ],
+  "out_of_scope": [
+    "The Clerk app name (sign-in screen and emails), the Vercel project, any domain: the user renames them in their dashboards.",
+    "Rewriting past briefs (neethi-redesign etc.): they are history.",
+    "The Oxblood colours and fonts, and CSS token names.",
+    "A trademark search: HULFT is also Saison Technology's file-transfer product; noted to the user, accepted (different market)."
+  ],
+  "decisions": [
+    {"date": "2026-11-15", "note": "Name Hulft, after Hulftsdorp (user). Mark: capital H as a Roman temple front (user), replacing the arch; wordmark capitalised 'Hulft' to match the capital H. Preview before sign-off since the mark is judged by eye."},
+    {"date": "2026-11-15", "note": "Mark, after three rounds on the board (user): serifed temple H's were 'ugly'; asked for minimal, then 'more law'. Chosen: the gabled H with the crossbar as a balance beam on a pivot. Wordmark stays Instrument Sans 'Hulft'. User: every SVG changes, not only the logo."}
+  ],
+  "progress": [
+    {"date": "2026-11-15", "note": "Scoping with the user; preview of the mark next."},
+    {"date": "2026-11-15", "note": "Agreed with the user after the preview; issue #64. The preview (uncommitted on app/hulft-rebrand) already covers d1-d4: no Neethi in app/, the mark, icon, sign-in, landing, 404 and hero drawings, the weighing beam; typecheck passes. Left for /build: d5 (APP.md) and the commit checks. The guard fix (a new brief created with a preview now asks the user) is uncommitted beside it."},
+    {"date": "2026-11-15", "note": "Build: last arch shape replaced (landing tile 'Gets you ready': courthouse columns with the tick in the door; no 'arch' left in app/apps/web); APP.md has the Hulft name and mark (d5). Checks: biome clean, typecheck, 134 unit tests. Headed UI walk (agent-browser, test user, branch DB agent/hulft-rebrand), screenshots in the session scratchpad walk/: s1 dashboard (title 'Hulft · …', 0 'neethi' in the HTML, no arch path, icon /icon.svg); case Perera v. Silva bfe44a37: asked 'Can Mr. Perera still go ahead with the ejectment if Silva pays the arrears now?' (chat 6029fa9d): while working the composer read 'Hulft is working… you can keep typing' and the beam ran animation 'mark-weigh'; answer with 4 citations checked, 1 not verified, whose panel reads 'Hulft did not read this in this chat'. s2: the chat at 390 px in dark and light, no horizontal scroll; 404 shows the dotted mark and the Hulft wordmark; landing tiles show the new icon. Sign-in panel (outlined mark) seen after a dev-server restart (Turbopack served a stale layout until then). Second chat for the user's 'chat is buggy' check (31 frames, walk/run1/): chat bugs found that predate this branch (its chat changes are 3 string lines) — reported to the user, not fixed here."}
+  ]
+}

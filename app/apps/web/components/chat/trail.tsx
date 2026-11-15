@@ -1,6 +1,6 @@
 "use client";
 // How an answer was researched, in a lawyer's terms (neethi-redesign d11): while it works, each step appears live on
-// a dotted thread under the working arch, with a timer; finished, the trail folds to one line ("How I got here") and
+// a dotted thread under the working mark, with a timer; finished, the trail folds to one line ("How I got here") and
 // opens into sentences: what it looked for, what it found, chips that open in the sources panel, thinking as a short
 // excerpt. No ids, modes or directions.
 import type { ChatMessage } from "@sllaw/api";

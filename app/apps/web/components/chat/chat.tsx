@@ -235,7 +235,7 @@ export function Chat({
         ) : (
           <Tooltip>
             <TooltipTrigger asChild>{chip}</TooltipTrigger>
-            <TooltipContent>Not verified: Neethi did not read this in this chat</TooltipContent>
+            <TooltipContent>Not verified: Hulft did not read this in this chat</TooltipContent>
           </Tooltip>
         );
       },
@@ -786,7 +786,7 @@ function CitationPanel({
             <p className="label-mono flex items-center gap-1.5 text-[10px] text-unverified-ink">
               <TriangleAlert className="size-3" /> Not verified
             </p>
-            <p className="mt-1.5 text-[15px] font-semibold">Neethi did not read this in this chat</p>
+            <p className="mt-1.5 text-[15px] font-semibold">Hulft did not read this in this chat</p>
             <p className="mt-1 text-[13.5px] leading-normal text-muted-foreground">
               It may be wrong or may not exist. Check it before you rely on it.
             </p>

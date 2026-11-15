@@ -15,8 +15,8 @@ export default function Terms() {
         <strong>Placeholder.</strong> This page is a draft to be replaced with the final legal text before launch.
       </div>
       <div className="mt-8 space-y-4 text-[15px] leading-relaxed text-muted-foreground">
-        <p>[Who may use Neethi: practising lawyers and those working under them.]</p>
-        <p>[Neethi is a research aid, not legal advice: you read the cited text and make the call.]</p>
+        <p>[Who may use Hulft: practising lawyers and those working under them.]</p>
+        <p>[Hulft is a research aid, not legal advice: you read the cited text and make the call.]</p>
         <p>[Plans, prices and limits, once announced.]</p>
         <p>[Acceptable use, liability, and how these terms change.]</p>
       </div>

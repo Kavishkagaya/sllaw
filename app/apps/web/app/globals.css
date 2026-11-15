@@ -228,20 +228,24 @@
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
-/* the arch drawing itself while the colleague works */
-.arch-working {
-  stroke-dasharray: 40 200;
-  animation: arch-draw 1.6s linear infinite;
+/* the mark at work: its balance beam weighs, rocking on the pivot, while the colleague works */
+.mark-working > :nth-child(3) {
+  transform-box: view-box;
+  transform-origin: 48px 48px;
+  animation: mark-weigh 1.6s ease-in-out infinite;
 }
-@keyframes arch-draw {
-  to {
-    stroke-dashoffset: -240;
+@keyframes mark-weigh {
+  0%,
+  100% {
+    transform: rotate(-7deg);
+  }
+  50% {
+    transform: rotate(7deg);
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .arch-working {
+  .mark-working > :nth-child(3) {
     animation: none;
-    stroke-dasharray: none;
   }
 }
 /* landing motion (landing-motion): only under html[data-motion], which the landing sets when JS runs and motion is

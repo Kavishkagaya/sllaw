@@ -54,7 +54,7 @@ export function AppSidebar({
   return (
     <Sidebar>
       <SidebarHeader className="gap-3 p-3">
-        <Link href="/dashboard" className="rounded-md px-1.5 py-1.5" aria-label="Neethi, dashboard">
+        <Link href="/dashboard" className="rounded-md px-1.5 py-1.5" aria-label="Hulft, dashboard">
           <Brand />
         </Link>
         <Link

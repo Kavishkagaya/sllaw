@@ -11,7 +11,7 @@ const WHAT = [
   ["Gazettes", "Regulations and orders published in the Gazette, linked to the Acts they are made under."],
 ] as const;
 
-// What Neethi answers from (d4): live counts from the corpus (one cached query of a few rows) and what each kind is.
+// What Hulft answers from (d4): live counts from the corpus (one cached query of a few rows) and what each kind is.
 export default async function Coverage() {
   const counts = await (await serverApi()).corpus.coverage().catch(() => null);
   return (
@@ -27,7 +27,7 @@ export default async function Coverage() {
             The law of Sri Lanka, as it stands today.
           </h1>
           <p className="mt-5 max-w-[560px] text-[17px] leading-relaxed text-[#b8b1a4]">
-            Neethi answers from these, and only these. The corpus is rebuilt every night from the official sources; the
+            Hulft answers from these, and only these. The corpus is rebuilt every night from the official sources; the
             counts below are live.
           </p>
           <CoverageStats counts={counts} className="mt-10 max-w-[640px]" />
