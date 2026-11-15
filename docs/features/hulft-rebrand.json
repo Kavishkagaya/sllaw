@@ -1,11 +1,11 @@
 {
   "title": "Rebrand to Hulft",
   "slug": "hulft-rebrand",
-  "status": "agreed",
+  "status": "merged",
   "preview": true,
   "branch": "app/hulft-rebrand",
   "issue": 64,
-  "neon_branch": {"name": "agent/hulft-rebrand", "id": "br-restless-cloud-b7i36epg"},
+  "neon_branch": null,
   "goal": "Rename the product from Neethi to Hulft: Neethi is used by someone else (user, 2026-11-15). Hulft is after Hulftsdorp, the courts' district in Aluthkade, Colombo. The mark becomes a capital H drawn as an old Roman temple front (the columned shape of the old Parliament and of courts), minimal and plainly about law.",
   "for_whom": "A practising Sri Lankan lawyer seeing the product on the public site, at sign-in and in the app.",
   "done_check": [
@@ -32,6 +32,7 @@
   "progress": [
     {"date": "2026-11-15", "note": "Scoping with the user; preview of the mark next."},
     {"date": "2026-11-15", "note": "Agreed with the user after the preview; issue #64. The preview (uncommitted on app/hulft-rebrand) already covers d1-d4: no Neethi in app/, the mark, icon, sign-in, landing, 404 and hero drawings, the weighing beam; typecheck passes. Left for /build: d5 (APP.md) and the commit checks. The guard fix (a new brief created with a preview now asks the user) is uncommitted beside it."},
-    {"date": "2026-11-15", "note": "Build: last arch shape replaced (landing tile 'Gets you ready': courthouse columns with the tick in the door; no 'arch' left in app/apps/web); APP.md has the Hulft name and mark (d5). Checks: biome clean, typecheck, 134 unit tests. Headed UI walk (agent-browser, test user, branch DB agent/hulft-rebrand), screenshots in the session scratchpad walk/: s1 dashboard (title 'Hulft · …', 0 'neethi' in the HTML, no arch path, icon /icon.svg); case Perera v. Silva bfe44a37: asked 'Can Mr. Perera still go ahead with the ejectment if Silva pays the arrears now?' (chat 6029fa9d): while working the composer read 'Hulft is working… you can keep typing' and the beam ran animation 'mark-weigh'; answer with 4 citations checked, 1 not verified, whose panel reads 'Hulft did not read this in this chat'. s2: the chat at 390 px in dark and light, no horizontal scroll; 404 shows the dotted mark and the Hulft wordmark; landing tiles show the new icon. Sign-in panel (outlined mark) seen after a dev-server restart (Turbopack served a stale layout until then). Second chat for the user's 'chat is buggy' check (31 frames, walk/run1/): chat bugs found that predate this branch (its chat changes are 3 string lines) — reported to the user, not fixed here."}
+    {"date": "2026-11-15", "note": "Build: last arch shape replaced (landing tile 'Gets you ready': courthouse columns with the tick in the door; no 'arch' left in app/apps/web); APP.md has the Hulft name and mark (d5). Checks: biome clean, typecheck, 134 unit tests. Headed UI walk (agent-browser, test user, branch DB agent/hulft-rebrand), screenshots in the session scratchpad walk/: s1 dashboard (title 'Hulft · …', 0 'neethi' in the HTML, no arch path, icon /icon.svg); case Perera v. Silva bfe44a37: asked 'Can Mr. Perera still go ahead with the ejectment if Silva pays the arrears now?' (chat 6029fa9d): while working the composer read 'Hulft is working… you can keep typing' and the beam ran animation 'mark-weigh'; answer with 4 citations checked, 1 not verified, whose panel reads 'Hulft did not read this in this chat'. s2: the chat at 390 px in dark and light, no horizontal scroll; 404 shows the dotted mark and the Hulft wordmark; landing tiles show the new icon. Sign-in panel (outlined mark) seen after a dev-server restart (Turbopack served a stale layout until then). Second chat for the user's 'chat is buggy' check (31 frames, walk/run1/): chat bugs found that predate this branch (its chat changes are 3 string lines) — reported to the user, not fixed here."},
+    {"date": "2026-11-15", "note": "Validated at 7a55703: semantic PASS (d1-d5, s1, s2; did not view the 16 px tab icon by eye), security PASS (no findings). PR #65 rebase-merged; Neon branch agent/hulft-rebrand deleted; .env.local back on production. The chat bugs (duplicate working card, trail flicker with timer reset, stray '**', scroll jumps) wait for their own brief (user: later)."}
   ]
 }
