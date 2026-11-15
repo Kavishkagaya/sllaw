@@ -142,6 +142,7 @@ with tempfile.TemporaryDirectory() as d:
         ("doc edit, no brief", edit("Write", os.path.join(d, "app", "README.md"), content="x"), None),
         ("new brief agreed at once", edit("Write", bp, content=json.dumps({**brief, "status": "agreed"})), "deny"),
         ("new brief in scoping", edit("Write", bp, content=json.dumps(brief)), None),
+        ("new brief with a preview asks", edit("Write", bp, content=json.dumps({**brief, "preview": True})), "ask"),
         ("brief not JSON", edit("Write", bp, content="{"), "deny"),
     ]
     put(brief)
