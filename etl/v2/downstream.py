@@ -24,6 +24,8 @@ CREATE SCHEMA IF NOT EXISTS kb;
 CREATE TABLE IF NOT EXISTS kb.docs (key TEXT PRIMARY KEY, kind TEXT NOT NULL, title TEXT, year INT, certified DATE,
     commenced DATE, commencement JSONB, long_title TEXT, source_url TEXT, parts TEXT[] NOT NULL, meta JSONB,
     published_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
+-- the stored file the law was built from (R2 source/<sha256>.<ext>, pdf or html): the app's viewer shows it (2026-11-15)
+ALTER TABLE kb.docs ADD COLUMN IF NOT EXISTS source_key TEXT;
 CREATE TABLE IF NOT EXISTS kb.chunks (id BIGINT PRIMARY KEY, uuid UUID NOT NULL UNIQUE,
     doc_key TEXT NOT NULL REFERENCES kb.docs(key) ON DELETE CASCADE, address TEXT NOT NULL UNIQUE, seq INT NOT NULL,
     label TEXT, kind TEXT, path TEXT, part INT NOT NULL, text_hash TEXT NOT NULL);
@@ -130,12 +132,12 @@ def publish(state, apply=False):
         execute_values(c, "INSERT INTO pub VALUES %s", [(k, now[k]) for k in changed], page_size=5000)
         c.execute("DELETE FROM kb.docs WHERE key IN (SELECT key FROM pub) OR key = ANY(%s)", (gone,))  # cascades
         c.execute(f"""INSERT INTO kb.docs (key, kind, title, year, certified, commenced, commencement, long_title,
-                                         source_url, parts, meta)
+                                         source_url, source_key, parts, meta)
                       SELECT d.key, d.kind, d.title, d.year, {date_sql("d.meta->>'certified'")},
                              {date_sql("d.meta->>'commenced'")}, d.meta->'commencement', d.meta->>'long_title',
-                             l.source_url, coalesce(d.parts, '{{}}'), d.meta
+                             l.source_url, f.r2_key, coalesce(d.parts, '{{}}'), d.meta
                       FROM docs d JOIN pub USING (key) LEFT JOIN documents x ON x.key = d.key
-                      LEFT JOIN listings l ON l.id = x.listing_id""")
+                      LEFT JOIN listings l ON l.id = x.listing_id LEFT JOIN files f ON f.sha256 = d.sha256""")
         c.execute(f"""INSERT INTO kb.chunks (id, uuid, doc_key, address, seq, label, kind, path, part, text_hash)
                       SELECT {vid_sql("c.id")}, c.id, c.doc_key, c.address, c.seq, c.label, c.kind, c.crumb, c.part, c.text_hash
                       FROM chunks c JOIN pub ON pub.key = c.doc_key""")

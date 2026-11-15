@@ -563,6 +563,14 @@ rewrites a run's summary against another); (4) one site down no longer stops the
   "sllaw-app law read (kb text parts)": Workers R2 Storage Bucket Item Read on `sllaw` only; tested 2026-11-08: read
   200, write to `sllaw` 403, `sllaw-files` 403; set in Vercel for all three environments, production redeployed). Checked against kb: act:9/2023 263 chunks, none
   without text; cap:25 s114's 1962 amendment with its date; a whole section joined from its "(cont.)" chunks.
+- **kb.docs.source_key (2026-11-15, user):** the R2 key of the stored file a law was built from (`files.r2_key`,
+  `source/<sha256>.pdf|html`), for the app's viewer (text beside our stored PDF or HTML page, not the official site).
+  Publish fills it (`downstream.py`, a `LEFT JOIN files` on `docs.sha256`; `ALTER TABLE ... ADD COLUMN IF NOT EXISTS`
+  in `KB_SCHEMA`). Backfilled once in the database (user's yes): 7,715 laws, 6,785 pdf, 930 html, 0 without. The
+  app's `R2_LAW_*` token reads `source/` too: a signed GET of one pdf and one html gave 206 with the forced inline
+  content type. A law republished from a newer file gets the new key; between a rebuild and its publish the
+  backfilled key could name the newer file (not checked: no law was mid-rebuild). Pages per chunk (to open the PDF at
+  the cited page) are **not** published: tree and chunk drop the block's page; needs a full rebuild, left for later.
 - **Cleanup:** R2 `v2test/` deleted (15,144 objects), the scratch database `etl_v2` dropped (320 MB); every
   `app/law/` and `tree/` object (15,533) is referenced by docs or kb.docs, none missing.
 - Schedule `daily` turned on 2026-11-08 19:09. **v1's 163,176 vectors deleted** (2026-11-08, `run embed --apply
