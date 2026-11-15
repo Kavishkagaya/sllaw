@@ -1,0 +1,35 @@
+{
+  "title": "Chat stays still while it answers",
+  "slug": "chat-stable",
+  "status": "agreed",
+  "branch": "app/chat-stable",
+  "issue": 66,
+  "neon_branch": {"name": "agent/chat-stable", "id": "br-jolly-sound-b7p8gtac"},
+  "goal": "Fix the chat bugs: the chat UI is not stable, it jumps around while an answer comes in (user, 2026-11-15). Everywhere the chat is used (quick chats and case chats share components/chat/chat.tsx).",
+  "for_whom": "A lawyer reading an answer while Hulft is still researching and writing it.",
+  "done_check": [
+    {"id": "d1", "check": "While an answer streams, in a quick chat and a case chat, a per-frame log of the thread shows its content height never shrinks: the trail stays open under 'Working on it' until the final answer starts, then folds once to 'How I got here' and does not reopen by itself. The sentences Hulft writes between searches show inside the trail as its thinking, not as the answer."},
+    {"id": "d2", "check": "From sending a message to the answer finishing, every frame captured at about 0.3 s shows at most one 'Working on it' box."},
+    {"id": "d3", "check": "At the bottom of the thread, the view follows the new text as it arrives. Scrolled up while it streams, the view does not move (scrollTop unchanged in the log), and a 'jump to latest' button appears that takes the lawyer back to the bottom and resumes following."}
+  ],
+  "scenarios": [
+    {"id": "s1", "steps": "Quick chat: 'My client rents a house in Colombo and the landlord wants him out so his son can live there. Can the landlord do that, and what notice must he give?' Watch until it finishes, frames every 0.3 s.",
+     "expect": "One working box, steps grow downwards without folding, the answer appears below a trail that folds once; no flash of an empty thread."},
+    {"id": "s2", "steps": "Case chat in Perera v. Silva: ask a plain question about the case; once the answer starts writing, scroll up to the question and read.",
+     "expect": "The view stays where the lawyer left it; 'jump to latest' brings them back to the end."}
+  ],
+  "out_of_scope": [
+    "The landing page's moving demo chat (hero-chat.tsx): a separate component.",
+    "Any redesign of the chat's look; only the jumps.",
+    "The sources panel and reloading a chat mid-answer, unless the fix itself touches them."
+  ],
+  "decisions": [
+    {"date": "2026-11-15", "note": "Found by capture (71 frames at ~0.3 s + a per-frame layout log, one quick-chat answer): the trail folds and reopens each time the model writes a sentence between tool calls (trail.tsx splitAnswer treats text after the last tool call as the answer; thread height fell ~1,050 px -> one screen 5 times in 12 s); a 'submitted' placeholder and the answer's own trail show two 'Working on it' boxes for ~1.5 s; chat.tsx scrolls the end into view on every token."},
+    {"date": "2026-11-15", "note": "In-between sentences are thinking and live in the trail (user). Follow the stream only while at the bottom, with a 'jump to latest' button (user)."},
+    {"date": "2026-11-15", "note": "Text after the last tool call stays in the live trail until it has a line break or passes 300 characters; then the trail folds and stays folded for that answer even if another search follows (a ref latch in Answer). The pending box is the same Answer component with no parts, and the timer runs from when the question went out, so the handover does not show. Following lets go on wheel up, touch drag, ArrowUp/PageUp/Home, or a scroll that moved up; a scroll event alone is not enough, because text arriving after our own scroll leaves a gap too (seen: the view stopped following at 235 px). Fixed on the way: a read with a source id the chat lacks returns a note string, not rows, and the trail's titlesOf crashed the whole chat page on it (seen in s1); a non-array read output is now skipped. Out of this brief, raised by the user mid-build: law citations and the trail in the brand maroon read like errors; left for its own brief."}
+  ],
+  "progress": [
+    {"date": "2026-11-15", "note": "Scoped with the user from a 0.3 s frame capture; agreed; issue #66."},
+    {"date": "2026-11-15", "note": "Built d1-d3 (trail.tsx splitAnswer/Timer, chat.tsx Answer, placeholder, scroll) plus the read-crash fix. Walked on agent/chat-stable, headed, frames ~0.3 s in the scratchpad + a per-frame layout log (scrollTop/scrollHeight, count of 'Working on it', 'How I got here', 'Jump to latest'). s1 quick chat 65d5f93b-acea-41fb-b8bf-2be879b3d51b (121 frames): max 1 working box; trail opens at 1.6 s, folds once at 22.9 s, the only shrink (1101 -> 748 px) is that fold. s2 case chat Perera v. Silva 2369b3de-6f7f-42c8-9c41-73e3aecbdb75 (122 frames): max 1 box, one fold at 21.7 s, no other shrink. d3 in case chat 5f41ee08-cd46-496f-8f16-b169b1549e28: wheel up as the answer starts -> scrollTop held at 5906 for 69 samples while height grew 7279 -> 9430, 'Jump to latest' shown throughout; click -> bottom (8752+724 = 9476), button gone; next answer at the bottom followed 10051 -> 11217 px, gap > 48 px in 4 of 782 samples (between a chunk and its scroll), button never shown, ended at gap 0. Not walked: phone width. Next: /validate."}
+  ]
+}
