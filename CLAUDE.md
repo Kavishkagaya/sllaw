@@ -179,4 +179,6 @@ one, and record dead ends and what was *not* checked.
   takes 1-3 s, past Node's 250 ms per address, so every query is `fetch failed` (AggregateError, ETIMEDOUT) while
   curl works. `apps/web`'s `dev` script sets `--network-family-autoselection-attempt-timeout=3000`; use the same
   `NODE_OPTIONS` for scripts.
+- **`pkill -f "next dev"` kills its own shell** (its command line matches, exit 144, the rest of the command never
+  runs; 2026-11-15): use `pkill -f "[n]ext dev"`.
 - **Legacy-font Sinhala listed as English** (act:54/2007, act:7/2006): nothing flags it yet.
