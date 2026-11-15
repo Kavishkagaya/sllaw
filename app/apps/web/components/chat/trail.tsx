@@ -83,12 +83,16 @@ const uniq = <T,>(xs: T[]) => [...new Set(xs)];
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
 /** The answer is the text after the last tool call; the rest (thinking included, also after it) is the trail. An `ask`
- *  call (reply chips, removed 2026-11-14) came after the answer in older chats, so it does not count. */
-export function splitAnswer(parts: Part[]) {
+ *  call (reply chips, removed 2026-11-14) came after the answer in older chats, so it does not count. While it works,
+ *  that text may be thinking out loud before the next search ("Let me read s. 22"): it stays in the trail until it is
+ *  plainly the answer (a line break or over 300 characters), so the trail does not fold and reopen (chat-stable). */
+export function splitAnswer(parts: Part[], live = false) {
   const lastTool = parts.findLastIndex((p) => p.type.startsWith("tool-") && (p.type as string) !== "tool-ask");
+  const after = parts.flatMap((p, i) => (p.type === "text" && i > lastTool ? [p.text] : [])).join("");
+  const cut = live && !after.trim().includes("\n") && after.trim().length <= 300 ? parts.length : lastTool;
   return {
-    trail: parts.filter((p, i) => p.type !== "step-start" && (p.type !== "text" || i < lastTool)),
-    answer: parts.filter((p, i) => p.type === "text" && i > lastTool),
+    trail: parts.filter((p, i) => p.type !== "step-start" && (p.type !== "text" || i < cut)),
+    answer: parts.filter((p, i) => p.type === "text" && i > cut),
   };
 }
 
@@ -98,7 +102,7 @@ function titlesOf(parts: Part[]) {
   const add = (c: { docKey: string; title: string | null }) => c.title && t.set(c.docKey, c.title);
   for (const p of parts) {
     if (p.type === "tool-search" && p.state === "output-available" && Array.isArray(p.output)) p.output.forEach(add);
-    if (p.type === "tool-read" && p.state === "output-available") p.output.forEach(add);
+    if (p.type === "tool-read" && p.state === "output-available" && Array.isArray(p.output)) p.output.forEach(add);
     if (p.type === "tool-asOf" && p.state === "output-available" && p.output) {
       add(p.output.chunk);
       for (const c of p.output.changes) if (c.byTitle) t.set(c.by, c.byTitle);
@@ -108,8 +112,8 @@ function titlesOf(parts: Part[]) {
 }
 
 /** m:ss since the trail went live: the colleague's time on this question. */
-function Timer() {
-  const [start] = useState(() => Date.now());
+function Timer({ since }: { since?: number }) {
+  const [start] = useState(() => since || Date.now());
   const [now, setNow] = useState(start);
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 1000);
@@ -123,12 +127,25 @@ function Timer() {
   );
 }
 
-export function Trail({ parts, live, onOpen }: { parts: Part[]; live: boolean; onOpen?: (s: TrailSource) => void }) {
+export function Trail({
+  parts,
+  live,
+  since,
+  onOpen,
+}: {
+  parts: Part[];
+  live: boolean;
+  /** when the question was sent: the timer runs from it, not from when this trail mounted */
+  since?: number;
+  onOpen?: (s: TrailSource) => void;
+}) {
   const [open, setOpen] = useState(false);
   const steps = parts.filter((p) => p.type !== "reasoning" && p.type !== "text");
   if (!parts.length && !live) return null;
   const count = (t: string) => steps.filter((p) => p.type === t).length;
-  const reads = parts.flatMap((p) => (p.type === "tool-read" && p.state === "output-available" ? p.output : [])).length;
+  const reads = parts.flatMap((p) =>
+    p.type === "tool-read" && p.state === "output-available" && Array.isArray(p.output) ? p.output : [],
+  ).length;
   const passagesRead = parts
     .flatMap((p) => (p.type === "tool-fileRead" && p.state === "output-available" ? readFiles(p.output) : []))
     .flatMap((f) => f.chunks).length;
@@ -160,7 +177,7 @@ export function Trail({ parts, live, onOpen }: { parts: Part[]; live: boolean; o
           <div className="mb-3.5 flex items-center gap-2.5">
             <BrandMark working className="size-5" />
             <span className="text-sm font-semibold">Working on it</span>
-            <Timer />
+            <Timer since={since} />
           </div>
           {thread}
           <div aria-hidden className="mt-1 flex flex-col gap-2">
@@ -290,6 +307,8 @@ function Step({ p, name, active }: { p: Part; name: (key: string) => string; act
     );
   }
   if (p.type === "tool-read") {
+    // a source id the chat does not have comes back as a note to the model, not rows: it reads again, nothing to show
+    if (p.state === "output-available" && !Array.isArray(p.output)) return null;
     const read = p.state === "output-available" ? p.output : [];
     return (
       <Row icon={running ? Loader2 : FileText} spin={running} active={running}>

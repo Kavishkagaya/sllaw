@@ -3,6 +3,7 @@ import { useChat } from "@ai-sdk/react";
 import type { ChatMessage } from "@sllaw/api";
 import { useMutation, useQueries, useQuery } from "@tanstack/react-query";
 import {
+  ArrowDown,
   ArrowLeft,
   BookMarked,
   BookOpen,
@@ -151,7 +152,7 @@ export function Chat({
     const cites: Cite[] = [];
     for (const m of messages)
       for (const p of m.parts) {
-        if (p.type === "tool-read" && p.state === "output-available")
+        if (p.type === "tool-read" && p.state === "output-available" && Array.isArray(p.output))
           for (const c of p.output) loaded.add(`s:${c.chunkId}`);
         if (p.type === "tool-asOf" && p.state === "output-available" && p.output) {
           loaded.add(`s:${p.output.chunk.chunkId}`);
@@ -172,17 +173,51 @@ export function Chat({
   }, [messages]);
   const numbers = useMemo(() => new Map(cites.map((c, i) => [c.key, i + 1])), [cites]);
 
-  // keep the newest message in view while it streams. Braces matter: newer browsers (Chrome 153, recent mobile
-  // Safari) return a Promise from scrollIntoView, and an effect that returns one crashes React on cleanup
-  const end = useRef<HTMLDivElement>(null);
+  // follow the newest text only while the lawyer is at the end of the thread; scrolled up to read, the view stays
+  // put and "Jump to latest" takes them back (chat-stable)
+  const scroller = useRef<HTMLDivElement>(null);
+  const stick = useRef(true);
+  const lastTop = useRef(0);
+  const [away, setAway] = useState(false);
+  // only the lawyer scrolling up lets go: text arriving after our own scroll leaves a gap too, and must not. The wheel,
+  // a touch drag and the keys let go before the scroll happens, so the next text does not pull them back down
+  const letGo = () => {
+    stick.current = false;
+    setAway(true);
+  };
+  const onScroll = () => {
+    const s = scroller.current;
+    if (!s) return;
+    if (s.scrollHeight - s.scrollTop - s.clientHeight < 48) stick.current = true;
+    else if (s.scrollTop < lastTop.current) stick.current = false;
+    lastTop.current = s.scrollTop;
+    setAway(!stick.current);
+  };
+  const scrollIntent = {
+    onScroll,
+    onWheel: (e: React.WheelEvent) => e.deltaY < 0 && letGo(),
+    onTouchMove: letGo,
+    onKeyDown: (e: React.KeyboardEvent) => ["ArrowUp", "PageUp", "Home"].includes(e.key) && letGo(),
+  };
+  const toEnd = () => {
+    stick.current = true;
+    setAway(false);
+    if (scroller.current) scroller.current.scrollTop = scroller.current.scrollHeight;
+  };
   // biome-ignore lint/correctness/useExhaustiveDependencies: messages is the trigger, not an input
   useEffect(() => {
-    end.current?.scrollIntoView({ block: "end" });
+    if (stick.current && scroller.current) scroller.current.scrollTop = scroller.current.scrollHeight;
   }, [messages]);
 
   const busy = status === "submitted" || status === "streaming";
+  // when the question went out: the working timer runs from it across the placeholder and the answer
+  const [since, setSince] = useState(0);
+  useEffect(() => {
+    if (busy) setSince(Date.now());
+  }, [busy]);
   const empty = messages.length === 0;
   const ask = (text: string, playbook?: string) => {
+    stick.current = true;
     send(id, text, caseId, playbook);
     // a fresh chat takes its own URL on its first message; Next syncs its router with pushState (no request)
     if (fresh && !location.pathname.endsWith(id)) history.pushState(null, "", `${location.pathname}/${id}`); // /chats → /chats/<id>
@@ -337,6 +372,8 @@ export function Chat({
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ duration: 0.3, delay: 0.1 }}
+                ref={scroller}
+                {...scrollIntent}
                 className="min-h-0 flex-1 overflow-y-auto"
               >
                 <div className="mx-auto flex max-w-3xl flex-col gap-6 px-4 py-6">
@@ -364,7 +401,8 @@ export function Chat({
                         </div>
                       </motion.div>
                     ) : (
-                      <motion.div key={m.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+                      // no fade: it takes the place of the placeholder below, which looks the same (chat-stable)
+                      <div key={m.id}>
                         <Answer
                           parts={m.parts}
                           live={busy && m.id === messages.at(-1)?.id}
@@ -372,14 +410,22 @@ export function Chat({
                           caseId={caseId}
                           loaded={loaded}
                           onOpen={openSource}
+                          since={since}
                         />
-                      </motion.div>
+                      </div>
                     ),
                   )}
-                  {status === "submitted" && (
-                    <div className="rounded-xl border bg-card px-5 py-4 shadow-xs">
-                      <Trail parts={[]} live />
-                    </div>
+                  {/* until the answer's own message arrives; then that one shows it (one working box, chat-stable) */}
+                  {busy && messages.at(-1)?.role === "user" && (
+                    <Answer
+                      parts={[]}
+                      live
+                      components={components}
+                      caseId={caseId}
+                      loaded={loaded}
+                      onOpen={openSource}
+                      since={since}
+                    />
                   )}
                   {error &&
                     (isLimit(error.message) ? (
@@ -398,7 +444,6 @@ export function Chat({
                         <AlertDescription>Something went wrong: {error.message}</AlertDescription>
                       </Alert>
                     ))}
-                  <div ref={end} />
                 </div>
               </motion.div>
             )}
@@ -407,8 +452,18 @@ export function Chat({
           <motion.div
             layout
             transition={SPRING}
-            className={cn("mx-auto w-full px-4", empty ? "max-w-2xl" : "max-w-3xl pb-4")}
+            className={cn("relative mx-auto w-full px-4", empty ? "max-w-2xl" : "max-w-3xl pb-4")}
           >
+            {!empty && away && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={toEnd}
+                className="absolute -top-11 left-1/2 -translate-x-1/2 rounded-full bg-card shadow-sm"
+              >
+                <ArrowDown /> Jump to latest
+              </Button>
+            )}
             <UsageHint status={status} />
             <Composer
               draftKey={draftKey}
@@ -518,6 +573,7 @@ function Answer({
   caseId,
   loaded,
   onOpen,
+  since,
 }: {
   parts: ChatMessage["parts"];
   live: boolean;
@@ -525,9 +581,13 @@ function Answer({
   caseId?: string;
   loaded: Set<string>;
   onOpen: (s: TrailSource) => void;
+  since?: number;
 }) {
-  const { trail, answer } = splitAnswer(parts);
-  const writing = answer.some((p) => p.type === "text" && p.text);
+  const { trail, answer } = splitAnswer(parts, live);
+  // once the answer has started, the trail stays folded: a later search does not open it again (chat-stable)
+  const started = useRef(false);
+  if (answer.some((p) => p.type === "text" && p.text)) started.current = true;
+  const writing = started.current;
   // the agent's changes to the case office, (docs/APP.md, Case office)
   const changes = parts.flatMap((p) =>
     p.type === "tool-caseUpdate" && p.state === "output-available" && typeof p.output === "object" && p.output.summary
@@ -546,7 +606,7 @@ function Answer({
         <div className="flex items-start gap-2.5">
           {!(live && !writing) && <BrandMark className="mt-2 size-5" />}
           <div className="min-w-0 flex-1">
-            <Trail parts={trail} live={live && !writing} onOpen={onOpen} />
+            <Trail parts={trail} live={live && !writing} since={since} onOpen={onOpen} />
           </div>
         </div>
       )}
