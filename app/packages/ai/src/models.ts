@@ -7,8 +7,10 @@ import { gateway, type LanguageModelMiddleware, wrapLanguageModel } from "ai";
 const tasks = {
   main: process.env.MODEL_MAIN || "deepseek/deepseek-v4.1-flash",
   files: process.env.MODEL_FILES || "deepseek/deepseek-v4.1-flash",
+  ocr: process.env.MODEL_OCR || "google/gemini-3-flash",
 };
 export type Task = keyof typeof tasks;
+export const taskModel = (task: Task) => tasks[task];
 
 // Pinned providers, in order: each keeps its own prompt cache, and the gateway spread calls over ~20 hosts. The
 // endpoint list prices are not what is billed (deepseek billed 2x its list): picked on the 9-question eval
@@ -74,15 +76,23 @@ export async function priceOf(modelId: string, t: Tokens, generationId: string |
 /** Records one gateway call (a model step, a decision) for `scope`: its tokens, and what the gateway billed. With
  *  no billed cost (a reply without one, or a stream cut off before its end: `cut`), it is priced by priceOf and
  *  marked estimated. Every call to the gateway is recorded here, once. */
-export function meterCall(scope: Scope, task: string, modelId: string, t: Tokens, meta: unknown, cut = false) {
+export function meterCall(
+  scope: Scope,
+  task: string,
+  modelId: string,
+  t: Tokens,
+  meta: unknown,
+  cut = false,
+  extra: Record<string, number> = {},
+) {
   const g = ((meta as { gateway?: GatewayMeta } | undefined)?.gateway ?? {}) as GatewayMeta;
   const billed = g.gatewayCost ?? g.cost;
   const generationId = g.generationId ?? null;
   const event = (costUsd: number | null, estimated: boolean) => ({
-    kind: "llm" as const,
+    kind: task === "ocr" ? ("ocr" as const) : ("llm" as const),
     task,
     model: modelId,
-    quantity: t,
+    quantity: { ...t, ...extra },
     costUsd,
     estimated,
     idem: generationId ? `gateway:${generationId}` : null,
@@ -128,12 +138,16 @@ export const meterDecision = (
  *  in (a stream's finish part may be read outside it), else for the workspace. A stream cut off before its finish
  *  part (the stop button, a timeout) is still metered: its tokens counted roughly (the prompt's and the text that
  *  came), priced by priceOf. */
-export const meterMiddleware = (task: Task, workspaceId: string): LanguageModelMiddleware => ({
+export const meterMiddleware = (
+  task: Task,
+  workspaceId: string,
+  extra: Record<string, number> = {},
+): LanguageModelMiddleware => ({
   specificationVersion: "v4",
   wrapGenerate: async ({ doGenerate, model }) => {
     const scope = usageScope() ?? { workspaceId };
     const r = await doGenerate();
-    meterCall(scope, task, model.modelId, tokensOf(r.usage), r.providerMetadata);
+    meterCall(scope, task, model.modelId, tokensOf(r.usage), r.providerMetadata, false, extra);
     return r;
   },
   wrapStream: async ({ doStream, model, params }) => {
@@ -151,6 +165,7 @@ export const meterMiddleware = (task: Task, workspaceId: string): LanguageModelM
         { input, cached: 0, output: roughTokens(chars), reasoning: 0 },
         undefined,
         true,
+        extra,
       );
     };
     let r: Awaited<ReturnType<DoStream>>;
@@ -171,7 +186,7 @@ export const meterMiddleware = (task: Task, workspaceId: string): LanguageModelM
           }
           if (part.type === "finish" && !done) {
             done = true;
-            meterCall(scope, task, model.modelId, tokensOf(part.usage), part.providerMetadata);
+            meterCall(scope, task, model.modelId, tokensOf(part.usage), part.providerMetadata, false, extra);
           } else if ("delta" in part && typeof part.delta === "string") chars += part.delta.length;
           out.enqueue(part);
         } catch (e) {
@@ -199,8 +214,9 @@ export async function gatewaySpend(startDate: string, endDate: string) {
   };
 }
 
-/** The model for a task; each call is attributed to the workspace (spend per workspace sets pricing). */
-export function model(task: Task, workspaceId: string) {
+/** The model for a task; each call is attributed to the workspace (spend per workspace sets pricing). `extra` is
+ *  added to each call's metered quantity (OCR: pages). */
+export function model(task: Task, workspaceId: string, extra: Record<string, number> = {}) {
   return wrapLanguageModel({
     model: gateway(tasks[task]),
     middleware: [
@@ -219,7 +235,7 @@ export function model(task: Task, workspaceId: string) {
           },
         }),
       },
-      meterMiddleware(task, workspaceId),
+      meterMiddleware(task, workspaceId, extra),
     ],
   });
 }

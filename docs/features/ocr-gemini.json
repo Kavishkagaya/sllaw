@@ -1,0 +1,41 @@
+{
+  "title": "Read phone photos and scans (OCR with Gemini 3 Flash)",
+  "slug": "ocr-gemini",
+  "status": "agreed",
+  "branch": "app/ocr-gemini",
+  "issue": 54,
+  "neon_branch": {"name": "agent/ocr-gemini", "id": "br-tiny-field-b7qd48te"},
+  "goal": "Turn on OCR: a photographed or scanned case file is read with Gemini 3 Flash through the AI Gateway, instead of 'No text could be read' (user, 2026-11-16, after the OCR comparison in docs/APP.md).",
+  "for_whom": "A practising lawyer who uploads court papers as phone photos or scanned PDFs, in English, Sinhala or Tamil.",
+  "done_check": [
+    {"id": "d1", "check": "A phone photo (JPEG) of a plaint in each of English, Sinhala and Tamil, uploaded on New case, is read: character error rate 1% or less against the known text, and the case's first brief uses its facts (party, amount, date)."},
+    {"id": "d2", "check": "A multi-page scanned PDF with no text layer is read page by page (page n's text is page n); in a PDF with some text-layer pages, those pages keep their own text and only the others are read by OCR."},
+    {"id": "d3", "check": "Every OCR call is one usage row (kind ocr, the Gemini model, the gateway's billed cost, pages counted) and counts toward the workspace spend limit; a workspace over its limit gets no OCR call and the file says why."},
+    {"id": "d4", "check": "A file whose text came from OCR shows a small 'Read from a scan' note (check names, dates and amounts against the original) where the lawyer reads the file; files with their own text do not."},
+    {"id": "d5", "check": "The cost per page measured on the test photos is recorded in docs/APP.md (expected about $0.004-0.009 a page)."}
+  ],
+  "scenarios": [
+    {"id": "s1", "steps": "A lawyer photographs a Sinhala plaint on a phone and starts a New case with it.", "expect": "The file reads; the first brief names the parties and the sum claimed as the plaint has them; the file carries the 'Read from a scan' note."},
+    {"id": "s2", "steps": "A lawyer adds a 20-page scanned journal (PDF, no text layer) to a case and asks what happened on a date in it.", "expect": "The answer cites the right page of the journal."},
+    {"id": "s3", "steps": "A workspace at its spend limit uploads a photo.", "expect": "No OCR call is made; the file says the spend limit stopped it."}
+  ],
+  "out_of_scope": [
+    "Re-reading files uploaded before OCR was on (user: new uploads only).",
+    "A per-file page cap (user: the spend limit covers it).",
+    "Other OCR providers (Mistral OCR, Document AI, DeepSeek-OCR) and a fallback between them.",
+    "The chat agent warning when a quoted fact came from a scanned page.",
+    "A guaranteed accuracy on handwriting."
+  ],
+  "decisions": [
+    {"date": "2026-11-16", "note": "Gemini 3 Flash via the AI Gateway: the only model of 16 tried that read Sinhala and Tamil photos well (docs/APP.md OCR test); metered like every model call (user)."},
+    {"date": "2026-11-16", "note": "OCR'd files show a 'Read from a scan' note, because on hard photos every model tried put plausible wrong words (names, dates) (user)."}
+  ],
+  "progress": [
+    {"date": "2026-11-16", "note": "Scoped with the user and agreed; summary on issue #54; branch app/ocr-gemini off origin/main; Neon branch agent/ocr-gemini, .env.local points at it (.env.main kept)."},
+    {"date": "2026-11-16", "note": "Built: gatewayOcr (ai/src/ocr.ts, model('ocr') = google/gemini-3-flash, thinking low, one page a call), extract reads a scanned PDF page by page from its images (pdfPageImages + png.ts, 16 at a time) and passes a PDF with every page's text to unpdf (extract_by unpdf@1), metering kind ocr + pages (models.ts), 'Read from a scan' note (components/scan-note.tsx) on the file page and in the citation viewer (readByOcr in services). Unit tests 138 pass (new: page-by-page images, PNG, extract_by, OCR metering)."},
+    {"date": "2026-11-16", "note": "Walk (headed, dev server on agent/ocr-gemini, test user): d1/s1 Sinhala photo (ocr/si_photo.jpg) on New case -> draft had court, DMR/04471/2026, both parties, Rs. 2,450,000 / 650,000 / 1,800,000 and the four dates; case 7e3b7434-8fbc-4733-8630-16b6c5bfddf0, first brief chat a64fbb6b cites 'Plaint ... p. 1' and states the claim from the photo. English: case f0295b23-3836-483e-abbe-5e83accc317e (brief 0037ee34); Tamil: case f263de74-5bf7-4061-b15c-77d0a76e46bd (brief f359d819); both drafts and briefs carry the plaint's parties, court, number and sums. CER on the same photos through gatewayOcr: EN 0, SI 0.17-0.43%, TA 0. Screenshots: session scratchpad s1-citation.png, s1-filepage.png (not kept)."},
+    {"date": "2026-11-16", "note": "d2/s2: 20-page scanned journal (no text layer, made from known text) added to case 7e3b7434 -> 'Journal, DC Colombo DMR/04471/2026', 20 pages; CER against the known text ~0 (only spaces lost at page headings in the viewer), every entry on its own page. Asked 'What happened in court on 21 October 2026?' (chat 1956ecfc): the agent first looked only at the empty case diary; after 'Check the journal I added.' it quoted entry 14 verbatim citing p. 14, with p. 13, 10, 16, 17, 18 all right. The first-turn miss is the agent not searching files, not OCR (outside this brief). Earlier, whole-PDF-with-page-range prompting put 3 of 12 pages wrong; replaced by one page a call (user chose images, no pdf-lib)."},
+    {"date": "2026-11-16", "note": "d3/s3: a 'spend' user limit of $0.0001 set for the test user on the agent branch only (user_limits note 'ocr-gemini d3 test (agent branch)', now expired) -> uploading notice-photo.jpg was refused: 'You have used today's allowance on the Free plan. It resets at midnight (Sri Lanka time).'; no files row, no ocr usage event. usage_events on the branch: 24 ocr events, model google/gemini-3-flash, pages 1 each, billed cost (estimated false), $0.0326 total. d4: note shown on the OCR'd plaint (file page and citation viewer); absent on two text-layer files of 'Perera v. Silva'. d5: ~$0.0014 a page recorded in docs/APP.md."},
+    {"date": "2026-11-16", "note": "Validation round 1 on 70f2119: semantic PASS; security FAIL (high: spend limits summed kind 'llm' only, so OCR spend was never counted; medium: a long scan could run past the limit after the upload check; medium: every page's images decoded before the first call; low: .env.example stale). Fixed in the same commit (now one commit): limits and admin spend queries count kind in ('llm','ocr') (agent branch: the test user's spend today 0.0333 -> 0.0659 with the 24 OCR pages); extract checks the owner's spend (Deps.budget -> checkSpend) before every 16 scanned pages and stops, not retried, saying 'Stopped after N of M scanned pages' (unit test); page images decoded one page at a time (pdfPageImages().page(n), closed at the end); .env.example says OCR is on by default and lists MODEL_OCR. Platform admins are not exempt from the mid-scan check (no user row in the pipeline). The d3 walk's tiny limit had been passed by llm spend, so it had not shown OCR counted."}
+  ]
+}

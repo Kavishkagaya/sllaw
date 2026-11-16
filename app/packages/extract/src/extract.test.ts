@@ -5,20 +5,27 @@ import { extract, extractors, httpOcr, mistralOcr, NoText, type OcrProvider, ocr
 const enc = (s: string) => new TextEncoder().encode(s);
 const LONG = "The petitioner states that the respondent unlawfully entered the land in dispute.";
 
-/** A minimal PDF with one text line per page; an empty string is a page with no text layer (a scan). */
+/** A minimal PDF with one text line per page; an empty string is a page with no text layer, and IMG a scanned page
+ *  (one 200x200 grey image, no text layer). */
+const IMG = "\u0000img";
 function pdf(pages: string[]) {
   const objs: string[] = [];
   const kids = pages.map((_, i) => `${3 + i * 2} 0 R`).join(" ");
   objs.push("<< /Type /Catalog /Pages 2 0 R >>", `<< /Type /Pages /Kids [${kids}] /Count ${pages.length} >>`);
   const font = 3 + pages.length * 2;
+  const image = font + 1;
   pages.forEach((t, i) => {
-    const s = t ? `BT /F1 12 Tf 72 720 Td (${t}) Tj ET` : "";
+    const s = t === IMG ? "q 400 0 0 400 100 200 cm /Im1 Do Q" : t ? `BT /F1 12 Tf 72 720 Td (${t}) Tj ET` : "";
     objs.push(
-      `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents ${4 + i * 2} 0 R /Resources << /Font << /F1 ${font} 0 R >> >> >>`,
+      `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents ${4 + i * 2} 0 R /Resources << /Font << /F1 ${font} 0 R >> /XObject << /Im1 ${image} 0 R >> >> >>`,
     );
     objs.push(`<< /Length ${s.length} >>\nstream\n${s}\nendstream`);
   });
   objs.push("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>");
+  const px = "A".repeat(200 * 200);
+  objs.push(
+    `<< /Type /XObject /Subtype /Image /Width 200 /Height 200 /ColorSpace /DeviceGray /BitsPerComponent 8 /Length ${px.length} >>\nstream\n${px}\nendstream`,
+  );
   let out = "%PDF-1.4\n";
   const offs: number[] = [];
   objs.forEach((o, i) => {
@@ -33,7 +40,7 @@ function pdf(pages: string[]) {
 
 /** An OCR provider that records its calls and returns "ocr text <n>" for every page. */
 function fakeOcr(pagesOf: (mime: string) => number) {
-  const calls: { url: string; mime: string; filename: string }[] = [];
+  const calls: { url: string; mime: string; filename: string; pages?: number[] }[] = [];
   const provider: OcrProvider = {
     by: "fake-ocr@1",
     async ocr(file) {
@@ -73,7 +80,7 @@ describe("PDFs without OCR", () => {
 });
 
 describe("OCR", () => {
-  it("sends the whole file once as a signed URL; pages with a text layer keep theirs", async () => {
+  it("sends the whole file once as a signed URL, naming the pages it needs; pages with a text layer keep theirs", async () => {
     const { provider, calls } = fakeOcr((m) => (m === "application/pdf" ? 20 : 1));
     const pages = Array.from({ length: 20 }, (_, i) => (i === 0 ? LONG : ""));
     const x = await extract(pdf(pages), "application/pdf", "scan.pdf", extractors(provider), ctx);
@@ -81,13 +88,63 @@ describe("OCR", () => {
     expect(x.pages).toHaveLength(20);
     expect(x.pages[0]!.text).toMatch(/petitioner/);
     expect(x.pages[1]!.text).toBe("ocr text 2");
-    expect(calls).toEqual([{ url: "https://store.example/signed", mime: "application/pdf", filename: "scan.pdf" }]);
+    expect(calls).toEqual([
+      {
+        url: "https://store.example/signed",
+        mime: "application/pdf",
+        filename: "scan.pdf",
+        pages: Array.from({ length: 19 }, (_, i) => i + 2),
+      },
+    ]);
   });
 
-  it("is not called for a PDF with a text layer on every page", async () => {
+  it("is not called for a PDF with a text layer on every page, and extract_by does not name it", async () => {
     const { provider, calls } = fakeOcr(() => 2);
-    await extract(pdf([LONG, LONG]), "application/pdf", "t.pdf", extractors(provider), ctx);
+    const x = await extract(pdf([LONG, LONG]), "application/pdf", "t.pdf", extractors(provider), ctx);
     expect(calls).toHaveLength(0);
+    expect(x.by).toBe("unpdf@1");
+  });
+
+  it("reads a scanned PDF page by page from its images when the provider reads pictures", async () => {
+    const seen: Uint8Array[][] = [];
+    const provider: OcrProvider = {
+      by: "fake-vision@1",
+      ocr: () => Promise.reject(new Error("not whole")),
+      async ocrPage(images) {
+        seen.push(images);
+        return `page read ${seen.length}`;
+      },
+    };
+    const x = await extract(pdf([LONG, IMG, "", IMG]), "application/pdf", "s.pdf", extractors(provider), ctx);
+    expect(x.by).toBe("unpdf+ocr:fake-vision@1@1");
+    expect(x.pages.map((p) => p.text.slice(0, 9))).toEqual([LONG.slice(0, 9), "page read", "", "page read"]);
+    expect(seen).toHaveLength(2); // page 3 has no image: nothing to read, no call
+    for (const [img] of seen) {
+      expect(Buffer.from(img!.subarray(0, 8)).toString("hex")).toBe("89504e470d0a1a0a"); // a PNG
+      const w = Buffer.from(img!).readUInt32BE(16);
+      expect(w).toBe(200);
+    }
+  });
+
+  it("stops a long scan when the owner's spend runs out, saying how far it got, not to be retried", async () => {
+    let calls = 0;
+    const provider: OcrProvider = {
+      by: "fake-vision@1",
+      ocr: () => Promise.reject(new Error("not whole")),
+      ocrPage: async () => `page ${++calls}`,
+    };
+    let checks = 0;
+    const budget = async () => {
+      if (++checks > 1) throw new Error("You have used today's allowance.");
+    };
+    const scan = Array.from({ length: 40 }, () => IMG);
+    await expect(
+      extract(pdf(scan), "application/pdf", "big.pdf", extractors(provider), { ...ctx, budget }),
+    ).rejects.toMatchObject({
+      message: expect.stringMatching(/allowance\. Stopped after 16 of 40 scanned pages/),
+      retryable: false,
+    });
+    expect(calls).toBe(16); // the first 16 pages, then the check before page 17 stopped it
   });
 
   it("reads images when a provider is set", async () => {

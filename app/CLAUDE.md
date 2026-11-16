@@ -51,7 +51,9 @@ office: imported by db, ai, services, api, apps/web (pure: the case office's sch
 - **`extract`**: a file's bytes -> its text, page by page. One `Extractor` per format (unpdf for text-layer PDFs,
   mammoth for .docx, plain text and HTML); OCR through an `OcrProvider`: the endpoint gets a signed URL to the
   whole file and returns its pages as JSON (`ocrFromEnv`: `mistralOcr` with `OCR_PROVIDER=mistral` + `MISTRAL_API_KEY`,
-  else `httpOcr` when `OCR_URL` is set, else off); `NoText` when there is none.
+  else `httpOcr` when `OCR_URL` is set); otherwise the app uses `ai`'s `gatewayOcr` (Gemini 3 Flash, one page a call:
+  a scanned PDF's pages go as their images, `ocrPage`), wired in `services/src/files/deps.ts`; `OCR_PROVIDER=off`
+  turns OCR off. `NoText` when there is none.
 - **`services`**: the business logic. Calls the queries in `db`, `etl_db` and `search` and the agents in `ai`;
   never writes SQL or imports drizzle. Builds the `ctx` agents run with.
 - **`ai`**: LLMs, tools and agents. DeepSeek via Vercel AI Gateway, one model per task (`MODEL_<TASK>` env);

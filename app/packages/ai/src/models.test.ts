@@ -126,6 +126,31 @@ test("outside any scope a call is metered for the model's workspace, with no use
   expect(events[0].costUsd).toBeCloseTo(5 * 0.000001 + 1 * 0.000002);
 });
 
+test("an OCR call is metered as kind ocr, with the pages it read", async () => {
+  const events: Metered[] = [];
+  setUsageSink(async (es) => void events.push(...es));
+  const model = new MockLanguageModelV4({
+    doGenerate: async () => ({
+      content: [{ type: "text", text: "page text" }],
+      finishReason: { unified: "stop", raw: "stop" },
+      usage: usage(1100, 400),
+      providerMetadata: { gateway: { cost: "0.002", generationId: "g9" } },
+      warnings: [],
+    }),
+  });
+  const { generateText } = await import("ai");
+  await withUsage({ workspaceId: "w3", task: "file.extract", ref: "file:f1" }, () =>
+    generateText({
+      model: wrapLanguageModel({ model, middleware: meterMiddleware("ocr", "w3", { pages: 1 }) }),
+      prompt: "q",
+    }),
+  );
+  await flushUsage();
+  expect(events).toHaveLength(1);
+  expect(events[0]).toMatchObject({ kind: "ocr", task: "file.extract", ref: "file:f1", costUsd: 0.002 });
+  expect(events[0].quantity).toMatchObject({ input: 1100, output: 400, pages: 1 });
+});
+
 test("a stream cut off before its finish (the stop button) is still metered, estimated, once", async () => {
   const events: Metered[] = [];
   setUsageSink(async (es) => void events.push(...es));

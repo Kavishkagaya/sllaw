@@ -96,6 +96,10 @@ export async function removeFile(id: string, d: Deps = appDeps()): Promise<Remov
 }
 
 /** A file's row, its card's summary, a download link and its status. */
+/** Its text came, at least in part, from OCR (extract_by names an OCR extractor only when OCR ran): the lawyer is
+ *  told to check names, dates and amounts against the original. */
+export const readByOcr = (f: Pick<FileRow, "extractBy">) => /(^|[+:])ocr:/.test(f.extractBy ?? "");
+
 export async function fileView(f: FileRow) {
   const { store } = appDeps();
   const card = f.categorizeState === "done" ? await getJson<Card>(store, keys.card(f.id)) : null;
@@ -108,6 +112,7 @@ export async function fileView(f: FileRow) {
     docTypes: DOC_TYPES,
     downloadUrl: f.uploadState === "stored" ? await store.downloadUrl(keys.original(f.id), URL_TTL, f.name) : null,
     status: fileStatus(f),
+    scanned: readByOcr(f),
   };
 }
 

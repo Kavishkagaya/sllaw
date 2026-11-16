@@ -6,6 +6,7 @@ import { useQuery } from "@tanstack/react-query";
 import { BookOpenText, ExternalLink, FileText, History, Landmark, LocateFixed } from "lucide-react";
 import Link from "next/link";
 import { useRef, useState } from "react";
+import { ScanNote } from "@/components/scan-note";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { lawName, pinpoint, textAs, titleCase } from "@/lib/law";
@@ -353,6 +354,7 @@ export function FileSource({
           </a>
         </Button>
       </Head>
+      {f.scanned && <ScanNote />}
       {cited && (
         <Quote label={`Cited passage · page ${cited.page}`} tone="file">
           {cited.text}

@@ -45,14 +45,14 @@ export const userPlanHistory = (userId: string) =>
 export const userLimitRows = (userId: string) => db.select().from(userLimits).where(eq(userLimits.userId, userId));
 
 /** What a user used since `day` (today's midnight) and since `month` (the 1st), across all their workspaces:
- *  messages sent, model spend in USD (every model call made for them: chat, their files' processing, re-typing a
+ *  messages sent, model spend in USD (every model call made for them, OCR included: chat, their files' processing, re-typing a
  *  file), and searches (Zilliz calls in a chat turn). */
 export async function userCounters(userId: string, day: Date, month: Date) {
   const r = await db.execute<{ messages: number; spend: number; spendMonth: number; searches: number }>(sql`
     select
       count(*) filter (where kind = 'action' and task = 'chat.message' and at >= ${day})::int as messages,
-      coalesce(sum(cost_usd) filter (where kind = 'llm' and at >= ${day}), 0)::float8 as spend,
-      coalesce(sum(cost_usd) filter (where kind = 'llm'), 0)::float8 as "spendMonth",
+      coalesce(sum(cost_usd) filter (where kind in ('llm', 'ocr') and at >= ${day}), 0)::float8 as spend,
+      coalesce(sum(cost_usd) filter (where kind in ('llm', 'ocr')), 0)::float8 as "spendMonth",
       count(*) filter (where kind = 'vector' and task = 'chat' and at >= ${day})::int as searches
     from usage_events
     where user_id = ${userId} and at >= ${month}`);
@@ -64,11 +64,11 @@ export async function userCounters(userId: string, day: Date, month: Date) {
 export async function userDailySpend(userId: string, from: Date, to: Date) {
   const r = await db.execute<{ day: string; spend: number; messages: number }>(sql`
     select to_char(at at time zone 'Asia/Colombo', 'YYYY-MM-DD') as day,
-      coalesce(sum(cost_usd) filter (where kind = 'llm'), 0)::float8 as spend,
+      coalesce(sum(cost_usd) filter (where kind in ('llm', 'ocr')), 0)::float8 as spend,
       count(*) filter (where kind = 'action')::int as messages
     from usage_events
     where user_id = ${userId} and at >= ${from} and at < ${to}
-      and (kind = 'llm' or (kind = 'action' and task = 'chat.message'))
+      and (kind in ('llm', 'ocr') or (kind = 'action' and task = 'chat.message'))
     group by 1 order by 1`);
   return r.rows;
 }

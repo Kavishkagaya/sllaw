@@ -55,6 +55,8 @@ export type Deps = {
   extract: (bytes: Uint8Array, mime: string, filename: string, ctx: ExtractCtx) => Promise<Extracted>;
   categorizer: Categorizer;
   index: FileIndex;
+  /** Throws when a user has used up their spend (limits' checkSpend): asked again as a long scan is read. */
+  budget?: (userId: string) => Promise<void>;
 };
 
 const stateOf = (f: FileRow, s: Step) => f[`${s}State`];
@@ -169,6 +171,7 @@ const STEP: Record<Step, (f: FileRow, d: Deps, signal: AbortSignal) => Promise<S
       const x = await d.extract(blob.bytes, f.mime, f.name, {
         url: () => d.store.downloadUrl(keys.original(f.id), 15 * 60),
         signal,
+        budget: d.budget && f.ownerId ? () => d.budget!(f.ownerId!) : undefined,
       });
       await putJson(d.store, keys.extract(f.id), { by: x.by, pages: x.pages } satisfies Pages);
       return { state: "done", by: x.by, set: { sha256, pages: x.totalPages } };
