@@ -177,6 +177,8 @@ one, and record dead ends and what was *not* checked.
 - **docling `PARTIAL_SUCCESS` drops pages** (15/1991 kept 1 of 7): `etl/extract.py` raises so the row stays
   queued; never store a partial raw.
 - **docling's default backend** keeps word cells and fonts (2.104); `etl/extract.py` falls back to pypdfium per file.
+- **docling takes cuda:0 unless told** (2026-11-16: card 0 full, 203 of 559 extracts failed out of memory): the
+  extract op and any hand-run `work extract` set `CUDA_VISIBLE_DEVICES` to the freest card.
 - **transformers 5.x breaks surya** (`SuryaDecoderConfig` lacks `pad_token_id`): pin 4.57.6 and add
   `kwargs.setdefault("pad_token_id", 2)` before `super().__init__()` in `surya/common/surya/decoder/config.py`.
   Surya on CPU gives 1 box a page: GPU only.

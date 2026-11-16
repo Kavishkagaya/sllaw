@@ -138,7 +138,9 @@ def fetch(context: dg.OpExecutionContext, config: Workers, listed):
 
 @dg.op(ins={"after": dg.In(dg.Nothing)}, tags={"stage": "extract"})
 def extract(context: dg.OpExecutionContext, config: Workers):
-    return stage(context, "extract", config.extract, py=PY_DOCLING)
+    # docling's layout model takes cuda:0 unless told: on 2026-11-16 card 0 was full (another user's job) and 203 of 559
+    # files failed CUDA out of memory, so the freest card, as OCR and embed do
+    return stage(context, "extract", config.extract, py=PY_DOCLING, extra={"CUDA_VISIBLE_DEVICES": str(free_gpu()[0])})
 
 
 T = "/var/tmp/e19309"
