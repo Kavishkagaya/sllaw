@@ -2,9 +2,7 @@
 """Court judgment spiders (court-judgments brief, #63; SOURCES.md "Courts", 2026-11-16). Judgments decided from
 FROM_YEAR on (user, 2026-11-16).
 
-  python3 -m etl.spiders.courts ca 2024          # print counts for one Court of Appeal year
-  python3 -m etl.spiders.courts sc-wayback       # the Supreme Court listing as Wayback archived it
-  python3 -m etl.spiders.courts sc-mirror        # the nuuuwan mirror's index
+  python3 -m etl.spiders.courts 2024             # print counts for one Court of Appeal year
 
 Court of Appeal: courtofappeal.lk/judgments?year=YYYY (the decided year), the whole year on one page; each row's
 button carries every field as data- attributes (data-case, data-date, data-by, data-parties, data-keywords,
@@ -12,13 +10,13 @@ data-legislation, data-file = "uploads/judgments/<name>.pdf"). Open, no challeng
 
 Supreme Court: supremecourt.lk/judgements/ is one table (Date with data-order="YYYY-MM-DD", Case No, Parties
 (short-text + full-text spans), Judges & Judgments = one line per judge with its own PDF, hidden Keywords and
-Legislation). The live site is behind a Cloudflare challenge; Wayback's capture of 2026-08-20 holds the whole table
-to 2026-08-07. The mirror (nuuuwan/lk_supreme_court_judgements) has PDFs Wayback lacks, to 2026-05-27.
+Legislation). The live site is behind a Cloudflare challenge (its spider: d3). Judgments to 2026-08-07 came in
+once from Wayback and a mirror (etl/v2/backfill.py), never part of the pipeline (user, 2026-11-16).
 
 A document is one PDF: key `ca:<file name>` / `sc:<file name>` (lower case, no .pdf), the court's own file name,
-so every copy of a file (court, Wayback, mirror) lands on one key.
+so every copy of a file lands on one key.
 """
-import csv, html, io, os, re, sys
+import html, os, re, sys
 
 from etl.spiders.acts import _get
 
@@ -27,8 +25,6 @@ SEEN = {}          # the last crawl's {year: (rows on the page, rows with a PDF)
 CA_PAGE = "https://courtofappeal.lk/judgments?year={}"
 CA_BASE = "https://courtofappeal.lk/"
 SC_LIVE = "https://supremecourt.lk/judgements/"
-SC_WAYBACK = "https://web.archive.org/web/20260820033143id_/https://supremecourt.lk/judgements/"
-MIRROR = "https://raw.githubusercontent.com/nuuuwan/lk_supreme_court_judgements/data/data/lk_supreme_court_judgements/"
 
 
 def key(court, url):
@@ -86,37 +82,13 @@ def sc_rows(page):
     return out
 
 
-def sc_wayback():
-    return sc_rows(_get(SC_WAYBACK).decode("utf8", "replace"))
-
-
-def mirror_rows():
-    """The mirror's index -> rows whose url is the mirror's copy and court_url the court's file it copies."""
-    t = _get(MIRROR + "docs_all.tsv").decode("utf8", "replace")
-    csv.field_size_limit(10 ** 8)
-    out = []
-    for r in csv.DictReader(io.StringIO(t), delimiter="\t"):
-        court_url, d = r["url_pdf"].strip().replace("http://", "https://"), r["date_str"][:10]
-        if not court_url.lower().endswith(".pdf") or not re.fullmatch(r"\d{4}-\d\d-\d\d", d):
-            continue
-        y = d[:4]
-        out.append({"court": "sc", "url": f"{MIRROR}{y[:3]}0s/{y}/{r['doc_id']}/doc.pdf", "court_url": court_url,
-                    "case": r["num"], "date": d, "judge": (r["judgement_by"] or "").strip(" ⚖") or None,
-                    "parties": (r["parties"] or "").strip() or None, "keywords": None, "legislation": None})
-    return out
-
-
 def recent(rows):
     return [r for r in rows if r["date"] and int(r["date"][:4]) >= FROM_YEAR]
 
 
 if __name__ == "__main__":
     from collections import Counter
-    what = sys.argv[1]
-    if what == "ca":
-        rows, counts = ca_crawl([int(y) for y in sys.argv[2:]])
-        print(counts)
-    else:
-        rows = sc_wayback() if what == "sc-wayback" else mirror_rows()
+    rows, counts = ca_crawl([int(y) for y in sys.argv[2:]])
+    print(counts)
     print(len(rows), "PDFs;", sorted(Counter(r["date"][:4] for r in rows).items()))
     print(rows[0])

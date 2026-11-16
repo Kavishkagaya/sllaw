@@ -189,7 +189,6 @@ def r2():
         aws_secret_access_key=os.environ["R2_SECRET_ACCESS_KEY"])
 
 
-WAYBACK_FIRST = ("https://supremecourt.lk/",)   # behind a Cloudflare challenge (SOURCES.md, 2026-11-16)
 _WB = {"next": 0.0, "lock": threading.Lock()}
 
 
@@ -216,8 +215,6 @@ def download(s3, bucket, stored, did, url):
     got = url
     try:
         try:
-            if url.startswith(WAYBACK_FIRST):
-                raise ValueError("challenged host")
             blob = acts._get(url)
         except (Exception, SystemExit):   # dead host, expired cert, 404: closest raw Wayback snapshot
             got = f"https://web.archive.org/web/2id_/{url}"

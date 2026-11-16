@@ -21,9 +21,7 @@ LANG = ["ENGLISH", "SINHALA", "TAMIL"]
 RANK = {"act": ["documents.gov.lk", "parliament.lk", "lankalaw", "commonlii"],
         "law": ["parliament.lk", "lankalaw", "commonlii"],
         "constitution_amendment": ["documents.gov.lk", "parliament.lk"],
-        "revised_1980": ["lankalaw", "commonlii"],
-        "supreme_court_judgment": ["lk_datasets", "supremecourt.lk"]}   # the mirror, then the court's file (via Wayback):
-                                                                         # archive.org refuses a bulk fetch (user, 2026-11-16)
+        "revised_1980": ["lankalaw", "commonlii"]}
 
 
 # -- stage 1: listing ------------------------------------------------------------------------------------------------
@@ -33,13 +31,11 @@ def _lang_of(url, lang):
     return "SINHALA" if re.search(r"_S\.pdf$", url) else "TAMIL" if re.search(r"_T\.pdf$", url) else lang
 
 
-def _court(r, url=None):
+def _court(r):
     """A court spider's row -> (v1 source name, url, title, date, meta)."""
     from etl.spiders import courts
-    src = {"ca": "courtofappeal", "sc": "supremecourt"}[r["court"]] if not url else "sc_mirror"
-    return (src, url or r["url"], f"{r['case']} ({r['date']})", r["date"],
-            {"court": r["court"], "court_key": courts.key(r["court"], r.get("court_url") or r["url"]), "lang": "ENGLISH",
-             "listing": r})
+    return ({"ca": "courtofappeal", "sc": "supremecourt"}[r["court"]], r["url"], f"{r['case']} ({r['date']})", r["date"],
+            {"court": r["court"], "court_key": courts.key(r["court"], r["url"]), "lang": "ENGLISH", "listing": r})
 
 
 def spider_rows(name, limit=None, years=None):
@@ -48,10 +44,6 @@ def spider_rows(name, limit=None, years=None):
     if name == "courtofappeal.lk/judgments":
         rows, courts.SEEN["ca"] = courts.ca_crawl(years or [date.today().year])
         return [_court(r) for r in courts.recent(rows)]
-    if name == "supremecourt.lk/wayback":     # bulk, once: Wayback's capture of the court's listing (2026-08-20)
-        return [_court(r) for r in courts.recent(courts.sc_wayback())]
-    if name == "lk_datasets/sc-mirror":       # bulk, once: the mirror's copies, for PDFs Wayback lacks
-        return [_court(r, r["url"]) for r in courts.recent(courts.mirror_rows())]
     if name == "documents.gov.lk/acts":
         recs = acts.crawl(limit=limit or 100, max_pages=1 if limit else None)
         return [("acts", acts.pdf_url(c["uploadedFile"]), r.get("descriptionEnglish"), r.get("date"),
@@ -85,9 +77,8 @@ def spider_rows(name, limit=None, years=None):
 
 SPIDERS = ["documents.gov.lk/acts", "documents.gov.lk/gazettes", "parliament.lk/acts", "parliament.lk/constitution",
            "lankalaw/acts-by-year", "lankalaw/le1980", "lankalaw/le1956", "courtofappeal.lk/judgments"]
-HOLD = ("ca:", "sc:")   # judgments: fetched only when named (--keys) until the user's go after the sample years
-                        # (court-judgments d4); a nightly plan without keys leaves them listed, not fetched
-BULK = ["supremecourt.lk/wayback", "lk_datasets/sc-mirror"]   # run by name, once; never in a nightly `all`
+HOLD = ("ca:", "sc:")   # judgments: fetched and extracted only when named (--keys) until the user's go for the full
+                        # run (court-judgments d4); a nightly plan without keys leaves them as they are
 
 
 def court_years(connect, source, spider):
@@ -110,10 +101,14 @@ def court_years(connect, source, spider):
 def listing(connect, name, limit=None):
     """Crawl first, then connect: a crawl takes minutes, and Neon closes a connection left idle that long
     (run 83e03e43, 2026-11-12)."""
+    extra = {"years": court_years(connect, "courtofappeal.lk", "judgments")} if name == "courtofappeal.lk/judgments" else {}
+    return write_rows(connect, name, spider_rows(name, limit, **extra))
+
+
+def write_rows(connect, name, rows):
+    """Spider rows -> listings (upsert on source, source_url) and the run's snapshot in R2."""
     from etl.spiders import courts
     from etl.v2.run import SOURCES, v1_type
-    extra = {"years": court_years(connect, "courtofappeal.lk", "judgments")} if name == "courtofappeal.lk/judgments" else {}
-    rows = spider_rows(name, limit, **extra)
     out = []
     for src, url, title, d, meta in rows:
         source, spider = SOURCES[src]
@@ -213,19 +208,30 @@ def fetch_one(db, item):
     lid, url = item.split("|", 1)
     s3, bucket = B.r2()
     _, sha, key, size, err, got = download(s3, bucket, set(), int(lid), url)
+    if err:
+        failed(db, int(lid), err)
+        raise RuntimeError(err)
+    return record(db, int(lid), sha, key, size, got)
+
+
+def failed(db, lid, err):
     with db.cursor() as cur:
-        if err:
-            cur.execute("""INSERT INTO listing_files (listing_id, error) VALUES (%s, %s)
-                           ON CONFLICT (listing_id) DO UPDATE SET error = EXCLUDED.error""", (int(lid), err))
-            db.commit()
-            raise RuntimeError(err)
+        cur.execute("""INSERT INTO listing_files (listing_id, error) VALUES (%s, %s)
+                       ON CONFLICT (listing_id) DO UPDATE SET error = EXCLUDED.error""", (lid, err))
+    db.commit()
+
+
+def record(db, lid, sha, key, size, got):
+    """A file stored at R2 `key` -> files, listing_files (fetched_from = the URL it really came from), its manifest."""
+    s3, bucket = B.r2()
+    with db.cursor() as cur:
         ext = key.rsplit(".", 1)[-1]
         cur.execute("""INSERT INTO files (sha256, ext, bytes, content_type, r2_key) VALUES (%s,%s,%s,%s,%s)
                        ON CONFLICT (sha256) DO NOTHING""", (sha, ext, size, "text/html" if ext == "html" else "application/pdf", key))
         cur.execute("""INSERT INTO listing_files (listing_id, sha256, fetched_from, fetched_at, error) VALUES (%s,%s,%s,NOW(),NULL)
                        ON CONFLICT (listing_id) DO UPDATE SET sha256 = EXCLUDED.sha256, fetched_from = EXCLUDED.fetched_from,
                          fetched_at = NOW(), error = NULL""",
-                    (int(lid), sha, got))
+                    (lid, sha, got))
         cur.execute("""SELECT l.source, l.source_url, lf.fetched_from, lf.fetched_at::text, l.type, l.listed_key, l.language
                        FROM listing_files lf JOIN listings l ON l.id = lf.listing_id WHERE lf.sha256 = %s""", (sha,))
         ls = [dict(zip(("source", "source_url", "fetched_from", "fetched_at", "type", "listed_key", "language"), r))

@@ -107,6 +107,10 @@ Each came from a correction or a costly mistake. Guarded = `.claude/hooks/guard.
 - **Shared UI state lives in a zustand store** (`apps/web/stores/`, user 2026-11-15): state another component reads
   or that must survive leaving the page (a chat's draft, playbook, open citation; uploads) goes in a store, keyed per
   chat or upload; a menu's open, a hover or a form being typed stays in `useState`.
+- **The pipeline fetches a source from its own site** (user, 2026-11-16): a mirror, an archive or anyone's copy
+  (Wayback, a GitHub dataset) used to fill a backlog goes in a one-off backfill script run by hand
+  (`etl/v2/backfill.py`), never into a spider, the fetch rank or the downloader, so the nightly run knows only the
+  real sites.
 - **Never repeat an investigation:** read `docs/SOURCES.md` before probing a site, `docs/PIPELINE_V2.md` before
   changing the pipeline. Findings get written down in the same session (see "Writing things down").
 
@@ -122,7 +126,8 @@ app (app/, Vercel) ─► its own database `app` in Neon sllaw-app (dev and prod
 
 - `etl/v2/`: the pipeline. `run.py` (listing / plan / work / resolve / status / publish / embed), `gate.py` (the
   quality gate), `pipeline.py` (Dagster
-  assets), `all.sh` (the whole chain with no engine), `schema.sql`, `test_v2.py`. Plan and decisions:
+  assets), `all.sh` (the whole chain with no engine), `schema.sql`, `test_v2.py`, `judgment.py` (judgments' own
+  stages 4-5), `backfill.py` (the one-time judgment backfill, 2026-11-16). Plan and decisions:
   `docs/PIPELINE_V2.md`; links model: `docs/LINKS.md`.
 - `etl/*.py`: v1 modules v2 still imports (`structure.blocks()`, spiders, `refs`, `mentions`, `extract`).
   `publish.py`, `embed.py`, `docs.py` builds and ampere's local Postgres are **retired** (2026-11-08).
@@ -133,7 +138,7 @@ app (app/, Vercel) ─► its own database `app` in Neon sllaw-app (dev and prod
   measurements, v1 operations at the end), `LINKS.md`, `LAYOUT.md` (how Act PDFs are laid out), `APP.md`.
 
 Keys: Acts `act:N/YYYY`, Laws `law:N/YYYY`, chapters `cap:N` (1980) and `cap1956:N`, `constitution`, `amendment:N`,
-`gazette:NNNN/NN`. Structuring is code-based and English-only; Sinhala and Tamil go to an agent with the whole Act.
+`gazette:NNNN/NN`, judgments `ca:<file>` / `sc:<file>` (the court's PDF name, lower case, no .pdf). Structuring is code-based and English-only; Sinhala and Tamil go to an agent with the whole Act.
 
 ### Hosts
 

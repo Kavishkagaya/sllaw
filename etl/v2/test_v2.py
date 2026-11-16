@@ -228,9 +228,14 @@ assert (r["case"], r["date"], r["judge"], r["parties"], r["keywords"], r["legisl
     "SC/APPEAL/133/2018", "2026-08-07", "Hon.Justice Sampath B. Abayakoon", "B. G. Dingiri Banda, No. 17 Vs. R.M. Dasanayaka",
     "Partition", None), r
 assert courts.recent([{"date": "2020-12-31"}, {"date": "2021-01-01"}]) == [{"date": "2021-01-01"}]
-src, url, title, d, meta = stages._court({**r, "court_url": r["url"]}, "https://raw.githubusercontent.com/x/doc.pdf")
-assert (src, url, title) == ("sc_mirror", "https://raw.githubusercontent.com/x/doc.pdf", "SC/APPEAL/133/2018 (2026-08-07)")
-assert v1_type(src, meta) == ("supreme_court_judgment", "sc:sc_appeal_133_2018"), v1_type(src, meta)   # mirror copy, court's key
+src, url, title, d, meta = stages._court(r)
+assert (src, url, title) == ("supremecourt", r["url"], "SC/APPEAL/133/2018 (2026-08-07)")
+assert v1_type(src, meta) == ("supreme_court_judgment", "sc:sc_appeal_133_2018"), v1_type(src, meta)
+# the pipeline fetches from the courts' own sites only; the mirror and Wayback were a one-time backfill (user, 2026-11-16)
+import inspect
+for mod in (stages, R if "R" in dir() else __import__("etl.v2.run", fromlist=["x"]), courts, __import__("etl.fetch", fromlist=["x"])):
+    src_text = inspect.getsource(mod)
+    assert "lk_datasets" not in src_text and "githubusercontent" not in src_text and "WAYBACK_FIRST" not in src_text, mod.__name__
 print("ok court rows and keys")
 
 
@@ -251,7 +256,7 @@ for today, held, want in ((_date(2026, 11, 16), [], [2021, 2022, 2023, 2024, 202
     with mock.patch.object(stages, "date", mock.Mock(today=lambda: today)):
         got = stages.court_years(lambda: YearsConn(held), "courtofappeal.lk", "judgments")
     assert got == want, (today, held, got)
-assert "supremecourt.lk/wayback" not in stages.SPIDERS and "courtofappeal.lk/judgments" in stages.SPIDERS
+assert "courtofappeal.lk/judgments" in stages.SPIDERS and not [x for x in stages.SPIDERS if "wayback" in x or "mirror" in x]
 print("ok court years")
 
 # judgments wait for the user's go (court-judgments d4): a plan without keys leaves them out, named keys go in

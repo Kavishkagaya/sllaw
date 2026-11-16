@@ -47,7 +47,7 @@ SOURCES = {"acts": ("documents.gov.lk", "acts"), "gazette": ("documents.gov.lk",
            "parliament": ("parliament.lk", "acts"), "constitution": ("parliament.lk", "constitution"),
            "lankalaw": ("lankalaw", "acts-by-year"), "le1980": ("lankalaw", "le1980"), "le1956": ("lankalaw", "le1956"),
            "commonlii": ("commonlii", "numbered-acts"), "courtofappeal": ("courtofappeal.lk", "judgments"),
-           "supremecourt": ("supremecourt.lk", "judgements"), "sc_mirror": ("lk_datasets", "sc-mirror")}
+           "supremecourt": ("supremecourt.lk", "judgements")}
 
 
 def v1_type(source, meta):
@@ -246,12 +246,11 @@ def do_build(c, key, fp=None):
 
 
 def build_judgment(c, key, title, sha, raw, lighton, fp):
-    """A judgment (etl/v2/judgment.py): its details from the court's own listing row for this key (the mirror's
-    rows have no keywords or Legislation column), else the row it was fetched from."""
+    """A judgment (etl/v2/judgment.py): its details from the court's listing row the file was chosen from."""
     from etl.v2 import judgment as J
     with c.cursor() as cur:
-        cur.execute("""SELECT listing->'v1_meta'->'listing' FROM listings WHERE listed_key = %s
-                       ORDER BY source = 'lk_datasets', id LIMIT 1""", (key,))
+        cur.execute("""SELECT l.listing->'v1_meta'->'listing' FROM documents d JOIN listings l ON l.id = d.listing_id
+                       WHERE d.key = %s""", (key,))
         row = cur.fetchone()[0]
     c.commit()
     prof, engine, paras, st, tree, ch, issues = J.build_doc(key, row, raw, lighton)
@@ -479,9 +478,12 @@ def plan_fetch(keys=None):
 
 def plan_extract(keys=None):
     from etl import extract as X
+    from etl.v2 import stages
     with db() as c, c.cursor() as cur:
         cur.execute("""SELECT DISTINCT f.sha256 FROM documents d JOIN files f ON f.sha256 = d.sha256
-                       WHERE f.raw_key IS NULL AND (%s::text[] IS NULL OR d.key = ANY(%s))""", (keys and list(keys), keys and list(keys)))
+                       WHERE f.raw_key IS NULL AND (%s::text[] IS NULL OR d.key = ANY(%s))
+                         AND (%s::text[] IS NOT NULL OR NOT d.key LIKE ANY(%s))""",            # held keys only when named
+                    (keys and list(keys), keys and list(keys), keys and list(keys), [h + "%" for h in stages.HOLD]))
         items = [(sha, f"{sha}|{X.VERSION}") for sha, in cur.fetchall()]
         changed, same = W.plan(c, "extract", items)
     print(f"extract: {changed} files to read, {same} unchanged")
@@ -519,7 +521,7 @@ def do_extract(c, sha, fp=None):
 def listing(name, limit=None):
     from etl.v2 import stages
     from etl.fetch import pg_connect
-    for n in (stages.SPIDERS if name == "all" else [name]):    # stages.BULK spiders run by name only
+    for n in (stages.SPIDERS if name == "all" else [name]):
         try:                           # one site down must not stop the others; its old listing stays as it was
             print(n, stages.listing(lambda: pg_connect(url=os.environ["V2_DATABASE_URL"]), n, limit), flush=True)
         except Exception as e:
