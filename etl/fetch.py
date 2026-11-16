@@ -16,7 +16,7 @@ keyed by content hash, source/<sha256>.pdf, so re-runs and duplicates never
 write twice and nothing is overwritten. The queue is `r2_key IS NULL`: a crash
 or a failed download just means run it again.
 """
-import argparse, hashlib, os, re, time
+import argparse, hashlib, os, re, threading, time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import boto3
@@ -189,13 +189,39 @@ def r2():
         aws_secret_access_key=os.environ["R2_SECRET_ACCESS_KEY"])
 
 
+WAYBACK_FIRST = ("https://supremecourt.lk/",)   # behind a Cloudflare challenge (SOURCES.md, 2026-11-16)
+_WB = {"next": 0.0, "lock": threading.Lock()}
+
+
+def wayback(url, gap=3, backoff=(60, 180, 600, 900)):
+    """One raw Wayback snapshot, paced: one request at a time, `gap` s apart; a refused connection (archive.org's
+    rate limit: 4 at a time were all refused within minutes, 2026-11-16) waits and tries again. An HTTP error (404:
+    never archived) is not retried."""
+    for wait in (0, *backoff):
+        time.sleep(wait)
+        with _WB["lock"]:
+            time.sleep(max(0.0, _WB["next"] - time.time()))
+            _WB["next"] = time.time() + gap
+        try:
+            return acts._get(f"https://web.archive.org/web/2id_/{url}", tries=1)
+        except OSError as e:          # URLError (refused, reset, timeout); HTTP errors raise SystemExit
+            if wait == backoff[-1]:
+                raise
+            print(f"wayback: {e}; waiting", flush=True)
+
+
 def download(s3, bucket, stored, did, url):
-    """One file: download, hash, put to R2 unless already stored. Runs in a worker thread."""
+    """One file: download, hash, put to R2 unless already stored. Runs in a worker thread.
+    -> (did, sha, key, bytes, error, fetched_from)."""
+    got = url
     try:
         try:
+            if url.startswith(WAYBACK_FIRST):
+                raise ValueError("challenged host")
             blob = acts._get(url)
         except (Exception, SystemExit):   # dead host, expired cert, 404: closest raw Wayback snapshot
-            blob = acts._get(f"https://web.archive.org/web/2id_/{url}")
+            got = f"https://web.archive.org/web/2id_/{url}"
+            blob = wayback(url)
         html = url.lower().endswith((".html", ".htm"))    # lankalaw serves some Acts as HTML pages
         if html and b"<" not in blob[:2000]:
             raise ValueError("not HTML: " + blob[:80].decode("utf8", "replace"))
@@ -207,9 +233,9 @@ def download(s3, bucket, stored, did, url):
         if sha not in stored:
             s3.put_object(Bucket=bucket, Key=key, Body=blob, ContentType="text/html" if html else "application/pdf")
             stored.add(sha)
-        return did, sha, key, len(blob), None
+        return did, sha, key, len(blob), None, got
     except (Exception, SystemExit) as e:   # acts._get raises SystemExit on HTTP errors
-        return did, None, None, None, f"fetch: {e}"[:500]
+        return did, None, None, None, f"fetch: {e}"[:500], None
 
 
 def save(cur, results):

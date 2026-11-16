@@ -186,8 +186,104 @@ class Conn:
 
 with mock.patch.object(stages, "spider_rows", lambda n, l: seen.append("crawl") or [
         ("parliament", "https://parliament.lk/a.pdf", "A Act", "2020-01-01", {"act_no": "1/2020", "lang": "ENGLISH"})]), \
-     mock.patch.object(stages, "execute_values", lambda cur, sql, rows, page_size: seen.append(f"write {len(rows)}")), \
+     mock.patch.object(stages, "execute_values", lambda cur, sql, rows, page_size, fetch: seen.append(f"write {len(rows)}") or [(True,)]), \
      mock.patch.object(stages.B, "r2", lambda: (mock.Mock(), "bucket")):
     stages.listing(lambda: seen.append("connect") or Conn(), "parliament.lk/acts")
 assert seen == ["crawl", "connect", "write 1", "commit", "close"], seen
 print("ok listing connects after the crawl")
+
+# court spiders (court-judgments #63): rows parsed from the page shapes seen 2026-11-16, keys from the court's file
+from etl.spiders import courts
+from etl.v2.run import v1_type
+CA = '''<tr>
+    <td>2024-12-20</td>
+    <td>CA/WRT/0692/2024 <button type="button" class="jd-view" data-case="CA/WRT/0692/2024" data-date="2024-12-20"
+      data-by="HON. JUSTICE P. KUMARARATNAM" data-parties="Lanwa v. Central Environmental Authority &amp; Others"
+      data-keywords="Writ of Mandamus" data-legislation="Article 140 of the Constitution"
+      data-file="uploads/judgments/CA-Writ-0692.24-1-2.pdf">View More</button></td></tr>
+<tr>
+    <td>2024-12-19</td><td>CA/WRT/0001/2024 <button data-case="CA/WRT/0001/2024" data-file="">x</button></td></tr>'''
+rows, n = courts.ca_rows(CA)
+assert n == 2 and len(rows) == 1, (n, rows)
+assert rows[0]["url"] == "https://courtofappeal.lk/uploads/judgments/CA-Writ-0692.24-1-2.pdf"
+assert rows[0]["parties"] == "Lanwa v. Central Environmental Authority & Others" and rows[0]["date"] == "2024-12-20"
+assert courts.key("ca", rows[0]["url"]) == "ca:ca-writ-0692.24-1-2"
+SC = '''<tr>
+    <td data-order="2026-08-07"><span class="jm-fe-date-badge">07 Aug 2026</span></td>
+    <td><span class="jm-fe-case-code">SC/APPEAL/133/2018</span></td>
+    <td><div class="jm-fe-parties-cell"><span class="short-text">B. G. Dingiri Banda</span>
+        <span class="full-text">B. G. Dingiri Banda,
+No. 17 Vs. R.M. Dasanayaka</span><button>View More</button></div></td>
+    <td><div class="jm-fe-judges-list">
+      <div class="jm-fe-judge-line"><span class="jm-fe-judge-badge">&#9878; Hon.Justice Sampath B. Abayakoon</span>
+        <a class="jm-fe-dl-btn-sm" href="https://web.archive.org/web/20260820033143/https://supremecourt.lk/wp-content/uploads/judgements/sc_appeal_133_2018.pdf">Download</a></div>
+      <div class="jm-fe-judge-line"><span class="jm-fe-judge-badge">&#9878; Hon.Justice A</span></div>
+    </div></td>
+    <td style="display:none;">Partition</td><td style="display:none;"></td></tr>'''
+rows = courts.sc_rows(SC)
+assert len(rows) == 1, rows
+r = rows[0]
+assert r["url"] == "https://supremecourt.lk/wp-content/uploads/judgements/sc_appeal_133_2018.pdf", r["url"]
+assert (r["case"], r["date"], r["judge"], r["parties"], r["keywords"], r["legislation"]) == (
+    "SC/APPEAL/133/2018", "2026-08-07", "Hon.Justice Sampath B. Abayakoon", "B. G. Dingiri Banda, No. 17 Vs. R.M. Dasanayaka",
+    "Partition", None), r
+assert courts.recent([{"date": "2020-12-31"}, {"date": "2021-01-01"}]) == [{"date": "2021-01-01"}]
+src, url, title, d, meta = stages._court({**r, "court_url": r["url"]}, "https://raw.githubusercontent.com/x/doc.pdf")
+assert (src, url, title) == ("sc_mirror", "https://raw.githubusercontent.com/x/doc.pdf", "SC/APPEAL/133/2018 (2026-08-07)")
+assert v1_type(src, meta) == ("supreme_court_judgment", "sc:sc_appeal_133_2018"), v1_type(src, meta)   # mirror copy, court's key
+print("ok court rows and keys")
+
+
+# a court spider's years: its first pass from 2021, then only this year (and last year in January)
+class YearsConn:
+    def __init__(self, held): self.held = held
+    def cursor(self):
+        cur = mock.MagicMock(); cur.__enter__.return_value.fetchall.return_value = [(y,) for y in self.held]; return cur
+    def commit(self): pass
+    def close(self): pass
+
+
+from datetime import date as _date
+for today, held, want in ((_date(2026, 11, 16), [], [2021, 2022, 2023, 2024, 2025, 2026]),
+                          (_date(2026, 11, 16), [2021, 2022, 2023, 2024, 2025, 2026], [2026]),
+                          (_date(2027, 1, 3), [2021, 2022, 2023, 2024, 2025, 2026], [2026, 2027]),
+                          (_date(2026, 11, 16), [2021, 2022, 2024, 2025, 2026], [2023, 2026])):
+    with mock.patch.object(stages, "date", mock.Mock(today=lambda: today)):
+        got = stages.court_years(lambda: YearsConn(held), "courtofappeal.lk", "judgments")
+    assert got == want, (today, held, got)
+assert "supremecourt.lk/wayback" not in stages.SPIDERS and "courtofappeal.lk/judgments" in stages.SPIDERS
+print("ok court years")
+
+# judgments wait for the user's go (court-judgments d4): a plan without keys leaves them out, named keys go in
+from etl.v2 import run as R
+planned = []
+for keys, want in ((None, ["1|a"]), ({"ca:x", "act:1/2020"}, ["1|a", "2|b"])):
+    planned.clear()
+    with mock.patch.object(R, "db", lambda: mock.MagicMock()), \
+         mock.patch.object(stages, "choose", lambda c: [("act:1/2020", "1|a"), ("ca:x", "2|b"), ("sc:y", "3|c")]), \
+         mock.patch.object(R.W, "plan", lambda c, st, items: planned.extend(sorted(i for i, _ in items)) or (len(items), 0)):
+        R.plan_fetch(keys)
+    assert sorted(planned) == want, (keys, planned)
+print("ok judgments held from a nightly fetch")
+
+# Wayback is paced: a refused connection waits and tries again, a 404 (never archived) does not (2026-11-16)
+from etl import fetch as F
+calls = []
+def _refused_once(u, tries=4):
+    calls.append(u)
+    if len(calls) == 1:
+        raise ConnectionRefusedError(111, "refused")
+    return b"%PDF"
+def _missing(u, tries=4):
+    calls.append(u)
+    raise SystemExit("HTTP 404")
+with mock.patch.object(F.acts, "_get", _refused_once), mock.patch.object(F.time, "sleep", lambda s: None):
+    assert F.wayback("https://supremecourt.lk/a.pdf") == b"%PDF" and len(calls) == 2
+calls.clear()
+with mock.patch.object(F.acts, "_get", _missing), mock.patch.object(F.time, "sleep", lambda s: None):
+    try:
+        F.wayback("https://supremecourt.lk/a.pdf")
+        raise AssertionError("a 404 must not be retried")
+    except SystemExit:
+        assert len(calls) == 1
+print("ok wayback pacing")

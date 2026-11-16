@@ -7,7 +7,7 @@ items come back after its lease.
   python3 -m etl.v2.run init                       # the schema (etl/v2/schema.sql), idempotent
   python3 -m etl.v2.run seed                       # one-off: the v1 inventory (DB_LOCAL_URL) and R2 -> v2 state
   python3 -m etl.v2.run listing <spider>|all [--limit N]   # stage 1 (spider names: etl/v2/stages.py SPIDERS)
-  python3 -m etl.v2.run plan  fetch|extract|ocr-ENGLISH|ocr-SINHALA|ocr-TAMIL|build|links    # which items are new or changed (by fingerprint)
+  python3 -m etl.v2.run plan  fetch|extract|ocr-ENGLISH|ocr-SINHALA|ocr-TAMIL|build|links [--keys a,b|@file]   # which items are new or changed (by fingerprint)
   python3 -m etl.v2.run work  fetch|extract|ocr-<LANG>|build|links [--n 4]   # claim and do items until none is left
   python3 -m etl.v2.run resolve                    # links: mentions -> target chunks (one at a time, a lease row)
   python3 -m etl.v2.run choose                     # stage 2's choice of file per document, against today's
@@ -46,12 +46,15 @@ def init():
 SOURCES = {"acts": ("documents.gov.lk", "acts"), "gazette": ("documents.gov.lk", "gazettes"),
            "parliament": ("parliament.lk", "acts"), "constitution": ("parliament.lk", "constitution"),
            "lankalaw": ("lankalaw", "acts-by-year"), "le1980": ("lankalaw", "le1980"), "le1956": ("lankalaw", "le1956"),
-           "commonlii": ("commonlii", "numbered-acts")}
+           "commonlii": ("commonlii", "numbered-acts"), "courtofappeal": ("courtofappeal.lk", "judgments"),
+           "supremecourt": ("supremecourt.lk", "judgements"), "sc_mirror": ("lk_datasets", "sc-mirror")}
 
 
 def v1_type(source, meta):
     """A v1 listing -> (type, listed_key): what the listing says the document is (docs/PIPELINE_V2.md, types)."""
     no = meta.get("act_no") or ""
+    if meta.get("court"):
+        return {"sc": "supreme_court_judgment", "ca": "court_of_appeal_judgment"}[meta["court"]], meta["court_key"]
     if meta.get("constitution"):
         k = meta["constitution"]
         return ("constitution" if k == "constitution" else "constitution_consolidation"), k
@@ -445,7 +448,8 @@ def gold_links():
 def plan_fetch(keys=None):
     from etl.v2 import stages
     with db() as c:
-        need = [(k, it) for k, it in stages.choose(c) if not keys or k in keys]
+        need = [(k, it) for k, it in stages.choose(c)
+                if (k in keys if keys else not k.startswith(stages.HOLD))]   # held keys only when named
         changed, same = W.plan(c, "fetch", [(it, it) for _, it in need])
     print(f"fetch: {len(need)} documents need a file; {changed} new to download, {same} already planned")
 
@@ -492,7 +496,7 @@ def do_extract(c, sha, fp=None):
 def listing(name, limit=None):
     from etl.v2 import stages
     from etl.fetch import pg_connect
-    for n in (stages.SPIDERS if name == "all" else [name]):
+    for n in (stages.SPIDERS if name == "all" else [name]):    # stages.BULK spiders run by name only
         try:                           # one site down must not stop the others; its old listing stays as it was
             print(n, stages.listing(lambda: pg_connect(url=os.environ["V2_DATABASE_URL"]), n, limit), flush=True)
         except Exception as e:
@@ -579,7 +583,8 @@ def main():
     a.add_argument("--limit", type=int)
     a.add_argument("--keys")
     x = a.parse_args()
-    keys = set(x.keys.split(",")) if x.keys else None
+    keys = set((open(x.keys[1:]).read() if x.keys.startswith("@") else x.keys).replace("\n", ",").split(",")) - {""} \
+        if x.keys else None                                                     # --keys a,b or --keys @file
     if x.cmd == "init":
         init()
     elif x.cmd == "seed":

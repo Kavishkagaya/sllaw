@@ -84,7 +84,7 @@ Found 2026-11-07 by reading the current code:
   last_seen; rows are never deleted (gone from the site = an old last_seen).
 - **Decided 2026-11-07: a crawl over many pages keeps its place,** so a crashed spider continues (CommonLII through
   archive.org took ~70 s an Act).
-- **Decided 2026-11-07: each spider run also writes its rows to R2,** `listings/<source>/<spider>/<date>.jsonl.gz`
+- **Decided 2026-11-07: each spider run also writes its rows to R2,** `listings/<source>/<spider>/<UTC time>.jsonl.gz`
   (one PUT a run, a few MB gzipped at most).
 
 ## Stage 2: fetch

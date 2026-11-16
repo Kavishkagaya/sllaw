@@ -22,7 +22,8 @@ ROOT = os.path.expanduser("~/sllaw")
 PY = os.environ.get("SLLAW_PY", "/var/tmp/e19309/etl_venv/bin/python")
 PY_DOCLING = os.environ.get("SLLAW_PY_DOCLING", "/var/tmp/e19309/sllaw_venv/bin/python")   # extract needs docling
 SPIDERS = ["documents.gov.lk/acts", "documents.gov.lk/gazettes", "parliament.lk/acts", "parliament.lk/constitution",
-           "lankalaw/acts-by-year", "lankalaw/le1980", "lankalaw/le1956"]          # = etl/v2/stages.py SPIDERS
+           "lankalaw/acts-by-year", "lankalaw/le1980", "lankalaw/le1956",
+           "courtofappeal.lk/judgments"]                                           # = etl/v2/stages.py SPIDERS
 
 
 def env():

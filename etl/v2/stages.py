@@ -2,7 +2,7 @@
 
   listing  every spider lists everything it sees, every language, no filter on what another source holds; rows are
            typed and upserted (source, source_url); each run also writes its rows to R2
-           (<prefix>listings/<source>/<spider>/<date>.jsonl.gz)
+           (<prefix>listings/<source>/<spider>/<UTC time>.jsonl.gz)
   fetch    one file per document: language first (English, Sinhala, Tamil), then the type's source rank, then the
            human fixes (etl/overrides.json: pin, reject, rekey); a failed download falls to the next candidate;
            a file is stored once per sha256 (source/<sha256>.<ext>) with a manifest beside it (source/<sha256>.json)
@@ -11,7 +11,7 @@
            read); no docling pass over scanned pages (today's extract runs docling on the whole file)
 """
 import gzip, hashlib, io, json, os, re, time
-from datetime import date
+from datetime import date, datetime, timezone
 
 from psycopg2.extras import Json, execute_values
 
@@ -21,7 +21,9 @@ LANG = ["ENGLISH", "SINHALA", "TAMIL"]
 RANK = {"act": ["documents.gov.lk", "parliament.lk", "lankalaw", "commonlii"],
         "law": ["parliament.lk", "lankalaw", "commonlii"],
         "constitution_amendment": ["documents.gov.lk", "parliament.lk"],
-        "revised_1980": ["lankalaw", "commonlii"]}
+        "revised_1980": ["lankalaw", "commonlii"],
+        "supreme_court_judgment": ["lk_datasets", "supremecourt.lk"]}   # the mirror, then the court's file (via Wayback):
+                                                                         # archive.org refuses a bulk fetch (user, 2026-11-16)
 
 
 # -- stage 1: listing ------------------------------------------------------------------------------------------------
@@ -31,9 +33,25 @@ def _lang_of(url, lang):
     return "SINHALA" if re.search(r"_S\.pdf$", url) else "TAMIL" if re.search(r"_T\.pdf$", url) else lang
 
 
-def spider_rows(name, limit=None):
+def _court(r, url=None):
+    """A court spider's row -> (v1 source name, url, title, date, meta)."""
+    from etl.spiders import courts
+    src = {"ca": "courtofappeal", "sc": "supremecourt"}[r["court"]] if not url else "sc_mirror"
+    return (src, url or r["url"], f"{r['case']} ({r['date']})", r["date"],
+            {"court": r["court"], "court_key": courts.key(r["court"], r.get("court_url") or r["url"]), "lang": "ENGLISH",
+             "listing": r})
+
+
+def spider_rows(name, limit=None, years=None):
     """(v1 source name, url, title, date, meta) for one spider; meta as today's discover_* build it."""
-    from etl.spiders import acts, gazettes, le1956, le1980, lankalaw, parliament
+    from etl.spiders import acts, courts, gazettes, le1956, le1980, lankalaw, parliament
+    if name == "courtofappeal.lk/judgments":
+        rows, courts.SEEN["ca"] = courts.ca_crawl(years or [date.today().year])
+        return [_court(r) for r in courts.recent(rows)]
+    if name == "supremecourt.lk/wayback":     # bulk, once: Wayback's capture of the court's listing (2026-08-20)
+        return [_court(r) for r in courts.recent(courts.sc_wayback())]
+    if name == "lk_datasets/sc-mirror":       # bulk, once: the mirror's copies, for PDFs Wayback lacks
+        return [_court(r, r["url"]) for r in courts.recent(courts.mirror_rows())]
     if name == "documents.gov.lk/acts":
         recs = acts.crawl(limit=limit or 100, max_pages=1 if limit else None)
         return [("acts", acts.pdf_url(c["uploadedFile"]), r.get("descriptionEnglish"), r.get("date"),
@@ -66,14 +84,36 @@ def spider_rows(name, limit=None):
 
 
 SPIDERS = ["documents.gov.lk/acts", "documents.gov.lk/gazettes", "parliament.lk/acts", "parliament.lk/constitution",
-           "lankalaw/acts-by-year", "lankalaw/le1980", "lankalaw/le1956"]
+           "lankalaw/acts-by-year", "lankalaw/le1980", "lankalaw/le1956", "courtofappeal.lk/judgments"]
+HOLD = ("ca:", "sc:")   # judgments: fetched only when named (--keys) until the user's go after the sample years
+                        # (court-judgments d4); a nightly plan without keys leaves them listed, not fetched
+BULK = ["supremecourt.lk/wayback", "lk_datasets/sc-mirror"]   # run by name, once; never in a nightly `all`
+
+
+def court_years(connect, source, spider):
+    """Years a court spider reads: from FROM_YEAR, those it has no row for yet (its first pass), then the current
+    year (and the previous one in January). Published judgments never change (user, 2026-11-15)."""
+    from etl.spiders.courts import FROM_YEAR
+    db = connect()
+    try:
+        with db.cursor() as cur:
+            cur.execute("SELECT DISTINCT left(date, 4)::int FROM listings WHERE source = %s AND spider = %s AND date ~ '^\\d{4}'",
+                        (source, spider))
+            held = {y for y, in cur.fetchall()}
+        db.commit()
+    finally:
+        db.close()
+    t = date.today()
+    return sorted(set(range(FROM_YEAR, t.year + 1)) - held | {t.year} | ({t.year - 1} if t.month == 1 else set()))
 
 
 def listing(connect, name, limit=None):
     """Crawl first, then connect: a crawl takes minutes, and Neon closes a connection left idle that long
     (run 83e03e43, 2026-11-12)."""
+    from etl.spiders import courts
     from etl.v2.run import SOURCES, v1_type
-    rows = spider_rows(name, limit)
+    extra = {"years": court_years(connect, "courtofappeal.lk", "judgments")} if name == "courtofappeal.lk/judgments" else {}
+    rows = spider_rows(name, limit, **extra)
     out = []
     for src, url, title, d, meta in rows:
         source, spider = SOURCES[src]
@@ -85,20 +125,22 @@ def listing(connect, name, limit=None):
     db = connect()
     try:
         with db, db.cursor() as cur:      # commits, or rolls back on an error
-            execute_values(cur, """INSERT INTO listings (source, spider, source_url, type, listed_key, title, date, date_precision,
+            got = execute_values(cur, """INSERT INTO listings (source, spider, source_url, type, listed_key, title, date, date_precision,
                                      language, format, listing) VALUES %s
                                    ON CONFLICT (source, source_url) DO UPDATE SET title = EXCLUDED.title, date = EXCLUDED.date,
                                      type = EXCLUDED.type, listed_key = EXCLUDED.listed_key, language = EXCLUDED.language,
-                                     listing = listings.listing || EXCLUDED.listing, last_seen = NOW()""", uniq, page_size=2000)
+                                     listing = listings.listing || EXCLUDED.listing, last_seen = NOW()
+                                   RETURNING (xmax = 0)""", uniq, page_size=2000, fetch=True)
+            new = sum(1 for (ins,) in got if ins)     # xmax = 0: a row inserted now, not updated
     finally:
         db.close()
     s3, bucket = B.r2()
     body = gzip.compress("\n".join(json.dumps({"source": r[0], "spider": r[1], "url": r[2], "type": r[3], "key": r[4],
                                                "title": r[5], "date": r[6], "language": r[8], "format": r[9]},
                                               ensure_ascii=False) for r in uniq).encode())
-    snap = f"{B.PREFIX}listings/{name}/{date.today()}.jsonl.gz"
+    snap = f"{B.PREFIX}listings/{name}/{datetime.now(timezone.utc):%Y-%m-%dT%H%M%SZ}.jsonl.gz"   # two runs a day keep both
     s3.put_object(Bucket=bucket, Key=snap, Body=body, ContentType="application/gzip")
-    return {"rows": len(uniq), "snapshot": snap}
+    return {"rows": len(uniq), "new": new, "snapshot": snap, **({"pages": courts.SEEN.pop("ca")} if "ca" in courts.SEEN else {})}
 
 
 # -- stage 2: fetch --------------------------------------------------------------------------------------------------
@@ -170,7 +212,7 @@ def fetch_one(db, item):
     from etl.fetch import download
     lid, url = item.split("|", 1)
     s3, bucket = B.r2()
-    _, sha, key, size, err = download(s3, bucket, set(), int(lid), url)
+    _, sha, key, size, err, got = download(s3, bucket, set(), int(lid), url)
     with db.cursor() as cur:
         if err:
             cur.execute("""INSERT INTO listing_files (listing_id, error) VALUES (%s, %s)
@@ -181,8 +223,9 @@ def fetch_one(db, item):
         cur.execute("""INSERT INTO files (sha256, ext, bytes, content_type, r2_key) VALUES (%s,%s,%s,%s,%s)
                        ON CONFLICT (sha256) DO NOTHING""", (sha, ext, size, "text/html" if ext == "html" else "application/pdf", key))
         cur.execute("""INSERT INTO listing_files (listing_id, sha256, fetched_from, fetched_at, error) VALUES (%s,%s,%s,NOW(),NULL)
-                       ON CONFLICT (listing_id) DO UPDATE SET sha256 = EXCLUDED.sha256, fetched_at = NOW(), error = NULL""",
-                    (int(lid), sha, url))
+                       ON CONFLICT (listing_id) DO UPDATE SET sha256 = EXCLUDED.sha256, fetched_from = EXCLUDED.fetched_from,
+                         fetched_at = NOW(), error = NULL""",
+                    (int(lid), sha, got))
         cur.execute("""SELECT l.source, l.source_url, lf.fetched_from, lf.fetched_at::text, l.type, l.listed_key, l.language
                        FROM listing_files lf JOIN listings l ON l.id = lf.listing_id WHERE lf.sha256 = %s""", (sha,))
         ls = [dict(zip(("source", "source_url", "fetched_from", "fetched_at", "type", "listed_key", "language"), r))
