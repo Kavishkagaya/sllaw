@@ -6,15 +6,15 @@
 #   3 extract   files with no raw output yet (docling: sllaw_venv; English scans need an OCR server in V2_OCR_API)
 #   4-5 build   tree, chunks, R2 parts, issues;  6 links + resolve;  then the link gold set, the publish and embed
 #   dry runs and the full quality gate. Rerunnable: each plan finds only what is new or changed.
-# Env: /var/tmp/e19309/v2.env (V2_DATABASE_URL, V2_R2_PREFIX) and ~/sllaw/.env. Run it in tmux; stop it with
+# Env: /var/tmp/e19309/neon.env (V2_DATABASE_URL, V2_R2_PREFIX) and ~/sllaw/.env. Run it in tmux; stop it with
 # `tmux kill-session -t v2all` (Ctrl-C in the pane is ignored).
 set -u
 trap "" INT
 cd ~/sllaw
-export $(cat /var/tmp/e19309/v2.env)
+export $(cat /var/tmp/e19309/neon.env)
 # where R2 output goes must be said, never defaulted: "" is production, "v2test/" a trial (2026-11-07: a trial run
 # without it wrote 4,904 objects at the bucket root)
-if ! grep -q '^V2_R2_PREFIX=' /var/tmp/e19309/v2.env; then echo "V2_R2_PREFIX missing from v2.env" >&2; exit 1; fi
+if ! grep -q '^V2_R2_PREFIX=' /var/tmp/e19309/neon.env; then echo "V2_R2_PREFIX missing from neon.env" >&2; exit 1; fi
 P=/var/tmp/e19309/etl_venv/bin/python
 PX=/var/tmp/e19309/sllaw_venv/bin/python     # docling
 N=${1:-12}

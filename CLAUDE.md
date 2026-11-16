@@ -144,7 +144,7 @@ untracked, `git pull` refuses, 2026-11-12): code gets there by copying changed f
 copy matches the base commit), then `bash etl/v2/dagster.sh` with no run active. Skill: `/ada-ssh`.
 
 - **ampere** 10.40.18.10: the work host. 2× RTX A6000 48 GB, shared and busy. Venvs `etl_venv`, `sllaw_venv`
-  (docling), `gpu_venv` (bge-m3), `lighton_venv` (vLLM), `dagster_venv`; env in `/var/tmp/e19309/{neon,v2}.env`.
+  (docling), `gpu_venv` (bge-m3), `lighton_venv` (vLLM), `dagster_venv`; env in `/var/tmp/e19309/neon.env` (V2_*; there is no v2.env, 2026-11-16).
   Dagster UI: `ssh -L 3070:localhost:3070 ampere`. After a reboot: `bash ~/sllaw/etl/v2/dagster.sh`.
 - **ada** 10.40.18.12: 3× RTX 6000 Ada, extra GPUs when ampere is full (has no bge-m3 or gpu_venv). Its `pgdata`
   is stale: never start it.
