@@ -31,6 +31,7 @@ import {
   fileStatus,
   fileView,
   type Removed,
+  readByOcr,
   removeFile,
   rerun,
   type Signed,
@@ -204,7 +205,7 @@ export async function caseFileChunks(a: Signed, caseId: string, fileId: string) 
   const f = await caseFile(a, caseId, fileId);
   if (!f) return null;
   const title = ((f.meta ?? {}) as { title?: string }).title ?? null;
-  return { id: f.id, name: f.name, title, chunks: (await chunksOf(blobStore(), f.id)) ?? [] };
+  return { id: f.id, name: f.name, title, scanned: readByOcr(f), chunks: (await chunksOf(blobStore(), f.id)) ?? [] };
 }
 
 export async function reprocessCaseFile(a: Signed, caseId: string, fileId: string, steps?: Step[]) {

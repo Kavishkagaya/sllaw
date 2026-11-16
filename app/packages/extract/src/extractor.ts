@@ -25,7 +25,12 @@ export class Unreadable extends Error {}
 
 /** What an extractor may need beyond the bytes: a signed URL to the file, for a service that fetches it (OCR), and
  *  the step's signal: aborted when the step's time is up, so a call still waiting is cancelled. */
-export type ExtractCtx = { url?: () => Promise<string | null>; signal?: AbortSignal };
+export type ExtractCtx = {
+  url?: () => Promise<string | null>;
+  signal?: AbortSignal;
+  /** Throws when the file's owner has used up their spend: checked as a long scan is read, every AT_ONCE pages. */
+  budget?: () => Promise<void>;
+};
 
 export interface Extractor {
   readonly name: string;

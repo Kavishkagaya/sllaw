@@ -45,7 +45,7 @@ export const llmSpend = async (p: Period) =>
     await rows<{ costUsd: number; calls: number; estimated: number }>(sql`
       select coalesce(sum(e.cost_usd), 0)::float8 as "costUsd", count(*)::int as calls,
         count(*) filter (where e.estimated)::int as estimated
-      from usage_events e where e.kind = 'llm' and ${within(p)}`)
+      from usage_events e where e.kind in ('llm', 'ocr') and ${within(p)}`)
   )[0]!;
 
 /** One user's model spend per file over the period (processing, re-typing), the most first; name null once deleted. */
@@ -61,7 +61,7 @@ export const userFileSpend = (p: Period, userId: string) =>
     select substr(e.ref, 6) as "fileId", f.name, coalesce(sum(e.cost_usd), 0)::float8 as "costUsd",
       count(*)::int as calls, array_agg(distinct e.task) as tasks, bool_or(e.estimated) as estimated
     from usage_events e left join files f on f.id::text = substr(e.ref, 6)
-    where e.kind = 'llm' and e.user_id = ${userId} and e.ref like 'file:%' and ${within(p)}
+    where e.kind in ('llm', 'ocr') and e.user_id = ${userId} and e.ref like 'file:%' and ${within(p)}
     group by 1, 2 order by 3 desc limit 50`);
 
 /** Usage per workspace over the period (workspace_id null: metered outside any scope). */

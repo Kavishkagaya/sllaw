@@ -3,13 +3,19 @@
 // into extract_by, so files read by the old one can be found and read again.
 import { meter, PRICES } from "@sllaw/usage";
 import { type ExtractCtx, type Extractor, ext, NoText } from "./extractor";
-import { pdfPagesText } from "./pdf";
+import { pdfPageImages, pdfPagesText } from "./pdf";
 
 export interface OcrProvider {
   readonly by: string; // name@version
-  /** Every page's text, in order (page 1 first), of the file at `url`. Stops when `signal` aborts. */
-  ocr(file: { url: string; mime: string; filename: string }, signal?: AbortSignal): Promise<string[]>;
+  /** Every page's text, in order (page 1 first), of the file at `url`; `pages` names the ones needed (a provider
+   *  may read them all). Stops when `signal` aborts. */
+  ocr(file: { url: string; mime: string; filename: string; pages?: number[] }, signal?: AbortSignal): Promise<string[]>;
+  /** One page of a scanned PDF from its images (PNG), when the provider reads pictures: a PDF is then read page by
+   *  page, so page n's text is always page n's (a model given the whole file and a page range mixed them up). */
+  ocrPage?(images: Uint8Array[], signal?: AbortSignal): Promise<string>;
 }
+
+const AT_ONCE = 16; // pages read at the same time
 
 /** Any OCR service with this contract:
  *    POST <OCR_URL>   Authorization: Bearer <OCR_TOKEN>
@@ -116,8 +122,8 @@ const url = async (ctx: ExtractCtx | undefined) => {
   return u;
 };
 
-/** Text-layer PDFs read here; when any page has no text layer, the whole file goes to OCR and those pages take its
- *  text (pages with a text layer keep theirs: it is exact). */
+/** A PDF with some page without a text layer (one with every page's text is the text extractor's): those pages go to
+ *  OCR and take its text (pages with a text layer keep theirs: it is exact). */
 export function ocrPdfExtractor(provider: OcrProvider): Extractor {
   return {
     name: `unpdf+ocr:${provider.by}`,
@@ -126,13 +132,53 @@ export function ocrPdfExtractor(provider: OcrProvider): Extractor {
     async extract(bytes, mime, filename, ctx) {
       const { pages, empty } = await pdfPagesText(bytes);
       if (!empty.length) return pages;
-      const ocr = await provider.ocr({ url: await url(ctx), mime, filename }, ctx?.signal);
+      const ocr = provider.ocrPage
+        ? await byPage(provider.ocrPage.bind(provider), bytes, empty, ctx)
+        : await provider.ocr({ url: await url(ctx), mime, filename, pages: empty }, ctx?.signal);
       const missing = new Set(empty);
       const merged = pages.map((p) => (missing.has(p.n) ? { n: p.n, text: (ocr[p.n - 1] ?? "").trim() } : p));
       if (!merged.some((p) => p.text)) throw new NoText("needs_ocr", "OCR found no text");
       return merged;
     },
   };
+}
+
+/** Each page's text from its images (none: no text), AT_ONCE pages at a time; indexed by page - 1 like ocr(). Before
+ *  each AT_ONCE pages the owner's spend is checked: past it, the step stops, saying how far it got (not retried). */
+async function byPage(
+  read: NonNullable<OcrProvider["ocrPage"]>,
+  bytes: Uint8Array,
+  pages: number[],
+  ctx?: ExtractCtx,
+): Promise<string[]> {
+  const pdf = await pdfPageImages(bytes);
+  const out: string[] = [];
+  const queue = [...pages];
+  let started = 0;
+  let checked: Promise<void> = Promise.resolve();
+  const worker = async () => {
+    for (let n = queue.shift(); n != null; n = queue.shift()) {
+      if (ctx?.budget && started++ % AT_ONCE === 0) {
+        const done = started - 1;
+        checked = checked.then(() =>
+          ctx.budget!().catch((e: Error) => {
+            throw Object.assign(new Error(`${e.message} Stopped after ${done} of ${pages.length} scanned pages.`), {
+              retryable: false,
+            });
+          }),
+        );
+      }
+      await checked;
+      const imgs = await pdf.page(n);
+      out[n - 1] = imgs.length ? await read(imgs, ctx?.signal) : "";
+    }
+  };
+  try {
+    await Promise.all(Array.from({ length: Math.min(AT_ONCE, pages.length) }, worker));
+  } finally {
+    await pdf.close();
+  }
+  return Array.from(out, (t) => t ?? "");
 }
 
 const IMAGES = new Set(["png", "jpg", "jpeg", "webp", "gif", "tif", "tiff", "heic"]);

@@ -1,4 +1,5 @@
 import { PageHeader } from "@/components/page-header";
+import { ScanNote } from "@/components/scan-note";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { docTypeLabel, fmtDate, fmtSize } from "@/lib/format";
@@ -55,6 +56,8 @@ export default async function CaseFilePage({ params }: { params: Promise<{ id: s
               .filter(Boolean)
               .join(" · ")}
           </p>
+
+          {v.scanned && <ScanNote className="mt-3" />}
 
           <FileActions caseId={c.id} fileId={f.id} name={f.name} status={v.status} downloadUrl={v.downloadUrl} />
 

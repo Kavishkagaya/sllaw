@@ -178,6 +178,20 @@ in v1; an entity graph can be built later from the same per-file JSON.
   its pages as JSON; that is the whole contract** (`OcrProvider`, `httpOcr`: POST {url, mime, filename} ->
   {pages: [{n, text}]}; on when `OCR_URL` is set). We send no bytes and split no pages. A PDF's pages with a text
   layer keep it; OCR fills the ones without. Provider not picked yet; not compared on Sinhala/Tamil scans.
+- **OCR on: Gemini 3 Flash through the gateway (user, 2026-11-16, brief ocr-gemini, #54):** the default provider
+  (`gatewayOcr` in `ai`, `MODEL_OCR`; `OCR_PROVIDER=mistral` or `OCR_URL` still pick the others, `OCR_PROVIDER=off`
+  turns it off). One page a call, a model call like any other (`model("ocr", ...)`), metered as kind `ocr` with
+  `pages: 1` and the gateway's billed cost, inside the uploader's spend limit (checked at upload, before any call).
+  A photo goes as its signed URL; **a scanned PDF goes page by page as its images** (unpdf's `extractImages`, encoded
+  to PNG with node's zlib, `extract/src/png.ts`), 16 pages at a time: given the whole PDF and a page range, Gemini put
+  another page's text on 3 of 12 pages (2026-11-16); one page a call put every page right (12/12 and 20/20). The
+  user chose images over adding pdf-lib. A PDF whose every page has a text layer is never sent (`extract_by` is then
+  `unpdf@1`), so `extract_by` naming `ocr:` means OCR ran: the file page and the citation viewer then say "Read from
+  a scan. Check names, dates and amounts against the original." (every model tried put plausible wrong words on a
+  hard photo). Thinking `low`. **Measured 2026-11-16 (agent branch, 24 pages):** $0.0326, so ~$0.0014 a page
+  (scanned journal pages ~$0.001, a Sinhala photo ~$0.003); CER on synthetic plaint photos EN 0, SI 0.17-0.43%,
+  TA 0, a 20-page scanned journal ~0 with every page on its page. Not checked: real phone photos, handwriting, a
+  page split into several image strips (sent as several images of one page), TIFF/GIF photos (Gemini reads neither).
 - **Mistral OCR wired, off (user, 2026-10-26):** `mistralOcr` (POST api.mistral.ai/v1/ocr with the signed URL;
   markdown per page, image placeholders dropped) is the first provider, on only with `OCR_PROVIDER=mistral` +
   `MISTRAL_API_KEY` (no key yet). About $4 per 1,000 pages (Mistral pricing, surveyed 2026-10-26); not on Vercel AI
@@ -185,6 +199,33 @@ in v1; an entity graph can be built later from the same per-file JSON.
   (per token, est. well under $1 per 1,000 pages), Google Cloud Vision (1,000 free/month, then $1.50 per 1,000),
   Document AI (best on Tamil, CER 0.78%, arXiv 2507.18264; Surya best on Sinhala, WER 2.61%), Azure free tier (first
   2 pages per request only: no use), Workers AI `toMarkdown` (text layer only; images are described, not read).
+  Rechecked 2026-11-16 (web search, snippets): Mistral OCR 4/4.1 $4 per 1,000 pages, $2 batch, $5 annotated (raised
+  2026-07; older $1-2 figures are stale); Document AI Enterprise OCR $1.50 (official page; $0.60 past 5M/month);
+  Textract DetectDocumentText $1.50 (no Sinhala/Tamil); Azure Read $1.50, 500 free/month; DeepSeek-OCR / OCR-2 hosted
+  on Novita at $0.03 per 1M tokens in and out (aggregators only, not Novita's page; 8k context), so cents per 1,000
+  pages; Gemini 3 Flash $0.50/$3 per 1M tokens, 2.5 Flash-Lite $0.10/$0.40. None tested on our scans yet.
+  AI Gateway model list (`ai-gateway.vercel.sh/v1/models`, 509 models, 2026-11-16): no DeepSeek-OCR and no Mistral
+  OCR; the only DeepSeek vision model is `deepseek/deepseek-v4-flash-vision-exp` ($0.22/$0.65 per 1M tokens,
+  experimental, a reasoning model). No OCR model type on the Gateway; vision models whose card names OCR:
+  `alibaba/qwen3-vl-instruct` ($0.20/$0.88, "OCR majorly enhanced", open weights) and `interfaze/interfaze-beta`
+  ($1.50/$3.50, LLM + specialised CNNs for OCR, beta, file input).
+- **OCR test on the Gateway (2026-11-16, laptop, < $0.10):** synthetic plaint pages (EN/SI/TA, Noto fonts, rendered
+  text = truth) as a phone photo (tilt, perspective, shading, noise, blur, JPEG 60, ~1050×1490) and a hard copy
+  (half size, more blur, JPEG 35; barely legible by eye). CER, normal / hard: **Gemini 3 Flash** 0 / 0, 0.09% / 0.60%,
+  0 / 0.47% (EN/SI/TA), $4-9 per 1,000 pages (thinking tokens); **Gemini 2.5 Flash-Lite** 0 / 0.35%, 0 / looped
+  (6,000 tokens of invented Sinhala), 0.08% / 1.8%, ~$0.40; Gemini 3.1 Flash-Lite (hard only) 0, 7.0%, 0.6%, ~$1;
+  DeepSeek V4 Flash Vision Exp 0 / 0.5%, 7.8% / empty, 2.5% / 76%, $1-4; Qwen3-VL 0, 49%, 7.2% (normal only), $1-2.
+  **On a hard page every model invents plausible text instead of failing:** 2.5 Flash-Lite wrote 2025 for 2026 (EN)
+  and a different plaintiff, address and date (SI); 3.1 Flash-Lite October -> September, Perera -> another name;
+  Gemini 3 Flash Perera -> තෙරේසා; DeepSeek dropped a digit (04471 -> 0447) and the slash in 42/3. Not tested:
+  DeepSeek-OCR (Novita) and Document AI (no keys), real phone photos, handwriting, stamps, typewritten or legacy-font
+  pages. Script and pages: session scratchpad (`ocr/render.py`, `run.py`), not kept. Same normal pages, also
+  2026-11-16: Mistral on the Gateway (no Mistral OCR there; send `top_p: 1` with temperature 0) reads English
+  perfectly but not Sinhala: Large 4 95% CER (TA 25%), Large 3 88% (TA looped), Medium 3.5 75% (5.6%), Small 87%
+  (1.9%), Ministral 14B 99.6% (3.0%). **Workers AI has no OCR model** (catalogue, 75 models): `toMarkdown` describes
+  images; vision models tested: Qwen 3.8 27B EN 0, SI 25%, TA 3.3%; Mistral Small 3.1 EN 0, SI 41%, TA 2.7%. Not run:
+  Kimi K2.6 (not on the Workers Free plan), Llama 3.2 Vision (needs accepting Meta's licence), Moondream 3.1 (wants
+  binary image input; untried), Clef / Clairic (decision and extraction models, not transcription).
 - **Files bucket `sllaw-files` (user, 2026-10-26):** R2, private, location APAC, created 2026-10-26 apart from the
   ETL's `sllaw`. No public access: r2.dev URL disabled, no custom domain; checked 2026-10-26: an unsigned GET is
   refused (400), r2.dev 401, signed GET and PUT 200. Reached only by signed URLs for one file (15 min). CORS: PUT with
