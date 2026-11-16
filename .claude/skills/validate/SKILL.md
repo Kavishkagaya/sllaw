@@ -19,7 +19,8 @@ deploys until both reports for the exact head commit say `VERDICT: PASS`.
    access, money or a large diff; CLAUDE.md Rules), each given: the brief path, `base` = `git merge-base origin/main HEAD`, `head` = full
    `git rev-parse HEAD`, the worktree path, the dev URL, and its report path
    `$(git rev-parse --git-common-dir)/validation/<head>/{semantic,security}.md` (absolute; mkdir it first). Give them
-   no opinion about whether it works.
+   no opinion about whether it works, and no report format: their definitions put `VERDICT: ...` on the first line,
+   which is the line the release gate reads ("ending with a line VERDICT" made a PASS unreadable, 2026-11-16).
 5. **Read both reports.** On FAIL: fix, commit, go back to 1 (the new commit has no reports). A later round resumes
    the same two validators (SendMessage: the new head, `git diff <old> <new>`, the new report path) rather than
    spawning fresh ones: they keep what they checked and re-check what the diff touches (tokens, user 2026-11-11).
