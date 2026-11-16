@@ -184,9 +184,15 @@ def choose(db):
             how = "language fallback" if held["lang"] != "ENGLISH" else how
             rows.append((key, held["type"], None, held["id"], held["sha"], held["lang"], how))
     with db.cursor() as cur:
-        execute_values(cur, """INSERT INTO documents (key, type, title, listing_id, sha256, language, chosen_by) VALUES %s
+        held = "|".join(h.rstrip(":") for h in HOLD)
+        execute_values(cur, f"""INSERT INTO documents (key, type, title, listing_id, sha256, language, chosen_by) VALUES %s
                                ON CONFLICT (key) DO UPDATE SET listing_id = EXCLUDED.listing_id, sha256 = EXCLUDED.sha256,
-                                 language = EXCLUDED.language, chosen_by = EXCLUDED.chosen_by, updated_at = NOW()""",
+                                 language = EXCLUDED.language, chosen_by = EXCLUDED.chosen_by, updated_at = NOW()
+                               -- an unchanged row is skipped, and a judgment that has its file keeps it (a published
+                               -- PDF never changes; the backfill's rows are never overwritten, user 2026-11-16)
+                               WHERE (documents.listing_id, documents.sha256, documents.language, documents.chosen_by)
+                                       IS DISTINCT FROM (EXCLUDED.listing_id, EXCLUDED.sha256, EXCLUDED.language, EXCLUDED.chosen_by)
+                                 AND NOT (documents.key ~ '^({held}):' AND documents.sha256 IS NOT NULL)""",
                        rows, page_size=2000)
         cur.execute("""UPDATE documents d SET title = l.title FROM listings l WHERE l.id = d.listing_id AND d.title IS NULL""")
     db.commit()
