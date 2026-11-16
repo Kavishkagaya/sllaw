@@ -287,3 +287,30 @@ with mock.patch.object(F.acts, "_get", _missing), mock.patch.object(F.time, "sle
     except SystemExit:
         assert len(calls) == 1
 print("ok wayback pacing")
+
+# judgments (etl/v2/judgment.py): case details first, then paragraphs packed to MAX with their pages
+from etl.v2 import judgment as J
+from etl.docs import MAX
+row = {"case": "CA/WRT/0634/2023", "date": "2024-05-13", "judge": "HON. JUSTICE X", "parties": "A v. B",
+       "keywords": "Writ of Certiorari", "legislation": "Industrial Disputes Act ss. 4(1), 17(1), 19; Constitution Article 140"}
+paras = [{"text": "JUDGMENT", "page": 1}, {"text": "a" * 900, "page": 1}, {"text": "b" * 900, "page": 2},
+         {"text": "c" * 300, "page": 3}, {"text": "", "page": 3}]
+ch = J.chunks("ca:ca-wrt-0634-23", row, paras)
+assert [c["crumb"] for c in ch] == ["case details", "page 1", "pages 2-3"], [c["crumb"] for c in ch]
+cap = [{"text": "IN THE COURT OF APPEAL OF THE DEMOCRATIC SOCIALIST REPUBLIC OF SRI LANKA", "page": 1},
+       {"text": "1. Godamunne Bolagedara, Battaramulla. PETITIONER", "page": 1}, {"text": "Vs.", "page": 1},
+       {"text": "Before: P. Kumararatnam, J.", "page": 1}, {"text": "Counsel: A for the Petitioner", "page": 1},
+       {"text": "Decided on: 13.05.2024", "page": 2}, {"text": "P. Kumararatnam, J.", "page": 2}]
+body = [{"text": f"{n}. The petitioner says " + "x" * 400, "page": 2 + n // 3} for n in range(1, 8)]
+body.insert(3, {"text": "1. Was the order lawful?", "page": 3})           # a list inside the text restarting at 1
+ch2 = J.chunks("ca:x", row, cap + body)
+assert [c["crumb"] for c in ch2] == ["case details", "caption", "pages 2-3 · paras 1-3", "pages 3-4 · paras 4-6",
+                                    "page 4 · para 7"], [c["crumb"] for c in ch2]
+assert ch2[1]["text"].startswith("IN THE COURT OF APPEAL") and ch2[1]["text"].endswith("P. Kumararatnam, J.")
+assert J.caption_end(body) == 0 and J.para_numbers(body[:4]) == {}          # no caption line; under 5 numbers
+assert ch[0]["text"].startswith("Court of Appeal, CA/WRT/0634/2023, decided 2024-05-13.")
+assert "Legislation: Industrial Disputes Act ss. 4(1), 17(1), 19; Constitution Article 140" in ch[0]["text"]
+assert all(len(c["text"]) <= MAX for c in ch) and [c["address"] for c in ch] == [f"ca:ca-wrt-0634-23/{n}/1" for n in (1, 2, 3)]
+assert J.profile("sc:x")["kind"] == "judgment" and J.profile("sc:x")["code"] == J.CODE
+assert "judgment.py" not in " ".join(__import__("etl.v2.build", fromlist=["_SRC"])._SRC)   # laws do not rebuild
+print("ok judgment chunks")

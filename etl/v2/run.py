@@ -218,8 +218,10 @@ def plan_build(keys=None):
             lo = f"{lo}|{oe}" if oe else lo          # a raw re-read with OCR is a new input
             if keys and key not in keys:
                 continue
+            from etl.v2 import judgment as J
             from etl.v2.profiles import profile
-            items.append((key, B.fingerprint(sha, lo, profile(key, title), fixes.get(key))))
+            prof = J.profile(key) if key.startswith(J.PREFIXES) else profile(key, title)
+            items.append((key, B.fingerprint(sha, lo, prof, fixes.get(key))))
         changed, same = W.plan(c, "build", items)
     print(f"build: {changed} newly queued, {same} already queued or built with this code")
 
@@ -233,11 +235,32 @@ def do_build(c, key, fp=None):
     c.commit()
     raw = B.get_json(raw_key)
     lighton = B.get_json(f"raw/lighton/{sha}.json.gz") if lo else None
+    from etl.v2 import judgment as J
+    if key.startswith(J.PREFIXES):
+        return build_judgment(c, key, title, sha, raw, lighton, fp)
     prof, engine, paras, st, tree, info, ch, issues = B.build_doc(key, title, raw, lighton, meta or {})
     from etl.docs import long_title_of
     from etl.v2.dates import dates
     return B.store(c, key, title, sha, prof, tree, ch, issues, fp,
                    {"long_title": long_title_of(paras), **dates(key, ch, listed, precision, paras)})
+
+
+def build_judgment(c, key, title, sha, raw, lighton, fp):
+    """A judgment (etl/v2/judgment.py): its details from the court's own listing row for this key (the mirror's
+    rows have no keywords or Legislation column), else the row it was fetched from."""
+    from etl.v2 import judgment as J
+    with c.cursor() as cur:
+        cur.execute("""SELECT listing->'v1_meta'->'listing' FROM listings WHERE listed_key = %s
+                       ORDER BY source = 'lk_datasets', id LIMIT 1""", (key,))
+        row = cur.fetchone()[0]
+    c.commit()
+    prof, engine, paras, st, tree, ch, issues = J.build_doc(key, row, raw, lighton)
+    out = B.store(c, key, title, sha, prof, tree, ch, issues, fp,
+                  {"court": prof["court"], **{k: row.get(k) for k in ("case", "date", "judge", "parties", "keywords", "legislation")}})
+    with c.cursor() as cur:
+        cur.execute("UPDATE docs SET year = %s WHERE key = %s", (int(row["date"][:4]), key))
+    c.commit()
+    return {**out, "engine": engine}
 
 
 # -- stage 6: links (mentions out of each document; resolution inside the database) -----------------------------------
