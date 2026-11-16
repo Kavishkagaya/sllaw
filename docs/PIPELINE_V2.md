@@ -505,6 +505,11 @@ trial; must be set, never defaulted), `V2_OCR_API` (a LightOn vLLM server), `ZIL
 `etl/overrides.json` as `reject`/`rekey`, and reading amendment ordinals from listing titles); build, links,
 resolve on 6 documents (plan again: 0 to build); publish and embed dry runs.
 
+**Decided 2026-11-16 (user): the nightly `choose` skips, never overwrites.** A `documents` row whose pick is unchanged
+is not written (before, every row was rewritten each night with the same values); a judgment (`ca:`/`sc:`) that has
+its file keeps it, so nothing the backfill (`etl/v2/backfill.py`) chose is replaced. A law still moves to a
+better-ranked file when one appears (RANK). Checked on ampere: a `plan fetch` rewrote 0 of 12,275 rows.
+
 **Full chain, 2026-11-07 22:44 to 2026-11-08 00:35 (`all.sh 12` on ampere, scratch state DB, R2 `v2test/`):**
 
 | step | result |
