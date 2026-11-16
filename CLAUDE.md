@@ -97,6 +97,9 @@ Each came from a correction or a costly mistake. Guarded = `.claude/hooks/guard.
 - **Only the streaming message renders** (user, 2026-11-15): earlier messages in a chat get stable props (memo on their
   parts, no `animated`/`isAnimating`) and never re-render while an answer streams; data the chips read through context
   keeps its identity until it changes. A per-token re-render of the thread made stalls grow with chat length.
+- **A watch command shows live progress, and is run once before it is handed over** (user, 2026-11-16, after
+  `tail -f all.log` and `tmux attach` both showed nothing between steps): counts that move (done / running / todo /
+  failed) every few seconds, e.g. `bash ~/sllaw/logs/v2/watch.sh <log dir>` on ampere for a plan/work run.
 - **Test the app the way a lawyer talks** (user, 2026-11-11): plain questions about the case and its people
   ("the Perera Traders demand"), never file names, ids or our own terms ("card", "field", "fileEdit"), and no
   invented facts that contradict the documents just to provoke the agent.
@@ -111,6 +114,8 @@ Each came from a correction or a costly mistake. Guarded = `.claude/hooks/guard.
   (Wayback, a GitHub dataset) used to fill a backlog goes in a one-off backfill script run by hand
   (`etl/v2/backfill.py`), never into a spider, the fetch rank or the downloader, so the nightly run knows only the
   real sites.
+- **Prices and vendor facts come from the docs or the web, never memory** (user, 2026-11-16, after OCR prices were
+  quoted wrong): read what `docs/` already records (OCR: `docs/APP.md`), check anything older on the web, cite sources.
 - **Never repeat an investigation:** read `docs/SOURCES.md` before probing a site, `docs/PIPELINE_V2.md` before
   changing the pipeline. Findings get written down in the same session (see "Writing things down").
 
