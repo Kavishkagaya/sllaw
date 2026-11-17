@@ -1,6 +1,6 @@
 // The main agent (what the chat runs) on the cases of etl/eval_agent.json: per case, whether it cites a gold section
 // (any edition of that law: same_as twins count), how many of the facts the answer must state it states (regexes,
-// case-insensitive), citations of chunks it never read, steps, tokens, cost; then a table per category.
+// case-insensitive) and states none of what it must not (must_not regexes), citations of chunks it never read, steps, tokens, cost; then a table per category.
 //   pnpm --filter @sllaw/services eval-agent                 every case
 //   pnpm --filter @sllaw/services eval-agent repealed,xref   these categories (or case ids)
 // TRACE_DIR=<dir> writes each case's tool calls, results and answer to <dir>/<id>.json.
@@ -17,6 +17,7 @@ type Case = {
   lang?: string;
   gold: [string, string | null][]; // [law key, label or null: any chunk of that law]
   must: string[];
+  must_not?: string[]; // regexes the answer must not match (a known wrong claim)
   note?: string;
 };
 const cases: Case[] = JSON.parse(readFileSync(new URL("../../../../etl/eval_agent.json", import.meta.url), "utf8"));
@@ -80,7 +81,9 @@ const one = async (q: Case) => {
         if (got.some((c) => t.has(c.docKey) && (label == null || c.label === label))) hit = true;
       }
     }
-    const missed = q.must.filter((m) => !new RegExp(m, "i").test(r.text));
+    const plain = r.text.replace(/\*+/g, ""); // facts are matched without markdown emphasis
+    const missed = q.must.filter((m) => !new RegExp(m, "i").test(plain));
+    const wrong = (q.must_not ?? []).filter((m) => new RegExp(m, "i").test(plain));
     const mine = calls.filter((c) => c.workspaceId === ws);
     const cost = mine.reduce((a, c) => a + Number(c.meta?.inferenceCost ?? NaN), 0);
     const row = {
@@ -88,7 +91,8 @@ const one = async (q: Case) => {
       cat: q.cat,
       hit,
       facts: `${q.must.length - missed.length}/${q.must.length}`,
-      factsOk: missed.length === 0,
+      wrong: wrong.length,
+      factsOk: missed.length === 0 && wrong.length === 0,
       cited: cited.length,
       unread: cited.filter((id) => !seen.has(id)).length,
       steps: r.steps.length,
@@ -98,7 +102,9 @@ const one = async (q: Case) => {
       secs: Math.round((Date.now() - t0) / 1000),
     };
     rows.push(row);
-    console.log(JSON.stringify({ ...row, missed: missed.map((m) => m.slice(0, 60)) }));
+    console.log(
+      JSON.stringify({ ...row, missed: missed.map((m) => m.slice(0, 60)), wrong: wrong.map((m) => m.slice(0, 60)) }),
+    );
     if (traceDir)
       writeFileSync(
         `${traceDir}/${q.id}.json`,
@@ -107,6 +113,7 @@ const one = async (q: Case) => {
             case: q,
             row,
             missed,
+            wrong,
             text: r.text,
             steps: r.steps.map((s) => ({
               calls: s.toolCalls.map((c) => ({ tool: c.toolName, input: c.input })),
