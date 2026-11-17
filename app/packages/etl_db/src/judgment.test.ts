@@ -42,7 +42,10 @@ describe("shortParties", () => {
       "Paranirupasingham Arulrajasingham v. Vadivelu Anandasiva. Vigneshwary",
     ],
     ["A. V. Perera v. The Attorney General", "A. V. Perera v. The Attorney General"],
-    ["O.L.M. MACAN MARKAR LIMITED No: 26 Galle Face Vs. AL-HAMBRA HOTEL LIMITED", "O.L.M. MACAN MARKAR LIMITED v. AL-HAMBRA HOTEL LIMITED"],
+    [
+      "O.L.M. MACAN MARKAR LIMITED No: 26 Galle Face Vs. AL-HAMBRA HOTEL LIMITED",
+      "O.L.M. MACAN MARKAR LIMITED v. AL-HAMBRA HOTEL LIMITED",
+    ],
     [
       "Anton Norbet Laktansiv Kurera Vs. The Attorney General,",
       "Anton Norbet Laktansiv Kurera v. The Attorney General",
