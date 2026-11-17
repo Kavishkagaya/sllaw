@@ -526,11 +526,17 @@ listed, 4,557 with a file (CA 3,116/3,175, SC 1,441/1,560; the rest 404 everywhe
 (median 18 CA, 29 SC); 29 scans with only the details chunk (need OCR); links 57,788 from 4,433 judgments; embed
 85,577 chunks in ~2.5 h (bge-m3, one shared A6000). Search (d6): a lawyer's question from 10 judgments' subjects finds
 the judgment in the top 10 for 6/10 dense, 8/10 weighted. Text against the PDF's text layer (d5, 10 judgments):
-96-99.5% of words in order. **Judgments make change links (found 2026-11-17, not fixed):** kb.links from `ca:`/`sc:` sources include
+96-99.5% of words in order. **Judgments make change links (found 2026-11-17, fixed the same day, judgment-cites-only #80):** kb.links from `ca:`/`sc:` sources included
 amends 44, repeals 3, replaces 1, amends_act 2, repeals_act 4, rescinds 6 (the rest are cites: 35,092): a judgment that
 quotes "section 10 ... is amended" reads as an amendment, so the app's law timeline, a section's "changed by" and the
-agent's asOf can list a judgment as amending a law (e.g. ca:ca-tax-46-2019-… -> act:23/2011 s.10). Fix in the ETL: a
-judgment's links are `cites` only. Not checked: how many of these show in the app today.
+agent's asOf can list a judgment as amending a law (e.g. ca:ca-tax-46-2019-… -> act:23/2011 s.10). Fix: the links
+stage turns a `ca:`/`sc:` mention into a cite (`run.cite_only`: relation `cites`, no ops), in `run.py`, not `mentions.py`,
+so only judgments relink (a `mentions.py` change relinks every document); the links fingerprint of a judgment carries
+`|cite_only`, so the rule's first run requeued the 4,557 judgments only. State DB before: 73 change links (amends 55,
+rescinds 6, repeals 5, repeals_act 4, amends_act 2, replaces 1; kb then held 60 of them), after: 0, cites 57,715 ->
+57,788; gold links 210/210. Relink of 4,557 judgments: one worker did ~100 in 200 s on a loaded ampere (load 61 on 32
+cores, the worker at 18% CPU: it waits on R2 and Neon), 8 workers finished in ~30 min. Not checked: how many showed in
+the app before the fix.
 
 **Keys fit where they are stored (2026-11-16).** Zilliz `chunks.doc_key` is VarChar(64): 11 Court of Appeal keys
 (file names carrying the case's subject, up to 111 chars) stopped the embed. `courts.key` trims a key over 64 at

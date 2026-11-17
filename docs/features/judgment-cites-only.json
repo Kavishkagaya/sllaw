@@ -23,5 +23,6 @@
     {"date": "2026-11-17", "note": "The fix is in the ETL (links from a judgment are cites), not a filter in the app, so every reader of kb.links gets it."},
     {"date": "2026-11-17", "note": "Cost: relink of the 4,433 judgments and a links-only publish (production write, asks); no rebuild of other documents, no embed."}
   ],
-  "progress": [{"date": "2026-11-17", "note": "Scoped with the user; issue #80."}]
+  "progress": [{"date": "2026-11-17", "note": "Scoped with the user; issue #80."},
+    {"date": "2026-11-17", "note": "Fix 8a45a3d (run.cite_only, a judgment's links fingerprint carries |cite_only; test in test_v2). On ampere (logs/v2/cites80): 4,557 judgments relinked, resolve; state links from ca:/sc: before cites 57,715 + 73 change kinds, after cites 57,788 only; gold-links 210/210; gate on state af3b4ca0: only the known 124 gazette label errors, structure gold 50/50. Publish dry run 378 documents (185 judgments, 196 gazettes, 15 others from resolve's known run-to-run moves). Not published: gazette-links (#81, another session) started a full gazette relink on the same state at 14:24, so the gated state is stale; one gate and one publish after it carries both. Next: that publish (asks the user), then s1 in the app, then /validate."}]
 }
