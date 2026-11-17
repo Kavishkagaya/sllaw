@@ -23,6 +23,7 @@ import { createContext, useContext, useEffect, useState } from "react";
 import { BrandMark } from "@/components/brand";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { cn } from "@/lib/utils";
+import { SourceIcon, type SourceKind, sourceKind } from "./source-icon";
 
 /** What a chip in the trail opens in the sources panel: a law's chunk, or a passage of a case file. */
 export type TrailSource =
@@ -232,30 +233,48 @@ function Row({
 }
 
 /** A law or file named in a step: a chip; with `src` it opens that source in the panel. */
-function Chip({ children, file, src }: { children: React.ReactNode; file?: boolean; src?: TrailSource }) {
+function Chip({
+  children,
+  file,
+  src,
+  kind,
+}: {
+  children: React.ReactNode;
+  file?: boolean;
+  src?: TrailSource;
+  kind?: SourceKind; // its icon: a law, regulation, judgment or case paper
+}) {
   const open = useContext(OpenSource);
   const cls = cn(
-    "mt-1 mr-1 inline-flex max-w-full items-center truncate rounded-[5px] border px-[7px] py-px text-[11.5px] font-medium",
+    "mt-1 mr-1 inline-flex max-w-full items-center gap-1 truncate rounded-[5px] border px-[7px] py-px text-[11.5px] font-medium",
     file
       ? "border-file-border bg-file text-file-ink"
       : src
         ? "border-law-border bg-law text-law-ink"
         : "bg-card text-foreground/80",
   );
+  const body = (
+    <>
+      {kind && <SourceIcon kind={kind} className="size-[11px] shrink-0 opacity-70" />}
+      <span className="truncate">{children}</span>
+    </>
+  );
   return src ? (
     <button type="button" onClick={() => open(src)} className={cn(cls, "cursor-pointer hover:brightness-95")}>
-      {children}
+      {body}
     </button>
   ) : (
-    <span className={cls}>{children}</span>
+    <span className={cls}>{body}</span>
   );
 }
 
-const Laws = ({ names }: { names: string[] }) =>
+const Laws = ({ names, kind }: { names: string[]; kind?: (name: string) => SourceKind | undefined }) =>
   names.length ? (
     <div className="flex flex-wrap">
       {names.slice(0, 5).map((n) => (
-        <Chip key={n}>{n}</Chip>
+        <Chip key={n} kind={kind?.(n)}>
+          {n}
+        </Chip>
       ))}
       {names.length > 5 && <span className="mt-1 text-[11px] text-muted-foreground">+{names.length - 5} more</span>}
     </div>
@@ -289,10 +308,9 @@ function Step({ p, name, active }: { p: Part; name: (key: string) => string; act
   const failed = "state" in p && p.state === "output-error";
   if (p.type === "tool-search") {
     const within = p.input?.docKeys?.flatMap((k) => (k ? [name(k)] : []));
-    const found =
-      p.state === "output-available" && Array.isArray(p.output)
-        ? uniq(p.output.map((h) => h.title ?? lawName(h.docKey)))
-        : [];
+    const hits = p.state === "output-available" && Array.isArray(p.output) ? p.output : [];
+    const found = uniq(hits.map((h) => h.title ?? lawName(h.docKey)));
+    const kindOf = new Map(hits.map((h) => [h.title ?? lawName(h.docKey), sourceKind(h.docKey)]));
     return (
       <Row icon={running ? Loader2 : Search} spin={running} active={running}>
         <p>
@@ -302,7 +320,7 @@ function Step({ p, name, active }: { p: Part; name: (key: string) => string; act
           {p.state === "output-available" && Array.isArray(p.output) && !p.output.length && <> — nothing found</>}
           {failed && <> — failed</>}
         </p>
-        <Laws names={found} />
+        <Laws names={found} kind={(n) => kindOf.get(n)} />
       </Row>
     );
   }
@@ -324,7 +342,11 @@ function Step({ p, name, active }: { p: Part; name: (key: string) => string; act
         {read.length > 0 && (
           <div className="flex flex-wrap">
             {read.map((r) => (
-              <Chip key={r.chunkId} src={{ kind: "law", chunkId: r.chunkId, label: chip(r) }}>
+              <Chip
+                key={r.chunkId}
+                kind={sourceKind(r.docKey)}
+                src={{ kind: "law", chunkId: r.chunkId, label: chip(r) }}
+              >
                 {chip(r)}
               </Chip>
             ))}
@@ -350,7 +372,7 @@ function Step({ p, name, active }: { p: Part; name: (key: string) => string; act
                 ? `amended ${plural(o.changes.length, "time", "times")}${last ? `, last ${last}` : ""}`
                 : "not amended"}
             </p>
-            <Laws names={uniq(o.changes.map((c) => name(c.by)))} />
+            <Laws names={uniq(o.changes.map((c) => name(c.by)))} kind={() => "law"} />
           </>
         )}
       </Row>
@@ -443,6 +465,7 @@ function Step({ p, name, active }: { p: Part; name: (key: string) => string; act
                 <Chip
                   key={f.file}
                   file
+                  kind="file"
                   src={Number.isFinite(n) ? { kind: "file", fileId: f.file, n, label } : undefined}
                 >
                   {label}
@@ -501,7 +524,10 @@ function Step({ p, name, active }: { p: Part; name: (key: string) => string; act
                 : `Looked at laws that ${kinds.join(" or ") || "relate to"} ${subject}`}
           {!running && !failed && !groups.length && " — none"}
         </p>
-        <Laws names={uniq(groups.map((g) => name(g.law)))} />
+        <Laws
+          names={uniq(groups.map((g) => name(g.law)))}
+          kind={(n) => sourceKind(groups.find((g) => name(g.law) === n)?.law)}
+        />
       </Row>
     );
   }

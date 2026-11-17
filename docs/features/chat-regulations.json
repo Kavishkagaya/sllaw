@@ -2,6 +2,7 @@
   "title": "Chat cites regulations",
   "slug": "chat-regulations",
   "status": "agreed",
+  "preview": true,
   "branch": "app/chat-regulations",
   "issue": 82,
   "neon_branch": {"name": "agent/chat-regulations", "id": "br-sparkling-shadow-b78ea77b"},
@@ -14,11 +15,12 @@
     {"id": "d4", "check": "Currency: a gazette hit or read carries 'amended by Gazette No. X (date)' and 'rescinded by Gazette No. Y (date)' from the links (as law hits carry 'changed by'). When a cited gazette was later amended or rescinded, the answer says so and names and cites the later gazette."},
     {"id": "d5", "check": "Asked for a regulation it does not hold (before 2010, or in the weekly Gazette), the chat says in one line that it holds the Extraordinary Gazettes from 2010 on that carry law, in English, not the weekly Gazette or earlier ones, never cites a gazette from memory, and gives what it does hold on the point."},
     {"id": "d6", "check": "Index check: the gazette chunks in kb that should be in Zilliz (those embed keeps: text at least its minimum length) are all there; the 2,320 gap between kb's 81,145 and Zilliz's 78,825 is explained by count, and any missing chunk is embedded (asks)."},
-    {"id": "d7", "check": "Eval: 8 regulation questions in a lawyer's words added to etl/eval_agent.json (made under a section, still in force or rescinded, one not held): at least 6 of 8 right, every gazette citation to a passage read. The existing law and judgment questions score as before. One run each side."}
+    {"id": "d7", "check": "Eval: 8 regulation questions in a lawyer's words added to etl/eval_agent.json (made under a section, still in force or rescinded, one not held): at least 6 of 8 right, every gazette citation to a passage read. The existing law and judgment questions score as before. One run each side."},
+    {"id": "d8", "check": "Each kind of source has its own icon wherever a citation shows: the inline citation chip in the answer, the Sources panel group, the viewer header and the trail rows. Law (Acts, Laws, Revised Editions, Constitution): building (Landmark); regulation (gazette): scroll (ScrollText); judgment: gavel (Gavel); case paper: file (FileText). Seen in a preview and agreed by eye before it is committed."}
   ],
   "scenarios": [
     {"id": "s1", "steps": "In a quick chat: 'What orders have been made under section 20 of the Imports and Exports (Control) Act, and which are still in force?'", "expect": "Cites the gazettes made under s.20 (2345/03 among them) as Title, Gazette No. (date), para N; for each one later amended or rescinded, names and cites the later gazette."},
-    {"id": "s2", "steps": "Ask for the regulations made in 2021 under the Colombo Port City Economic Commission Act.", "expect": "The year filter keeps 2021 gazettes; cites them, opening each in the viewer at the cited paragraph."},
+    {"id": "s2", "steps": "Ask for the regulations and orders made in 2024 under the Colombo Port City Economic Commission Act.", "expect": "The year filter keeps 2024 gazettes; cites them, opening each in the viewer at the cited paragraph."},
     {"id": "s3", "steps": "Ask for the 1989 emergency regulations under the Public Security Ordinance.", "expect": "A one-line note on what it holds (Extraordinary Gazettes from 2010 on), nothing cited from memory, then what it does hold on the point."}
   ],
   "out_of_scope": [
@@ -33,9 +35,13 @@
     {"date": "2026-11-17", "note": "Currency in the answer only, from the amends/rescinds links (user)."},
     {"date": "2026-11-17", "note": "Holdings line: Extraordinary Gazettes from 2010 on that carry law, English; not the weekly Gazette or earlier (user)."},
     {"date": "2026-11-17", "note": "Proof: 8 eval questions, bar 6/8, one run per side (user)."},
+    {"date": "2026-11-17", "note": "Reopened during /build (user): separate icons per kind of source (d8: law Landmark, regulation ScrollText, judgment Gavel, case paper FileText; chip, Sources panel, viewer, trail), with a preview. s2's year corrected from 2021 to 2024: kb holds 25 gazettes made under act:11/2021, from 2023 (4), 2024 (10), 2025 (6), 2026 (5), none from 2021 (my misreading at scope; the 2021 walk, chat 4f666e23, rightly said none is held and the earliest is 2023)."},
     {"date": "2026-11-17", "note": "Found at scope (Zilliz count queries, read-only): kind 'gazette' 78,825 chunks, all with year null (the year comes from a key ending /YYYY; gazette:2345/03 does not); kb says 81,145."}
   ],
   "progress": [
-    {"date": "2026-11-17", "note": "Scoped with the user; issue #82. Branch app/chat-regulations off origin/main; Neon branch agent/chat-regulations, .env.local points at it (production kept as .env.main). The ETL part (d3, d6) commits on main."}
+    {"date": "2026-11-17", "note": "Scoped with the user; issue #82. Branch app/chat-regulations off origin/main; Neon branch agent/chat-regulations, .env.local points at it (production kept as .env.main). The ETL part (d3, d6) commits on main."},
+    {"date": "2026-11-17", "note": "d6: on ampere (probe piped, nothing stored) kb's 81,145 gazette chunks = 78,825 of 40+ chars, all in Zilliz (0 missing, 0 extra) + 2,320 under E.MIN, which embed skips. d3: main cf8ebae (build.doc_year: a gazette's year from meta.certified; test_v2 'ok doc year') and fe71294 (PIPELINE_V2.md). Backfill with the user's yes (script piped to ampere): state docs 3,481, kb.docs 3,481, Zilliz 78,825 by entities/upsert partialUpdate (year only); after: gazette chunks with year null 0, total 78,825, year 2021 4,407, year < 2010 0. Not yet on ampere's checkout: build.py (copy at push, so new gazettes get a year)."},
+    {"date": "2026-11-17", "note": "d1, d2, d4, d5 built (7a2c6df): prompt section 'The regulations you search', search/links wording; gazette display title 'subject, Gazette No. N (dd.mm.yyyy)' in etl_db named() (so search, read, chips and viewer alike), chip label '…, para N' (specs.lawLabel); gazette hits and reads carry status from amends/rescinds links (ports.later, gazetteStatus); gazette hits come whole (passage, counted read, as judgments: chunks p50 1,060 / max 1,809 chars); links 'in' newest first (the cap of 50 cut s. 20's list at 2017). Headed walks on the agent DB: s1 /chats/8e62a5dd-ab97-4e94-a450-8d2e6de8195e (before the whole-hit change: 11 searches, 22 provisions; names rescinded 1808/06 by 1813/15, 2421/04 by 2421/44 (cited), 2274/42 by 2282/21, 2304/04 by 2315/46; holdings line; 6 checked / 15 not verified, the reason for whole hits); one links call failed on the model's missing docKey (schema). s2 as first written (2021) /chats/4f666e23-6753-4ea9-a697-43754b59b254: year filters used, rightly 'none from 2021 held, earliest 2023'; s2 with 2024 /chats/55bbdb56-9bb3-4b9d-aa94-3da022018886: 13 checked / 2 not verified."},
+    {"date": "2026-11-17", "note": "d8 preview walked headed and agreed by the user: components/chat/source-icon.tsx (sourceKind, SOURCE_ICON); s1 chat chips landmark 3 / scroll-text 6 (+15 unverified triangles), groups landmark 1 + scroll-text 11, trail scroll-text 3; judgments chat bfa0ba7d chips landmark 14 / gavel 7, groups landmark 8 / gavel 4; Perera v. Silva case chat 1d59a699 chips landmark 19; viewer of gazette 2044/40: scroll-text, 'Gazette Extraordinary No. 2044/40' (lib lawName). Also: panel rows 'para N' (shortPin), viewer history no 'Enacted 40' (year only from a 4-digit /YYYY). Not seen: a case-paper chip (no chat on this account cites one). Screenshots: session scratchpad icons-trail.png, icons-viewer.png."}
   ]
 }

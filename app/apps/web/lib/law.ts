@@ -11,6 +11,7 @@ export function lawName(key: string) {
   if (kind === "constitution") return "Constitution of Sri Lanka";
   if (kind === "ca") return "Court of Appeal judgment";
   if (kind === "sc") return "Supreme Court judgment";
+  if (kind === "gazette") return `Gazette Extraordinary No. ${rest}`;
   return key;
 }
 
@@ -35,6 +36,7 @@ export const pinpoint = (path: string | null, label: string | null) =>
 export const shortPin = (path: string | null, label: string | null) =>
   pinpoint(path, label)
     ?.replace(/^section\s+/i, "s. ")
+    .replace(/^regulation\s+(?=\S+$)/i, "para ") // a gazette's paragraph, as its chip names it
     .replace(/\.$/, "") ?? null;
 
 /** "RENT (AMENDMENT) ACT, No. 55 OF 1980" -> "Rent (Amendment) Act, No. 55 of 1980": some titles are stored in capitals. */
