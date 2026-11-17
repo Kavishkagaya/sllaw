@@ -86,7 +86,9 @@ Each came from a correction or a costly mistake. Guarded = `.claude/hooks/guard.
 - **Spend Claude Code tokens like money** (user, 2026-11-11, after a session hit its 5-hour limit): read a page with a
   targeted `agent-browser eval` or a grepped snapshot, never a whole snapshot; screenshot only to judge a design;
   wait with one quiet loop that prints only the end state; a later validation round resumes the same validators
-  (SendMessage with the new head and the diff) instead of spawning fresh ones; demos and repeat runs only when asked.
+  (SendMessage with the new head and the diff) instead of spawning fresh ones; demos and repeat runs only when asked. Paid evals (eval-agent, eval-chat) too
+  (user, 2026-11-17, after ~$1.30 of reruns in one build): one run per side the brief asks for; a rerun to judge
+  noise, or a full run after a prompt tweak, is proposed with its cost and waits for a yes.
   No agent redoes another's work (user, 2026-11-12, 2026-11-14): validators verify the builder's recorded runs (the
   brief's `progress`, the rows it left, its UI walk with screenshot paths) instead of re-running paid steps or
   re-walking the UI, walk only what the record does not cover, and each validator stays in its own lane.
