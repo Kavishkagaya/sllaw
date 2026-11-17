@@ -1,0 +1,32 @@
+{
+  "title": "Judgments on the home and coverage pages",
+  "slug": "coverage-judgments",
+  "status": "agreed",
+  "branch": "app/coverage-judgments",
+  "issue": 72,
+  "neon_branch": false,
+  "goal": "The public home page and the coverage page say what Hulft now covers: Supreme Court and Court of Appeal judgments from 2021, now published to kb (court-judgments #63). Update the home content and the coverage (user, 2026-11-17).",
+  "for_whom": "A Sri Lankan lawyer deciding whether Hulft covers what they argue from.",
+  "done_check": [
+    {"id": "d1", "check": "The counts band (home and coverage pages) has 6 cells, 3 rows of 2, all live from kb: Acts and Laws, Revised Edition chapters, Judgments (ca: + sc:, 4,557 on 2026-11-17), Gazettes, Amendments followed, Last updated; each number matches a count of kb.docs / kb.links."},
+    {"id": "d2", "check": "The coverage page lists Judgments among what it covers (Supreme Court and Court of Appeal, from 2021) and no longer says judgments are not yet covered; the home page's 'Judgments are next' trust item and the FAQ's 'Judgments come next' say judgments from 2021 are in. Years only: no mention of the Supreme Court's gap after August 2026 (user)."},
+    {"id": "d3", "check": "Both pages walked in the headed browser on desktop and phone width (counts read with a targeted eval, the 6-cell grid seen), light and dark."}
+  ],
+  "scenarios": [
+    {"id": "s1", "steps": "Open the home page, then Coverage, as a lawyer who wants to know if judgments are in.",
+     "expect": "Both say Supreme Court and Court of Appeal judgments from 2021 are covered, and show the live judgments count."}
+  ],
+  "out_of_scope": [
+    "The app citing judgments in chat (the next brief).",
+    "Mentioning the Supreme Court's gap after August 2026 (user: years only); the live-site spider is #71.",
+    "Any other change to the pages' design."
+  ],
+  "decisions": [
+    {"date": "2026-11-17", "note": "Six cells, 3 rows of 2: Judgments and Gazettes join the four (user)."},
+    {"date": "2026-11-17", "note": "Years only, no Supreme Court gap on the pages (user)."},
+    {"date": "2026-11-17", "note": "No Neon branch: the change reads kb (sllaw-etl, read-only) and touches no app table."}
+  ],
+  "progress": [
+    {"date": "2026-11-17", "note": "Scoped with the user; agreed; issue #72."}
+  ]
+}
