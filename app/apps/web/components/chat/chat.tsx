@@ -144,7 +144,12 @@ export function Chat({
     for (const m of messages)
       for (const p of m.parts) {
         if (p.type === "tool-search" && p.state === "output-available" && Array.isArray(p.output))
-          for (const c of p.output) add(c);
+          for (const c of p.output) {
+            if ("passage" in c) {
+              add({ ...c, text: c.passage });
+              loaded.add(`s:${c.chunkId}`); // a judgment hit comes whole: it was read
+            } else add(c);
+          }
         if (p.type === "tool-read" && p.state === "output-available" && Array.isArray(p.output))
           for (const c of p.output) {
             loaded.add(`s:${c.chunkId}`);

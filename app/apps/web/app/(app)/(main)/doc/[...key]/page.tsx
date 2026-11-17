@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { Separator } from "@/components/ui/separator";
 import { SidebarTrigger } from "@/components/ui/sidebar";
+import { isJudgment, lawName, prose } from "@/lib/law";
 import { serverApi } from "@/trpc/server";
 import { DocView } from "./doc-view";
 
@@ -23,7 +24,7 @@ export default async function DocPage({ params }: { params: Promise<{ key: strin
           <article className="mx-auto max-w-3xl px-6 py-10">
             <h1 className="text-3xl leading-tight font-semibold">{doc.title ?? doc.key}</h1>
             <p className="mt-2 text-sm text-muted-foreground">
-              {doc.key}
+              {isJudgment(doc.key) ? lawName(doc.key) : doc.key}
               {doc.commenced ? ` · commenced ${doc.commenced}` : ""}
             </p>
             <Separator className="my-6" />
@@ -34,7 +35,9 @@ export default async function DocPage({ params }: { params: Promise<{ key: strin
                 className="scroll-mt-4 rounded-md px-3 py-3 data-cited:bg-law-mark data-cited:ring-1 data-cited:ring-law-border"
               >
                 {c.path && <p className="mb-1 text-xs text-muted-foreground">{c.path}</p>}
-                <div className="font-law leading-relaxed whitespace-pre-wrap">{c.text}</div>
+                <div className="font-law leading-relaxed whitespace-pre-wrap">
+                  {isJudgment(doc.key) ? prose(c.text) : c.text}
+                </div>
               </section>
             ))}
           </article>

@@ -215,4 +215,16 @@ describe("labels", () => {
       lawLabel({ docKey: "constitution:21", title: "Constitution", path: "Chapter III › Article 12 — Equality." }),
     ).toBe("Art. 12, Constitution");
   });
+
+  it("names a judgment passage by its parties, case, date and page", async () => {
+    const { lawLabel } = await import("./specs");
+    const title = "J. P. A. Jagath Keerthi v. Lalith U. Gamage, CA/WRT/634/2021 (12.12.2025)";
+    expect(lawLabel({ docKey: "ca:ca-writ-634-21-judgment-final", title, path: "pages 2-4 · paras 7-15" })).toBe(
+      `${title}, pp. 2-4`,
+    );
+    expect(
+      lawLabel({ docKey: "sc:sc_appeal_133_2018", title: "A v. B, SC/APPEAL/133/2018 (07.08.2026)", path: "page 7" }),
+    ).toBe("A v. B, SC/APPEAL/133/2018 (07.08.2026), p. 7");
+    expect(lawLabel({ docKey: "ca:x", title, path: "case details" })).toBe(title);
+  });
 });

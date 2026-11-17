@@ -3,13 +3,13 @@
 // marked. A law by its chunk id (corpus.chunk: the chunk, which laws changed it, its law's timeline; corpus.doc, the law around it, only when opened); a case
 // file by its id and chunk number (case.fileChunks: the same chunks the agent read).
 import { useQuery } from "@tanstack/react-query";
-import { BookOpenText, ExternalLink, FileText, History, Landmark, LocateFixed } from "lucide-react";
+import { ArrowLeft, BookOpenText, ExternalLink, FileText, Gavel, History, Landmark, LocateFixed } from "lucide-react";
 import Link from "next/link";
 import { useRef, useState } from "react";
 import { ScanNote } from "@/components/scan-note";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { lawName, pinpoint, textAs, titleCase } from "@/lib/law";
+import { isJudgment, lawName, pinpoint, prose, textAs, titleCase } from "@/lib/law";
 import { cn } from "@/lib/utils";
 import { useTRPC } from "@/trpc/client";
 
@@ -235,7 +235,63 @@ function ReadMark({ read, children }: { read?: boolean; children: React.ReactNod
   return read ? <p className="label-mono text-[10px] text-ok">✓ Read · {children}</p> : null;
 }
 
+const CITED_FIRST = 10; // judgments listed under a section before "Show all"
+
+/** The judgments that cite a section, newest first; a click opens one at the passage that cites it. Nothing when none
+ *  does. */
+function CitedBy({ chunkId, onOpen }: { chunkId: number; onOpen: (chunkId: number) => void }) {
+  const trpc = useTRPC();
+  const [all, setAll] = useState(false);
+  const first = useQuery(trpc.corpus.citedBy.queryOptions({ chunkId, limit: CITED_FIRST }));
+  const rest = useQuery(trpc.corpus.citedBy.queryOptions({ chunkId }, { enabled: all }));
+  const got = (all && rest.data) || first.data;
+  if (!got?.total) return null;
+  return (
+    <section aria-label="Judgments citing this section" className="space-y-2">
+      <p className="label-mono text-[10px] text-muted-foreground">
+        Cited by {got.total} {got.total === 1 ? "judgment" : "judgments"}
+      </p>
+      <ul className="space-y-1">
+        {got.judgments.map((j) => (
+          <li key={j.docKey}>
+            <button
+              type="button"
+              onClick={() => onOpen(j.chunkId)}
+              className="flex w-full items-start gap-2 rounded-md px-2 py-1.5 text-left text-[13px] hover:bg-accent"
+            >
+              <Gavel className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
+              <span>{j.title}</span>
+            </button>
+          </li>
+        ))}
+      </ul>
+      {got.total > got.judgments.length && (
+        <Button variant="ghost" size="sm" className="h-7 text-xs" disabled={all} onClick={() => setAll(true)}>
+          {all ? "Loading…" : `Show all ${got.total}`}
+        </Button>
+      )}
+    </section>
+  );
+}
+
 export function LawSource({ chunkId, read }: { chunkId: number; read?: boolean }) {
+  // a judgment opened from "Cited by" shows here, in place of the section, with a way back
+  const [peek, setPeek] = useState<number | null>(null);
+  if (peek != null)
+    return (
+      <div>
+        <div className="px-5 pt-4">
+          <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setPeek(null)}>
+            <ArrowLeft /> Back to the section
+          </Button>
+        </div>
+        <LawView key={peek} chunkId={peek} />
+      </div>
+    );
+  return <LawView chunkId={chunkId} read={read} onOpen={setPeek} />;
+}
+
+function LawView({ chunkId, read, onOpen }: { chunkId: number; read?: boolean; onOpen?: (chunkId: number) => void }) {
   const trpc = useTRPC();
   const view = useQuery(trpc.corpus.chunk.queryOptions({ chunkId }));
   const key = view.data?.chunk.docKey;
@@ -249,6 +305,44 @@ export function LawSource({ chunkId, read }: { chunkId: number; read?: boolean }
   const { chunk: c, doc: info, changed, timeline, amends } = view.data;
   const where = pinpoint(c.path, c.label);
   let last: string | null = null;
+  if (isJudgment(c.docKey))
+    return (
+      <div className="space-y-5 p-5">
+        <ReadMark read={read}>a judgment</ReadMark>
+        <Head icon={Gavel} kind={lawName(c.docKey)} title={info?.title ?? c.title ?? c.docKey} sub={where}>
+          <Button asChild variant="outline" size="sm">
+            <Link href={`/doc/${c.docKey}#c${c.chunkId}`}>
+              Open the judgment <BookOpenText />
+            </Link>
+          </Button>
+          {info?.sourceUrl && (
+            <Button asChild variant="outline" size="sm">
+              <a href={info.sourceUrl} target="_blank" rel="noopener noreferrer">
+                The court's PDF <ExternalLink />
+              </a>
+            </Button>
+          )}
+        </Head>
+        <Quote label={where ? `Cited passage · ${where}` : "Cited passage"} tone="law">
+          {prose(c.text)}
+        </Quote>
+        <Whole title="The whole judgment" onJump={doc.isSuccess ? jump : undefined}>
+          {!whole && (
+            <Button variant="outline" size="sm" onClick={() => setWhole(true)}>
+              <BookOpenText /> Read the whole judgment here
+            </Button>
+          )}
+          {whole && doc.isPending && <Skeleton className="h-64 w-full" />}
+          {doc.isError && <Problem>Could not load the judgment: {doc.error.message}</Problem>}
+          {doc.data?.chunks.map((x) => (
+            <section key={x.id} ref={x.id === c.chunkId ? at : undefined} className={part(x.id === c.chunkId, "law")}>
+              {x.path && <p className={crumb}>{x.path}</p>}
+              {prose(x.text)}
+            </section>
+          ))}
+        </Whole>
+      </div>
+    );
   return (
     <div className="space-y-5 p-5">
       {/* the stored text is as enacted (or as in its edition): "in force" only when nothing changed it since */}
@@ -293,6 +387,7 @@ export function LawSource({ chunkId, read }: { chunkId: number; read?: boolean }
       ) : (
         <AmendmentLine docKey={c.docKey} chunkId={c.chunkId} law={timeline} section={changed} />
       )}
+      {onOpen && <CitedBy chunkId={c.chunkId} onOpen={onOpen} />}
       <Whole title="The whole law" onJump={doc.isSuccess ? jump : undefined}>
         {!whole && (
           <Button variant="outline" size="sm" onClick={() => setWhole(true)}>

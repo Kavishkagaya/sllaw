@@ -830,9 +830,9 @@
   "q": "Under the Artificial Intelligence Regulation Act No. 5 of 2025, what fine applies to running an unregistered AI system?",
   "gold": [],
   "must": [
-   "(not|no)\\b[^\\n]{0,120}?\\b(in|within|part of|covered by|available in|held in|find|found|locate)\\b[^\\n]{0,40}?\\b(corpus|library|database|collection|sources?|records|materials)|could(n.t| not) (find|locate)|unable to (find|locate)|no (such|record of (an?|the|this))\\b|does not (appear|exist)|doesn.t (appear|exist)|not aware of"
+   "(not|no)\\b[^\\n]{0,120}?\\b(in|within|part of|covered by|available in|held in|find|found|locate)\\b[^\\n]{0,40}?\\b(corpus|library|database|collection|sources?|records|materials)|could(n.t| not) (find|locate)|unable to (find|locate)|no (such|record of (an?|the|this))\\b|does not (appear|exist)|doesn.t (appear|exist)|not aware of|not in the (law|laws|legislation) I hold"
   ],
-  "note": "no such Act"
+  "note": "no such Act; 'not in the law I hold' is how the prompt names its corpus since chat-judgments (2026-11-17)"
  },
  {
   "id": "none-judgment",
@@ -842,7 +842,7 @@
   "must": [
    "(not|no)\\b[^\\n]{0,120}?\\b(in|within|part of|covered by|available in|held in|find|found|locate)\\b[^\\n]{0,40}?\\b(corpus|library|database|collection|sources?|records|materials)|could(n.t| not) (find|locate)|unable to (find|locate)|no (such|record of (an?|the|this))\\b|does not (appear|exist)|doesn.t (appear|exist)|not aware of|judgment|case law|decisions"
   ],
-  "note": "judgments are not in the corpus; it may say so and still point to Article 11/13/126"
+  "note": "a 2003 judgment: the corpus holds CA/SC judgments from 2021 only (chat-judgments, 2026-11-17); it may say so and still point to Article 11/13/126"
  },
  {
   "id": "none-indian-ipc",
@@ -851,8 +851,138 @@
   "gold": [],
   "must": [
    "Sri Lank",
-   "(not|no)\\b[^\\n]{0,120}?\\b(in|within|part of|covered by|available in|held in|find|found|locate)\\b[^\\n]{0,40}?\\b(corpus|library|database|collection|sources?|records|materials)|could(n.t| not) (find|locate)|unable to (find|locate)|no (such|record of (an?|the|this))\\b|does not (appear|exist)|doesn.t (appear|exist)|not aware of|outside|only (covers|holds|has) Sri Lank|not Indian"
+   "(not|no)\\b[^\\n]{0,120}?\\b(in|within|part of|covered by|available in|held in|find|found|locate)\\b[^\\n]{0,40}?\\b(corpus|library|database|collection|sources?|records|materials)|could(n.t| not) (find|locate)|unable to (find|locate)|no (such|record of (an?|the|this))\\b|does not (appear|exist)|doesn.t (appear|exist)|not aware of|outside|only (covers|holds|has) Sri Lank|not Indian|Sri Lankan law only|can.t advise on"
   ],
-  "note": "foreign law: should say it holds Sri Lankan law (may give Penal Code s296)"
+  "note": "foreign law: should say it holds Sri Lankan law (may give Penal Code s296); 'I help with Sri Lankan law only, so I can't advise on the Indian Penal Code' is right (chat-judgments, 2026-11-17)"
+ },
+ {
+  "id": "judgment-1",
+  "cat": "judgment",
+  "q": "My client asked the Debt Conciliation Board to review its decision and it refused without giving any reasons. Can that refusal be quashed by writ?",
+  "gold": [
+   [
+    "ca:writ-152-24",
+    null
+   ]
+  ],
+  "must": [],
+  "note": "chat-judgments d6 (2026-11-17): a lawyer's question from the judgment's listed keywords"
+ },
+ {
+  "id": "judgment-2",
+  "cat": "judgment",
+  "q": "The contract has an arbitration clause but the other side is about to act before the arbitrator is appointed. Will the Court of Appeal grant an interim injunction to keep the status quo?",
+  "gold": [
+   [
+    "ca:inj-03-24",
+    null
+   ]
+  ],
+  "must": [],
+  "note": "chat-judgments d6 (2026-11-17): a lawyer's question from the judgment's listed keywords"
+ },
+ {
+  "id": "judgment-3",
+  "cat": "judgment",
+  "q": "A lorry owned by my client was confiscated because the driver used it to transport cannabis without the owner's knowledge. How does the owner get the vehicle released?",
+  "gold": [
+   [
+    "ca:2.24022023-ca-phc-0158-15",
+    null
+   ]
+  ],
+  "must": [],
+  "note": "chat-judgments d6 (2026-11-17): a lawyer's question from the judgment's listed keywords"
+ },
+ {
+  "id": "judgment-4",
+  "cat": "judgment",
+  "q": "Who succeeds to a permit holder's land under the Land Development Ordinance when no successor was nominated, and can a relative challenge the Divisional Secretary's decision?",
+  "gold": [
+   [
+    "ca:wrt-0681-23-09.07.2025",
+    null
+   ]
+  ],
+  "must": [],
+  "note": "chat-judgments d6 (2026-11-17): a lawyer's question from the judgment's listed keywords"
+ },
+ {
+  "id": "judgment-5",
+  "cat": "judgment",
+  "q": "My client was convicted in the Colombo High Court of trafficking 7.93 grams of heroin found in a pink cellophane bag in his trouser pocket during a Colombo Crime Division raid in Mattakkuliya, and got life imprisonment. The parcel weighed about 25 grams at the scene. On appeal, how will the Court of Appeal look at the inward journey of that production to the Government Analyst?",
+  "gold": [
+   [
+    "ca:court-of-appeal-judgment-hcc-228.2018",
+    null
+   ]
+  ],
+  "must": [],
+  "note": "chat-judgments d6 (2026-11-17): rewritten with this judgment's own facts; the first version (its keywords only) is decided in dozens of judgments, and the agent cited 29-50 others on the same point"
+ },
+ {
+  "id": "judgment-6",
+  "cat": "judgment",
+  "q": "My clients run ground-floor shops in the Ratna Building on Main Street, Colombo 11. The UDA revoked its lease with the company that built the building and has now served them quit notices under the State Lands (Recovery of Possession) Act, although it undertook in the Civil Appellate High Court not to eject them without due process. Can they get a writ and interim relief against the quit notices?",
+  "gold": [
+   [
+    "ca:wrt-0250-22-20.11.2023",
+    null
+   ]
+  ],
+  "must": [],
+  "note": "chat-judgments d6 (2026-11-17): rewritten with this judgment's own facts; the first version (its keywords only) is decided in dozens of judgments, and the agent cited 29-50 others on the same point"
+ },
+ {
+  "id": "judgment-7",
+  "cat": "judgment",
+  "q": "A university lecturer was interdicted pending a disciplinary inquiry and his salary was stopped. Is he entitled to his pay while the inquiry is pending?",
+  "gold": [
+   [
+    "sc:sc_fr_74_2020",
+    null
+   ]
+  ],
+  "must": [],
+  "note": "chat-judgments d6 (2026-11-17): a lawyer's question from the judgment's listed keywords"
+ },
+ {
+  "id": "judgment-8",
+  "cat": "judgment",
+  "q": "Our appeal was filed in the name of a party who had already died. Can the defect in the caption be cured, or is the appeal a nullity?",
+  "gold": [
+   [
+    "sc:sc_spl_la_16_2019",
+    null
+   ]
+  ],
+  "must": [],
+  "note": "chat-judgments d6 (2026-11-17): a lawyer's question from the judgment's listed keywords"
+ },
+ {
+  "id": "judgment-9",
+  "cat": "judgment",
+  "q": "My client bought a land in Welimada in 2009 that the Ministry had requisitioned in 1974 under the Co-operative Societies (Special Provisions) Act for a co-operative shop, and no compensation has ever been paid. If he files a fundamental rights application now, will the one month rule and his delay defeat it?",
+  "gold": [
+   [
+    "sc:sc_fr_162_2015",
+    null
+   ]
+  ],
+  "must": [],
+  "note": "chat-judgments d6 (2026-11-17): rewritten with this judgment's own facts; the first version (its keywords only) is decided in dozens of judgments, and the agent cited 29-50 others on the same point"
+ },
+ {
+  "id": "judgment-10",
+  "cat": "judgment",
+  "q": "Officers of the Sri Lanka Planning Service were placed in supernumerary posts by a Cabinet decision. Can they claim a violation of equal protection?",
+  "gold": [
+   [
+    "sc:sc_fr_236_237_2008-1",
+    null
+   ]
+  ],
+  "must": [],
+  "note": "chat-judgments d6 (2026-11-17): a lawyer's question from the judgment's listed keywords"
  }
 ]

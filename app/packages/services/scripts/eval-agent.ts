@@ -29,7 +29,7 @@ if (traceDir) mkdirSync(traceDir, { recursive: true });
 const calls: Metered[] = [];
 setUsageSink(async (es) => void calls.push(...es.filter((e) => e.kind === "llm")));
 const CITE = /\[\[([a-z]\d+(?:\s*[,;]\s*[a-z]\d+)*)\]\]/g;
-const SEEN = new Set(["read", "asOf"]); // tools whose output is chunks the agent has read
+const SEEN = new Set(["read", "asOf", "search"]); // tools whose output is chunks the agent has read (search: whole judgment hits only)
 const tokens = (cs: Metered[], k: string) => cs.reduce((a, c) => a + (c.quantity[k] ?? 0), 0);
 
 // a law and the documents that are the same law (other editions, the Constitution's consolidations)
@@ -62,7 +62,7 @@ const one = async (q: Case) => {
       else if (x && typeof x === "object") {
         const o = x as Record<string, unknown>;
         const id = real(o.chunkId);
-        if (id != null) seen.add(id);
+        if (id != null && (!("snippet" in o) || "passage" in o)) seen.add(id); // a law search hit is a snippet: not read
         const by = real(o.byChunk);
         if (by != null && typeof o.clause === "string") seen.add(by);
         Object.values(o).forEach(collect);

@@ -9,8 +9,17 @@ export function lawName(key: string) {
   if (kind === "ord" && year) return `Ordinance No. ${n} of ${year}`;
   if (kind === "cap" || kind === "cap1956") return `Chapter ${rest}${kind === "cap1956" ? " (1956 ed.)" : ""}`;
   if (kind === "constitution") return "Constitution of Sri Lanka";
+  if (kind === "ca") return "Court of Appeal judgment";
+  if (kind === "sc") return "Supreme Court judgment";
   return key;
 }
+
+/** A Court of Appeal or Supreme Court judgment's key (ca:…, sc:…). */
+export const isJudgment = (key: string) => /^(ca|sc):/.test(key);
+
+/** A judgment's text as read: the PDF's lines come as paragraphs, so a break before a line that starts in lower case
+ *  is the same sentence going on ("the notice of termination\n\nstipulated under the Rent Act"). */
+export const prose = (t: string) => t.replace(/\s*\n\n(?=[a-z])/g, " ");
 
 /** The last step of a chunk's breadcrumb ("Part II › section 13 — Notice (cont.)" → "section 13 — Notice"). */
 export const pinpoint = (path: string | null, label: string | null) =>

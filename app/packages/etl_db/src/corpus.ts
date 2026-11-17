@@ -1,9 +1,28 @@
 import { aliasedTable, and, asc, eq, ilike, inArray, like, ne, or, sql } from "drizzle-orm";
 import { db } from "./client";
+import { isJudgment, judgmentTitle } from "./judgment";
 import { chunks, docs, links } from "./schema";
 import { partTexts, sourceFileUrl } from "./text";
 
-const docCols = { key: docs.key, kind: docs.kind, title: docs.title, year: docs.year, commenced: docs.commenced };
+// a doc's title as shown: a law's own; a judgment's from its listing (parties, case number, date: judgment.ts)
+const titleCols = {
+  title: docs.title,
+  jCase: sql<string | null>`${docs.meta}->>'case'`,
+  jDate: sql<string | null>`${docs.meta}->>'date'`,
+  jParties: sql<string | null>`${docs.meta}->>'parties'`,
+};
+type Titled = { title: string | null; jCase: string | null; jDate: string | null; jParties: string | null };
+/** The row with its display title, and for a judgment `decided` (YYYY-MM-DD). */
+function named<T extends Titled & { docKey?: string; key?: string }>({ jCase, jDate, jParties, ...r }: T) {
+  const judgment = isJudgment(r.docKey ?? r.key ?? "");
+  return {
+    ...r,
+    title: judgment ? (judgmentTitle({ case: jCase, date: jDate, parties: jParties }) ?? r.title) : r.title,
+    ...(judgment && { decided: jDate }),
+  };
+}
+
+const docCols = { key: docs.key, kind: docs.kind, ...titleCols, year: docs.year, commenced: docs.commenced };
 // uuid and part find a chunk's text in R2 (withText); callers get `text` in their place
 const chunkCols = {
   id: chunks.id,
@@ -48,7 +67,7 @@ export async function docWithChunks(key: string) {
   const [doc] = await db.select(docCols).from(docs).where(eq(docs.key, key));
   if (!doc) return null;
   const parts = await db.select(chunkCols).from(chunks).where(eq(chunks.docKey, key)).orderBy(asc(chunks.seq));
-  return { ...doc, chunks: await withText(parts) };
+  return { ...named(doc), chunks: await withText(parts) };
 }
 
 /** The law's stored source file, signed for the viewer: a PDF, or the HTML page it was built from. null when none. */
@@ -76,21 +95,23 @@ export async function lawChanges(key: string) {
 /** A law's title, key and source link, for the viewer. */
 export async function docInfo(key: string) {
   const [d] = await db
-    .select({ key: docs.key, title: docs.title, sourceUrl: docs.sourceUrl })
+    .select({ key: docs.key, ...titleCols, sourceUrl: docs.sourceUrl })
     .from(docs)
     .where(eq(docs.key, key));
-  return d ?? null;
+  return d ? named(d) : null;
 }
 
 /** Chunks by id, each with its law's title; ids no longer in the corpus are left out. */
 export async function chunksById(ids: number[]) {
   if (!ids.length) return [];
   return withText(
-    await db
-      .select({ ...chunkCols, title: docs.title })
-      .from(chunks)
-      .innerJoin(docs, eq(docs.key, chunks.docKey))
-      .where(inArray(chunks.id, ids)),
+    (
+      await db
+        .select({ ...chunkCols, ...titleCols })
+        .from(chunks)
+        .innerJoin(docs, eq(docs.key, chunks.docKey))
+        .where(inArray(chunks.id, ids))
+    ).map(named),
   );
 }
 
@@ -146,7 +167,7 @@ export async function sectionsOf(chunkIds: number[]): Promise<Read[]> {
   const parts = await Promise.all(
     heads.map(async (h) => {
       const run = await db
-        .select({ ...chunkCols, title: docs.title })
+        .select({ ...chunkCols, ...titleCols })
         .from(chunks)
         .innerJoin(docs, eq(docs.key, chunks.docKey))
         .where(
@@ -158,7 +179,7 @@ export async function sectionsOf(chunkIds: number[]): Promise<Read[]> {
         )
         .orderBy(asc(chunks.seq));
       const sec: Read[] = [h];
-      for (const c of await withText(run))
+      for (const c of await withText(run.map(named)))
         if (c.seq === sec.at(-1)!.seq + 1) sec.push(c);
         else break;
       if (sec.length === SECTION_MAX) {
@@ -199,6 +220,53 @@ async function withHeads(chunkIds: number[]) {
   const head = new Map(chunkIds.map((id) => [id, id]));
   for (const r of rows) if (r.head) head.set(r.id, r.head);
   return head;
+}
+
+/** Judgments' display titles by key (search hits carry only the stored title): one small row each. */
+export async function judgmentTitles(keys: string[]) {
+  const ks = [...new Set(keys.filter(isJudgment))];
+  if (!ks.length) return new Map<string, string>();
+  const rows = await db
+    .select({ key: docs.key, ...titleCols })
+    .from(docs)
+    .where(inArray(docs.key, ks));
+  return new Map(rows.map((r) => [r.key, named(r).title ?? r.key]));
+}
+
+/** The judgments that cite a section, newest first: one row each, with the passage to open (the first passage of
+ *  the opinion that cites it; the case details when only the court's listing names the section). Links point at the
+ *  section's first chunk, so a "(cont.)" chunk asks for its head's. Small rows; the join stays in the database. */
+export async function citedBy(chunkId: number, limit?: number) {
+  const head = sql`(select h.id from kb.chunks h join kb.chunks c on c.id = ${chunkId} where c.path like '% (cont.)'
+    and h.doc_key = c.doc_key and h.seq < c.seq and h.path = left(c.path, -8) order by h.seq desc limit 1)`;
+  const src = aliasedTable(chunks, "src");
+  const rows = await db
+    .select({
+      key: links.srcDoc,
+      ...titleCols,
+      chunkId: sql<number>`(array_agg(${links.srcChunk} order by (${src.seq} = 0), ${src.seq}))[1]`.mapWith(Number),
+      total: sql<number>`count(*) over ()`.mapWith(Number),
+    })
+    .from(links)
+    .innerJoin(docs, eq(docs.key, links.srcDoc))
+    .innerJoin(src, eq(src.id, links.srcChunk))
+    .where(
+      and(
+        eq(links.kind, "cites"),
+        or(eq(links.dstChunk, chunkId), eq(links.dstChunk, head)),
+        eq(docs.kind, "judgment"),
+      ),
+    )
+    .groupBy(links.srcDoc, docs.key) // docs.key is the primary key: its other columns may be selected
+    .orderBy(sql`${docs.meta}->>'date' desc nulls last`, links.srcDoc)
+    .limit(limit ?? 100_000); // the first few for the panel (a Constitution Article is cited by ~1,000); all on Show all
+  return {
+    total: rows[0]?.total ?? 0,
+    judgments: rows.map((r) => {
+      const { key, ...n } = named(r);
+      return { docKey: key, chunkId: n.chunkId, title: n.title ?? key, decided: n.decided ?? null };
+    }),
+  };
 }
 
 /** Which laws changed a section, and when (one row per amending law, earliest date): the source panel's marks on the

@@ -30,6 +30,7 @@ import {
   editCaseFile,
   finishUpload,
   getChunk,
+  getCitedBy,
   getDoc,
   getDocSource,
   getHistory,
@@ -274,6 +275,10 @@ export const appRouter = router({
     chunk: signedUser
       .input(z.object({ chunkId: z.number().int().positive() }))
       .query(({ input }) => getChunk(input.chunkId)),
+    // the judgments citing a section (the source panel): the first `limit` and the total; all when left out
+    citedBy: signedUser
+      .input(z.object({ chunkId: z.number().int().positive(), limit: z.number().int().min(1).max(50).optional() }))
+      .query(({ input }) => getCitedBy(input.chunkId, input.limit)),
     // a section's full history (the /history page): every change with the amending section's whole text
     history: signedUser
       .input(z.object({ chunkId: z.number().int().positive() }))

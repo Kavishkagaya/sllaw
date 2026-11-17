@@ -1,6 +1,6 @@
 import type { AsOf, CaseFile, Change, Chunk, Ctx, Status } from "@sllaw/ai";
 import { fileById, filesOfCase } from "@sllaw/db";
-import { changeStatus, changesInto, chunksById, linksOf, sectionsOf } from "@sllaw/etl_db";
+import { changeStatus, changesInto, chunksById, judgmentTitles, linksOf, sectionsOf } from "@sllaw/etl_db";
 import { emptyOffice, type Office } from "@sllaw/office";
 import { type FileIndex, fileIndex, searchLaw } from "@sllaw/search";
 import { type BlobStore, blobStore } from "@sllaw/storage";
@@ -137,7 +137,12 @@ export function agentCtx(
         const c = f ? await editCard(f, patch as CardPatch, userId ? { id: userId } : null) : null;
         return c ? { title: c.title, docType: c.docType } : null;
       },
-      search: (query, opts) => searchLaw(query, opts),
+      search: async (query, opts) => {
+        const hits = await searchLaw(query, opts);
+        // a judgment's stored title is its case number and date: the hit gets its parties too (judgment.ts)
+        const names = await judgmentTitles(hits.map((h) => h.docKey));
+        return names.size ? hits.map((h) => ({ ...h, title: names.get(h.docKey) ?? h.title })) : hits;
+      },
       read: async (ids) => (await sectionsOf(ids)).map((c) => ({ ...asChunk(c), ...(c.more && { more: c.more }) })),
       links: (target, direction, opts) => linksOf(target, direction, opts),
       asOf: (chunkId, date) => asOf(chunkId, date ?? asOfDate),

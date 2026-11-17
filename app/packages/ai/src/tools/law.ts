@@ -5,32 +5,51 @@ import { tool } from "ai";
 import { z } from "zod";
 import type { Ctx } from "../ports";
 
-const docKey = z.string().describe("a law's key, from a hit or a link: act:9/2023, law:5/1972, cap:107, cap1956:331");
+const docKey = z
+  .string()
+  .describe(
+    "a law's or judgment's key, from a hit or a link: act:9/2023, law:5/1972, cap:107, cap1956:331, ca:…, sc:…",
+  );
+const isJudgment = (key: string) => /^(ca|sc):/.test(key);
 const chunkId = z.number().int();
 
 export const lawTools = ({ ports }: Ctx) => ({
   search: tool({
     description:
-      "Search the Sri Lankan statute corpus. The query must be English (translate Sinhala/Tamil first). " +
-      "mode 'dense' (default) for questions in plain words; 'weighted' for plain words plus an exact string " +
+      "Search Sri Lankan law: the laws, and the judgments of the Court of Appeal and the Supreme Court from 2021. " +
+      "only: 'laws' or 'judgments' (or one court) to search just those; left out, both. " +
+      "The query must be English (translate Sinhala/Tamil first). " +
+      "mode 'dense' (default; 'weighted' when only judgments) for questions in plain words; 'weighted' for plain words plus an exact string " +
       "(a section or Article number, 'No. N of YYYY', Cap. N, a defined term); 'keyword' to find given words only, " +
       "e.g. 'section 51' within docKeys, or a phrase from a link's text to find the chunk it points at. " +
-      "Returns the start of each hit only: read the ones you need in full.",
+      "Returns the start of each law hit only: read the ones you need in full. A judgment hit is the whole passage.",
     inputSchema: z.object({
       query: z.string(),
       mode: z.enum(["dense", "weighted", "keyword"]).optional(),
-      docKeys: z.array(docKey).optional().describe("only these laws"),
+      only: z.enum(["laws", "judgments", "courtOfAppeal", "supremeCourt"]).optional(),
+      docKeys: z.array(docKey).optional().describe("only these laws or judgments"),
       yearFrom: z.number().int().optional(),
       yearTo: z.number().int().optional(),
       limit: z.number().int().min(1).max(20).optional(),
     }),
-    execute: async ({ query, mode, limit, ...filters }) => {
-      const hits = await ports.search(query, { mode, filters, limit });
+    execute: async ({ query, mode: asked, limit, ...filters }) => {
+      // judgments are found by their words more than laws are: weighted put the judgment a question was written from
+      // in the top 10 for 7/10, dense for 4/10 (chat-judgments d6, 2026-11-17)
+      const judgments = !!filters.only && filters.only !== "laws";
+      const mode = asked ?? (judgments ? "weighted" : undefined);
+      // and 20 of them: for the agent's own short queries the judgment sought ranked 12th-25th (d6, 2026-11-17)
+      const hits = await ports.search(query, { mode, filters, limit: limit ?? (judgments ? 20 : undefined) });
       // dense always returns something when the laws have text: nothing at all means they have none (law:16/1974)
       if (!hits.length && filters.docKeys?.length && !(await ports.search(query, { filters, limit: 1 })).length)
         return `${filters.docKeys.join(", ")}: no text in the corpus. Do not search it again; use its links, or say so in gaps.`;
-      const st = await ports.status(hits.map((h) => h.chunkId));
+      const st = await ports.status(hits.filter((h) => !isJudgment(h.docKey)).map((h) => h.chunkId));
       return hits.map(({ score, ...h }) => {
+        // a judgment hit comes whole (`passage`, not cut to a snippet): what the agent cites from it is what it read, and
+        // the app shows it as read (chat-judgments d2: snippets were cited unread, 10 of 10 eval runs' unread citations)
+        if (isJudgment(h.docKey)) {
+          const { text, ...rest } = h;
+          return { ...rest, kind: "judgment", passage: text };
+        }
         const x = st[h.chunkId];
         return {
           ...h,

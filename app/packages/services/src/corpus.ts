@@ -2,10 +2,12 @@ import {
   amendsOf,
   changedBy,
   chunksById,
+  citedBy,
   coverageCounts,
   docInfo,
   docSource,
   docWithChunks,
+  isJudgment,
   lawChanges,
 } from "@sllaw/etl_db";
 import { asChunk, asOf } from "./agent";
@@ -20,6 +22,9 @@ export const getDocSource = (key: string) => docSource(key);
 export async function getChunk(chunkId: number) {
   const [c] = await chunksById([chunkId]);
   if (!c) return null;
+  // a judgment has no history: its details and its court's PDF only
+  if (isJudgment(c.docKey))
+    return { chunk: asChunk(c), doc: await docInfo(c.docKey), changed: [], amends: null, timeline: [], judgment: true };
   // two round trips: the chunk, then everything else side by side (an amending section adds its target law's timeline)
   const [doc, changed, amends, own] = await Promise.all([
     docInfo(c.docKey),
@@ -27,8 +32,18 @@ export async function getChunk(chunkId: number) {
     amendsOf(c.docKey, chunkId),
     lawChanges(c.docKey),
   ]);
-  return { chunk: asChunk(c), doc, changed, amends, timeline: amends ? await lawChanges(amends.docKey) : own };
+  return {
+    chunk: asChunk(c),
+    doc,
+    changed,
+    amends,
+    timeline: amends ? await lawChanges(amends.docKey) : own,
+    judgment: false,
+  };
 }
+
+/** The judgments that cite a section, newest first: the first `limit` and the total (the panel shows 10, then all). */
+export const getCitedBy = (chunkId: number, limit?: number) => citedBy(chunkId, limit);
 
 /** A section's full history (the /history page only): the section as enacted, every change made to it up to today,
  *  oldest first, each with the amending section's whole text (not the clipped clause the agent gets), the changes
