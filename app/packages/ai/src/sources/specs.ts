@@ -61,12 +61,21 @@ export function judgmentPage(path: string | null | undefined) {
   const m = path?.match(/^pages? (\d+)(?:-(\d+))?/);
   return m ? (m[2] ? `pp. ${m[1]}-${m[2]}` : `p. ${m[1]}`) : null;
 }
+/** A gazette chunk's place: "regulation 6" -> "para 6"; a Schedule or Part as its breadcrumb names it. */
+export function gazettePara(path: string | null | undefined, label: string | null | undefined) {
+  const last = path?.split("›").at(-1)?.split(" — ")[0]?.replace("(cont.)", "").trim();
+  const m = last?.match(/^(?:regulation|paragraph|para|rule|clause)\s+(\S+)$/i);
+  return m ? `para ${m[1]}` : last || (label ? `para ${label}` : null);
+}
 /** A law chunk's label from the chunk itself (search hit, read, asOf): "s. 22, Rent (Act No. 7 of 1972)"; a judgment
- *  passage's: "Keerthi v. Gamage, CA/WRT/634/2021 (12.12.2025), p. 7" (its title is made from the listing). */
+ *  passage's: "Keerthi v. Gamage, CA/WRT/634/2021 (12.12.2025), p. 7"; a gazette's: "The Imports and Exports (Control)
+ *  Regulations No. 12 of 2023, Gazette No. 2345/03 (14.08.2023), para 2" (both titles are made from the listing). */
 export const lawLabel = (o: Obj) =>
   /^(ca|sc):/.test(o.docKey ?? "")
     ? join(o.title ?? o.docKey, judgmentPage(o.path))
-    : join(where(o.path, o.label), lawName(o.title, o.docKey));
+    : /^gazette:/.test(o.docKey ?? "")
+      ? join(o.title ?? o.docKey, gazettePara(o.path, o.label))
+      : join(where(o.path, o.label), lawName(o.title, o.docKey));
 const law = (up: Obj[]) => lawLabel(own(up));
 const amending = (up: Obj[]) => {
   const o = own(up);

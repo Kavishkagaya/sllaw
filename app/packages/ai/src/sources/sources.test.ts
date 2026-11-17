@@ -216,6 +216,17 @@ describe("labels", () => {
     ).toBe("Art. 12, Constitution");
   });
 
+  it("names a regulation by its title, Gazette number, date and paragraph (chat-regulations d2)", async () => {
+    const { lawLabel } = await import("./specs");
+    const title = "The Imports and Exports (Control) Regulations No. 12 of 2023, Gazette No. 2345/03 (14.08.2023)";
+    expect(lawLabel({ docKey: "gazette:2345/03", title, path: "regulation 2 (cont.)" })).toBe(`${title}, para 2`);
+    expect(lawLabel({ docKey: "gazette:2345/03", title, path: "Part II — General › regulation 11", label: "11" })).toBe(
+      `${title}, para 11`,
+    );
+    expect(lawLabel({ docKey: "gazette:2345/03", title, path: "First Schedule" })).toBe(`${title}, First Schedule`);
+    expect(lawLabel({ docKey: "gazette:2345/03", title, path: null })).toBe(title);
+  });
+
   it("names a judgment passage by its parties, case, date and page", async () => {
     const { lawLabel } = await import("./specs");
     const title = "J. P. A. Jagath Keerthi v. Lalith U. Gamage, CA/WRT/634/2021 (12.12.2025)";

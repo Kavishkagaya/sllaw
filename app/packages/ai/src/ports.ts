@@ -29,6 +29,8 @@ export type Link = {
   context: string | null;
 };
 export type Direction = "out" | "in";
+/** A later gazette that amends or rescinds a gazette (its links, gazette-links #81). */
+export type Later = { kind: "amends" | "rescinds"; by: string; date: string | null };
 /** One change to a section: the amending law and section, and that section's text (the operative clause, cut). */
 export type Change = {
   date: string | null;
@@ -117,6 +119,8 @@ export interface Ports {
   ): Promise<Link[]>;
   asOf(chunkId: number, date?: string): Promise<AsOf | null>; // date left out: ctx.asOfDate
   status(chunkIds: number[]): Promise<Record<number, Status>>;
+  /** Gazette key -> the later gazettes that amend or rescind it, oldest first; a gazette with none is left out. */
+  later(docKeys: string[]): Promise<Record<string, Later[]>>;
 }
 
 export type Ctx = {

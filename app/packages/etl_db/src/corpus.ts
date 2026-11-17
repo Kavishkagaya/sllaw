@@ -1,23 +1,31 @@
-import { aliasedTable, and, asc, eq, ilike, inArray, like, ne, or, sql } from "drizzle-orm";
+import { aliasedTable, and, asc, desc, eq, ilike, inArray, like, ne, or, sql } from "drizzle-orm";
 import { db } from "./client";
+import { gazetteTitle, isGazette } from "./gazette";
 import { isJudgment, judgmentTitle } from "./judgment";
 import { chunks, docs, links } from "./schema";
 import { partTexts, sourceFileUrl } from "./text";
 
-// a doc's title as shown: a law's own; a judgment's from its listing (parties, case number, date: judgment.ts)
+// a doc's title as shown: a law's own; a judgment's from its listing (parties, case number, date: judgment.ts); a
+// gazette's as a regulation is cited (subject, Gazette No. (date): gazette.ts). jDate: a judgment's decision date, a
+// gazette's date (meta.certified).
 const titleCols = {
   title: docs.title,
   jCase: sql<string | null>`${docs.meta}->>'case'`,
-  jDate: sql<string | null>`${docs.meta}->>'date'`,
+  jDate: sql<string | null>`coalesce(${docs.meta}->>'date', ${docs.meta}->>'certified')`,
   jParties: sql<string | null>`${docs.meta}->>'parties'`,
 };
 type Titled = { title: string | null; jCase: string | null; jDate: string | null; jParties: string | null };
 /** The row with its display title, and for a judgment `decided` (YYYY-MM-DD). */
 function named<T extends Titled & { docKey?: string; key?: string }>({ jCase, jDate, jParties, ...r }: T) {
-  const judgment = isJudgment(r.docKey ?? r.key ?? "");
+  const key = r.docKey ?? r.key ?? "";
+  const judgment = isJudgment(key);
   return {
     ...r,
-    title: judgment ? (judgmentTitle({ case: jCase, date: jDate, parties: jParties }) ?? r.title) : r.title,
+    title: judgment
+      ? (judgmentTitle({ case: jCase, date: jDate, parties: jParties }) ?? r.title)
+      : isGazette(key)
+        ? gazetteTitle({ key, title: r.title, date: jDate })
+        : r.title,
     ...(judgment && { decided: jDate }),
   };
 }
@@ -143,14 +151,22 @@ export async function linksOf(
         ? eq(links.dstChunk, chunkId)
         : // what refers to a law from outside it: its own "under section 12" links (docs/LINKS.md) stay out
           and(eq(links.dstDoc, docKey), ne(links.srcDoc, docKey));
-  return db
-    .select()
-    .from(links)
-    .where(
-      and(where, kinds?.length ? inArray(links.kind, kinds) : undefined, ...words.map((w) => ilike(links.context, w))),
-    )
-    .orderBy(asc(links.date))
-    .limit(Math.min(limit, 50)); // a Code's whole-doc list runs to thousands: narrow by chunk, kinds or text
+  return (
+    db
+      .select()
+      .from(links)
+      .where(
+        and(
+          where,
+          kinds?.length ? inArray(links.kind, kinds) : undefined,
+          ...words.map((w) => ilike(links.context, w)),
+        ),
+      )
+      // "in" newest first: a section can have hundreds of regulations made under it, and the cap must not cut the ones
+      // in force (s. 20 of act:1/1969: the walk's list stopped in 2017, chat-regulations s1)
+      .orderBy(direction === "in" ? desc(links.date) : asc(links.date))
+      .limit(Math.min(limit, 50))
+  ); // a Code's whole-doc list runs to thousands: narrow by chunk, kinds or text
 }
 
 export const CHANGE_KINDS = ["amends", "inserts", "replaces", "repeals"];
@@ -222,9 +238,9 @@ async function withHeads(chunkIds: number[]) {
   return head;
 }
 
-/** Judgments' display titles by key (search hits carry only the stored title): one small row each. */
-export async function judgmentTitles(keys: string[]) {
-  const ks = [...new Set(keys.filter(isJudgment))];
+/** Judgments' and gazettes' display titles by key (search hits carry only the stored title): one small row each. */
+export async function shownTitles(keys: string[]) {
+  const ks = [...new Set(keys.filter((k) => isJudgment(k) || isGazette(k)))];
   if (!ks.length) return new Map<string, string>();
   const rows = await db
     .select({ key: docs.key, ...titleCols })
@@ -360,6 +376,17 @@ export async function changeStatus(chunkIds: number[]) {
       repealed: rep.at(-1) ?? null,
     };
   });
+}
+
+/** The later gazettes that amend or rescind each of these gazettes, oldest first: small rows, from the links. */
+export async function laterGazettes(keys: string[]) {
+  const ks = [...new Set(keys.filter(isGazette))];
+  if (!ks.length) return [];
+  return db
+    .select({ dstDoc: links.dstDoc, kind: links.kind, srcDoc: links.srcDoc, date: links.date })
+    .from(links)
+    .where(and(inArray(links.dstDoc, ks), inArray(links.kind, ["amends", "rescinds"]), like(links.srcDoc, "gazette:%")))
+    .orderBy(asc(links.date), links.srcDoc);
 }
 
 /** What the public Coverage page counts, in one query that returns one row: Acts and Laws, Revised Edition chapters

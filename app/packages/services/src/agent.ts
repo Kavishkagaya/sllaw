@@ -1,6 +1,6 @@
 import type { AsOf, CaseFile, Change, Chunk, Ctx, Status } from "@sllaw/ai";
 import { fileById, filesOfCase } from "@sllaw/db";
-import { changeStatus, changesInto, chunksById, judgmentTitles, linksOf, sectionsOf } from "@sllaw/etl_db";
+import { changeStatus, changesInto, chunksById, laterGazettes, linksOf, sectionsOf, shownTitles } from "@sllaw/etl_db";
 import { emptyOffice, type Office } from "@sllaw/office";
 import { type FileIndex, fileIndex, searchLaw } from "@sllaw/search";
 import { type BlobStore, blobStore } from "@sllaw/storage";
@@ -77,6 +77,17 @@ export async function status(chunkIds: number[]): Promise<Record<number, Status>
   return Object.fromEntries((await changeStatus(chunkIds)).map(({ chunkId, ...s }) => [chunkId!, s]));
 }
 
+/** Gazette key -> the later gazettes that amend or rescind it (one entry per gazette and kind). */
+export async function later(docKeys: string[]) {
+  const out: Record<string, { kind: "amends" | "rescinds"; by: string; date: string | null }[]> = {};
+  for (const r of await laterGazettes(docKeys)) {
+    const xs = (out[r.dstDoc] ??= []);
+    if (!xs.some((x) => x.by === r.srcDoc && x.kind === r.kind))
+      xs.push({ kind: r.kind as "amends" | "rescinds", by: r.srcDoc, date: r.date });
+  }
+  return out;
+}
+
 export const today = () => new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Colombo" }); // YYYY-MM-DD
 
 /**
@@ -139,14 +150,16 @@ export function agentCtx(
       },
       search: async (query, opts) => {
         const hits = await searchLaw(query, opts);
-        // a judgment's stored title is its case number and date: the hit gets its parties too (judgment.ts)
-        const names = await judgmentTitles(hits.map((h) => h.docKey));
+        // a judgment's stored title is its case number and date, a gazette's its listing's: the hit gets the title the app
+        // shows (judgment.ts, gazette.ts)
+        const names = await shownTitles(hits.map((h) => h.docKey));
         return names.size ? hits.map((h) => ({ ...h, title: names.get(h.docKey) ?? h.title })) : hits;
       },
       read: async (ids) => (await sectionsOf(ids)).map((c) => ({ ...asChunk(c), ...(c.more && { more: c.more }) })),
       links: (target, direction, opts) => linksOf(target, direction, opts),
       asOf: (chunkId, date) => asOf(chunkId, date ?? asOfDate),
       status,
+      later,
     },
   };
 }

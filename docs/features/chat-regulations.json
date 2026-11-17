@@ -1,0 +1,41 @@
+{
+  "title": "Chat cites regulations",
+  "slug": "chat-regulations",
+  "status": "agreed",
+  "branch": "app/chat-regulations",
+  "issue": 82,
+  "neon_branch": {"name": "agent/chat-regulations", "id": "br-sparkling-shadow-b78ea77b"},
+  "goal": "The chat (quick chats and case chats) finds and cites regulations: the Extraordinary Gazettes in kb and Zilliz, made under Act sections and linked to the gazettes that amend or rescind them (gazette-links #81). Today the prompt and the search tool never mention them, and a year filter drops every gazette because their year is empty. Second of three after gazette-links; coverage is brief 3 (user, 2026-11-17).",
+  "for_whom": "A practising Sri Lankan lawyer who needs the regulations made under a section (an order, rules, a levy) and whether the one they rely on is still in force, with the gazette to check.",
+  "done_check": [
+    {"id": "d1", "check": "The prompt and the search tool say the corpus holds regulations (Extraordinary Gazettes from 2010 on carrying orders, regulations, rules and by-laws, in English) and that the ones made under a section are found by links 'in' on that section (kinds: made_under) and by search. Asked what it searches, the chat names laws, regulations and CA/SC judgments."},
+    {"id": "d2", "check": "A cited regulation reads 'Title, Gazette No. (date), para N' in the answer and on its source chip, e.g. 'Imports and Exports (Control) Regulations, Gazette No. 2345/03 (date), para 3'. A gazette is cited only from a passage the agent read in this chat."},
+    {"id": "d3", "check": "Year filter: every gazette in kb.docs has a year from its date, and every gazette chunk in Zilliz has that year (0 with year null, from 78,825 on 2026-11-17), updated in place with no re-embed. A search with yearFrom/yearTo returns gazettes of those years and no others."},
+    {"id": "d4", "check": "Currency: a gazette hit or read carries 'amended by Gazette No. X (date)' and 'rescinded by Gazette No. Y (date)' from the links (as law hits carry 'changed by'). When a cited gazette was later amended or rescinded, the answer says so and names and cites the later gazette."},
+    {"id": "d5", "check": "Asked for a regulation it does not hold (before 2010, or in the weekly Gazette), the chat says in one line that it holds the Extraordinary Gazettes from 2010 on that carry law, in English, not the weekly Gazette or earlier ones, never cites a gazette from memory, and gives what it does hold on the point."},
+    {"id": "d6", "check": "Index check: the gazette chunks in kb that should be in Zilliz (those embed keeps: text at least its minimum length) are all there; the 2,320 gap between kb's 81,145 and Zilliz's 78,825 is explained by count, and any missing chunk is embedded (asks)."},
+    {"id": "d7", "check": "Eval: 8 regulation questions in a lawyer's words added to etl/eval_agent.json (made under a section, still in force or rescinded, one not held): at least 6 of 8 right, every gazette citation to a passage read. The existing law and judgment questions score as before. One run each side."}
+  ],
+  "scenarios": [
+    {"id": "s1", "steps": "In a quick chat: 'What orders have been made under section 20 of the Imports and Exports (Control) Act, and which are still in force?'", "expect": "Cites the gazettes made under s.20 (2345/03 among them) as Title, Gazette No. (date), para N; for each one later amended or rescinded, names and cites the later gazette."},
+    {"id": "s2", "steps": "Ask for the regulations made in 2021 under the Colombo Port City Economic Commission Act.", "expect": "The year filter keeps 2021 gazettes; cites them, opening each in the viewer at the cited paragraph."},
+    {"id": "s3", "steps": "Ask for the 1989 emergency regulations under the Public Security Ordinance.", "expect": "A one-line note on what it holds (Extraordinary Gazettes from 2010 on), nothing cited from memory, then what it does hold on the point."}
+  ],
+  "out_of_scope": [
+    "A list of regulations on a section in the law viewer (user, 2026-11-17).",
+    "Currency shown on the chip or in the gazette viewer: the answer only (user, 2026-11-17).",
+    "Coverage: gazettes before 2010, the weekly Gazette, law gazettes the description filter misses, the 124 gazette label errors: brief 3 (ETL).",
+    "Re-embedding gazette text or rebuilding it."
+  ],
+  "decisions": [
+    {"date": "2026-11-17", "note": "Agreed before this scope: label 'Title, Gazette No. (date), para N'; no regulations list in the viewer (user)."},
+    {"date": "2026-11-17", "note": "Year fix in the ETL, not the app: year from the gazette's date in the pipeline, publish, Zilliz year field updated in place on its rows, no re-embed (production writes, ask). The ETL part commits on main (ETL rule), the app part on app/chat-regulations (user)."},
+    {"date": "2026-11-17", "note": "Currency in the answer only, from the amends/rescinds links (user)."},
+    {"date": "2026-11-17", "note": "Holdings line: Extraordinary Gazettes from 2010 on that carry law, English; not the weekly Gazette or earlier (user)."},
+    {"date": "2026-11-17", "note": "Proof: 8 eval questions, bar 6/8, one run per side (user)."},
+    {"date": "2026-11-17", "note": "Found at scope (Zilliz count queries, read-only): kind 'gazette' 78,825 chunks, all with year null (the year comes from a key ending /YYYY; gazette:2345/03 does not); kb says 81,145."}
+  ],
+  "progress": [
+    {"date": "2026-11-17", "note": "Scoped with the user; issue #82. Branch app/chat-regulations off origin/main; Neon branch agent/chat-regulations, .env.local points at it (production kept as .env.main). The ETL part (d3, d6) commits on main."}
+  ]
+}
