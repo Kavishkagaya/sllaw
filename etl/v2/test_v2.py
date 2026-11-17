@@ -375,3 +375,8 @@ _x = _gz("do by this Notification amend the Notification No. 902 published in Ga
          "Notification No. 974 published in Gazette Extraordinary No. 1901/19 of February 13, 2015 is hereby rescinded.")
 assert ("rescinds", "gazette:1901/19", ()) in _x and ("amends", "gazette:1544/17", ()) in _x, _x    # the nearer verb
 print("ok gazette nearer verb")
+
+from etl.v2.build import doc_year   # the year filter's year: a gazette's from its date (chat-regulations #82)
+assert doc_year("act:9/2023") == 2023 and doc_year("gazette:2345/03", {"certified": "2023-08-14"}) == 2023
+assert doc_year("gazette:2345/03") is None and doc_year("cap:107", {"certified": "1980-01-01"}) is None
+print("ok doc year")

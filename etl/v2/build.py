@@ -80,6 +80,15 @@ def build_doc(key, title, raw, lo, meta):
     return prof, engine, paras, st, tree, info, ch, checks.check(key, prof, paras, st, tree, info, ch)
 
 
+def doc_year(key, meta=None):
+    """The year the app's year filter reads (kb.docs, Zilliz): an Act's or Law's from its key; a gazette's from its
+    date (gazette:2345/03 names no year; every one had none, so a year filter dropped them all: chat-regulations #82)."""
+    if m := re.search(r"/(\d{4})$", key):
+        return int(m[1])
+    d = (meta or {}).get("certified") or ""
+    return int(d[:4]) if key.startswith("gazette:") and re.match(r"\d{4}-", d) else None
+
+
 def store(db, key, title, sha, prof, tree, ch, issues, fp, meta=None):
     """Write one built document: R2 objects first, then its rows in one transaction (the app-facing tables never
     name an object that is not there yet)."""
@@ -88,7 +97,7 @@ def store(db, key, title, sha, prof, tree, ch, issues, fp, meta=None):
     part_keys = [put_json("app/law/", {"doc": key, "chunks": [{k: c[k] for k in ("id", "address", "label", "crumb", "text")}
                                                               for c in g]}) for g in groups]
     part_of = {c["id"]: i for i, g in enumerate(groups) for c in g}
-    year = int(m[1]) if (m := re.search(r"/(\d{4})$", key)) else None
+    year = doc_year(key, meta)
     with db.cursor() as cur:
         cur.execute("""INSERT INTO docs (key, kind, title, year, sha256, tree_key, parts, fingerprint, meta, built_at)
                        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,NOW())
