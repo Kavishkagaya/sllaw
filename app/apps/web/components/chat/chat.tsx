@@ -59,7 +59,9 @@ const PARTIAL = /\[\[[^\]\n]*\]?$|\[$/;
 const toLinks = (s: string, live = false) =>
   (live ? s.replace(PARTIAL, "[citing…](#citing)") : s).replace(CITE, (...m) => {
     const c = citeOf(m as unknown as RegExpMatchArray);
-    return `[${c.label}](#cite:${encodeURIComponent(JSON.stringify(c))})`;
+    // ( and ) too: encodeURIComponent keeps them, and a label cut short ("Order (CHINA HARBOR…") leaves one unbalanced,
+    // which ends the markdown link early and shows it raw (chat-regulations s2 walk)
+    return `[${c.label}](#cite:${encodeURIComponent(JSON.stringify(c)).replace(/[()]/g, (p) => (p === "(" ? "%28" : "%29"))})`;
   });
 
 const EXAMPLES = [
