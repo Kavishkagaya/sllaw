@@ -27,6 +27,7 @@
     {"date": "2026-11-17", "note": "No Neon branch: the change reads kb (sllaw-etl, read-only) and touches no app table."}
   ],
   "progress": [
-    {"date": "2026-11-17", "note": "Scoped with the user; agreed; issue #72."}
+    {"date": "2026-11-17", "note": "Scoped with the user; agreed; issue #72."},
+    {"date": "2026-11-17", "note": "Built: coverageCounts adds judgments (ca:/sc:) and gazettes; the band is 6 cells (3x2), last cell (Last updated) keeps the accent; coverage page lists Judgments (last item spans both columns, no empty cell) and drops 'Not yet covered'; home trust 'Judgments beside the statutes', 'Sri Lankan law only' says statutes and judgments, FAQ says judgments from 2021. Walked headed on the dev server (kb in production): /coverage cells Acts and Laws 3,227, Revised Edition chapters 997, Judgments 4,557 (= the 4,557 published), Gazettes 3,481, Amendments followed 20,137, Last updated 17 Nov 2026; 2 columns at 1280 and 390 wide; no horizontal scroll at 390; home band the same, trust and FAQ texts read by eval (FAQ inside its closed disclosure). Screenshots: scratchpad cov-desktop.png, cov-phone.png, cov-phone-dark.png, home-phone.png. The band is on the ink section in both themes; the What list checked dark at 390."}
   ]
 }
