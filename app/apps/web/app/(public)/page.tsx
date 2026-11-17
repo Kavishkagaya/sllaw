@@ -427,10 +427,13 @@ const TRUST = [
     "Hulft may only cite text it has read in that chat. Anything else is marked unverified, in plain sight.",
   ],
   ["Your files stay in your case", "Only you can see a case's files and chats."],
-  ["Sri Lankan law only", "Answers come from Sri Lankan statutes, not from the internet or another country's law."],
   [
-    "Judgments are next",
-    "Supreme Court and Court of Appeal decisions join the statutes, linked to the sections they interpret.",
+    "Sri Lankan law only",
+    "Answers come from Sri Lankan statutes and judgments, not from the internet or another country's law.",
+  ],
+  [
+    "Judgments beside the statutes",
+    "Supreme Court and Court of Appeal judgments from 2021, linked to the sections they cite.",
   ],
 ] as const;
 
@@ -462,7 +465,7 @@ const FAQ = [
   ],
   [
     "Which laws does it cover?",
-    "The Constitution and its amendments, Acts and Laws, the Revised Editions and gazettes, each followed through its amendments. Judgments come next.",
+    "The Constitution and its amendments, Acts and Laws, the Revised Editions and gazettes, each followed through its amendments, and Supreme Court and Court of Appeal judgments from 2021.",
   ],
   ["Can I ask in Sinhala or Tamil?", "Yes. Ask in any of the three languages; the law is quoted as enacted."],
   ["Who sees my case files?", "You. Nobody else."],

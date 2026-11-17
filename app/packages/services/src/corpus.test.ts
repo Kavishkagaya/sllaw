@@ -5,7 +5,14 @@ const counts = vi.fn();
 vi.mock("@sllaw/etl_db", () => ({ coverageCounts: () => counts(), docInfo: vi.fn(), docWithChunks: vi.fn() }));
 vi.mock("./agent", () => ({ asOf: vi.fn() }));
 
-const row = { acts: 3227, chapters: 997, amendments: 20075, updated: "2026-11-14 02:10:00+00" };
+const row = {
+  acts: 3227,
+  chapters: 997,
+  judgments: 4557,
+  gazettes: 2340,
+  amendments: 20075,
+  updated: "2026-11-14 02:10:00+00",
+};
 
 describe("coverage", () => {
   beforeEach(() => {

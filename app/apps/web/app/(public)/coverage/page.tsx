@@ -1,5 +1,6 @@
 import { CoverageStats, fmtUpdated } from "@/components/public/coverage-stats";
 import { Eyebrow } from "@/components/public/site";
+import { cn } from "@/lib/utils";
 import { serverApi } from "@/trpc/server";
 
 export const metadata = { title: "Coverage" };
@@ -9,6 +10,7 @@ const WHAT = [
   ["Acts and Laws", "Acts of Parliament and Laws of the National State Assembly, as enacted and as amended."],
   ["Revised Editions", "The Legislative Enactments of 1956 and 1980, chapter by chapter."],
   ["Gazettes", "Regulations and orders published in the Gazette, linked to the Acts they are made under."],
+  ["Judgments", "Judgments of the Supreme Court and the Court of Appeal from 2021, linked to the sections they cite."],
 ] as const;
 
 // What Hulft answers from (d4): live counts from the corpus (one cached query of a few rows) and what each kind is.
@@ -35,17 +37,14 @@ export default async function Coverage() {
       </section>
       <section className="mx-auto max-w-[1200px] px-4 py-16 sm:px-6 sm:py-20">
         <div className="grid gap-px overflow-hidden rounded-2xl border bg-border sm:grid-cols-2">
-          {WHAT.map(([t, p]) => (
-            <div key={t} className="bg-card p-7">
+          {WHAT.map(([t, p], i) => (
+            <div key={t} className={cn("bg-card p-7", i === WHAT.length - 1 && WHAT.length % 2 && "sm:col-span-2")}>
               <h2 className="text-lg font-semibold tracking-[-0.02em]">{t}</h2>
               <p className="mt-1.5 text-[15px] leading-relaxed text-muted-foreground">{p}</p>
             </div>
           ))}
         </div>
-        <p className="mt-8 text-sm text-muted-foreground">
-          Not yet covered: judgments of the Supreme Court and the Court of Appeal (next). Last updated{" "}
-          {fmtUpdated(counts?.updated)}.
-        </p>
+        <p className="mt-8 text-sm text-muted-foreground">Last updated {fmtUpdated(counts?.updated)}.</p>
       </section>
     </main>
   );
