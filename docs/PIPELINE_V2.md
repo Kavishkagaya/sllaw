@@ -451,6 +451,15 @@ unchanged. All 7,336 documents built in memory in 276 s (16 workers), 0 failed, 
   nothing queued took 8-14 s each in run `5479086b`; the listings take about 9 min, so an unchanged day is ~10 min.
   Schedule `daily` (02:00 Colombo, publish and embed with apply) skips a day while a run is still going; it is off
   until the app reads `kb` (embed --apply before that puts ids the live app cannot map into its search).
+- **Gazette year (2026-11-17, chat-regulations #82).** Every gazette had `year` null in docs, kb.docs and Zilliz
+  (the year came from a key ending `/YYYY`), so the app's year filter dropped all 78,825 gazette chunks. Now
+  `build.doc_year` takes a gazette's from `meta.certified` (all 3,481 have one, 2010-01-01 to 2026-11-05). Backfill
+  by hand on ampere, with the user's yes: state docs 3,481, kb.docs 3,481, Zilliz 78,825 chunks by
+  `entities/upsert` with `partialUpdate: true` (year only, no re-embed); after: 0 gazette chunks with year null,
+  total 78,825, 4,407 of 2021. **Embed compares text hashes only**, so a later change to a doc's year (or kind,
+  label) never reaches Zilliz by itself: it needs the same partial upsert. A Zilliz query caps at 16,384 rows, and
+  200 gazettes can hold 19,260 chunks: page by halving a full batch. Index check the same day: kb's 81,145 gazette
+  chunks = 78,825 of 40+ chars (all in Zilliz, 0 missing, 0 extra) + 2,320 shorter, which embed skips (`E.MIN`).
 - **Decided 2026-11-07 (user): every chunk is embedded again** (bge-m3, `EMBED_LOCAL=1` on a GPU host), no copy by
   hash. bge-m3 (4.3 GB) and `gpu_venv` are on ampere; ada has neither (2026-11-08).
 
