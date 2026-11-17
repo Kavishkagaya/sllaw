@@ -324,3 +324,12 @@ assert all(len(c["text"]) <= MAX for c in ch) and [c["address"] for c in ch] == 
 assert J.profile("sc:x")["kind"] == "judgment" and J.profile("sc:x")["code"] == J.CODE
 assert "judgment.py" not in " ".join(__import__("etl.v2.build", fromlist=["_SRC"])._SRC)   # laws do not rebuild
 print("ok judgment chunks")
+
+# a judgment changes no law: its amending words are cites (judgment-cites-only #80)
+from etl import mentions as _M
+_t = ["Section 10 of the Inland Revenue Act, No. 10 of 2006 is hereby amended by the repeal of subsection (2) thereof."]
+_act = [R.cite_only("act:1/2099", r) for r in _M.mentions("act:1/2099", "", _t)]
+_ca = [R.cite_only("ca:ca-tax-46-2019", r) for r in _M.mentions("ca:ca-tax-46-2019", "", _t)]
+assert any(_M.kind_of(r) != "cites" for r in _act), [_M.kind_of(r) for r in _act]
+assert _ca and len(_ca) == len(_act) and all(_M.kind_of(r) == "cites" and not r["ops"] for r in _ca), [_M.kind_of(r) for r in _ca]
+print("ok judgments only cite")

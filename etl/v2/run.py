@@ -297,9 +297,19 @@ def plan_links(keys=None):
         cur.execute("""SELECT d.key, string_agg(c.text_hash, ',' ORDER BY c.seq) FROM docs d JOIN chunks c ON c.doc_key = d.key
                        GROUP BY d.key""")
         rv = refs_version()
-        items = [(k, hashlib.sha1(f"{h}|{rv}".encode()).hexdigest()) for k, h in cur.fetchall() if not keys or k in keys]
+        items = [(k, hashlib.sha1(f"{h}|{rv}{'|cite_only' if is_judgment(k) else ''}".encode()).hexdigest())
+                 for k, h in cur.fetchall() if not keys or k in keys]                   # cite_only's rule relinks judgments
         changed, same = W.plan(c, "links", items)
     print(f"links: {changed} newly queued, {same} already queued or read")
+
+
+def is_judgment(key):
+    return key.split(":")[0] in ("ca", "sc")
+
+
+def cite_only(key, r):
+    """A judgment changes no law: a quoted "section 10 is amended" is a cite (judgment-cites-only #80)."""
+    return {**r, "relation": "cites", "ops": None} if is_judgment(key) else r
 
 
 def do_links(c, key, fp=None):
@@ -319,7 +329,7 @@ def do_links(c, key, fp=None):
         ids = [r[0] for r in cur.fetchall()]
         texts = [text.get(i, "") for i in ids]
         rows = []
-        for r in M.mentions(key, lt, texts):
+        for r in map(lambda r: cite_only(key, r), M.mentions(key, lt, texts)):
             labs = r["labels"] or []
             rows.append((key, None if r["i"] is None else ids[r["i"]], M.kind_of(r), r["dst_doc"], r["dst_name"],
                          labs[0] if len(labs) == 1 else None, (r["context"] or "")[:300] or None,

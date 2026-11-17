@@ -1,0 +1,27 @@
+{
+  "title": "Judgments only cite",
+  "slug": "judgment-cites-only",
+  "status": "agreed",
+  "branch": "main",
+  "issue": 80,
+  "neon_branch": null,
+  "goal": "A judgment never shows as amending, repealing or replacing a law: its links to laws are cites only (user, 2026-11-17, before inviting a junior who argues from case law).",
+  "for_whom": "A practising lawyer reading a section's history (as amended, changed by) or a judgment's Cited by in the app.",
+  "done_check": [
+    {"id": "d1", "check": "After the relink and publish, kb.links has 0 links from a ca:/sc: document whose kind is not cites (60 on 2026-11-17: amends 44, repeals 3, replaces 1, amends_act 2, repeals_act 4, rescinds 6); each of those 60 is kept as a cites link; no other source's links change; test_v2 and gold-links 210/210 pass."}
+  ],
+  "scenarios": [
+    {"id": "s1", "steps": "In the app, open section 10 of Act No. 23 of 2011 (which the Court of Appeal tax judgment ca:ca-tax-46-2019 was wrongly linked as amending) and read its history; then open that judgment.",
+     "expect": "The section's changes list only Acts; the judgment still appears as citing that section (Cited by)."}
+  ],
+  "out_of_scope": [
+    "Judgments that really change a law's effect (a section struck down): not modelled.",
+    "Supreme Court judgments after 2026-08-07 (#71).",
+    "Re-embedding: links only, no text or vector change."
+  ],
+  "decisions": [
+    {"date": "2026-11-17", "note": "The fix is in the ETL (links from a judgment are cites), not a filter in the app, so every reader of kb.links gets it."},
+    {"date": "2026-11-17", "note": "Cost: relink of the 4,433 judgments and a links-only publish (production write, asks); no rebuild of other documents, no embed."}
+  ],
+  "progress": [{"date": "2026-11-17", "note": "Scoped with the user; issue #80."}]
+}
