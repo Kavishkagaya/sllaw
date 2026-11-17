@@ -105,6 +105,9 @@ Each came from a correction or a costly mistake. Guarded = `.claude/hooks/guard.
 - **Test the app the way a lawyer talks** (user, 2026-11-11): plain questions about the case and its people
   ("the Perera Traders demand"), never file names, ids or our own terms ("card", "field", "fileEdit"), and no
   invented facts that contradict the documents just to provoke the agent.
+- **An eval miss is diagnosed before it is reported** (user, 2026-11-17): read what the agent cited or returned
+  instead and say whether the question (its gold) or the agent is wrong. A wrong question is rewritten (a note in the
+  case says why), not put to the user as a choice of target; only an agent that falls short goes to the user.
 - **YAGNI, simplest version** (user, 2026-11-11, 2026-11-12): scope and build only what the user asked for; no
   undo, history or other "just in case" extras (they come back when a user asks). The smallest change that works:
   one line where one line does it, not a new module, option or abstraction. One path for one kind of thing: a model
