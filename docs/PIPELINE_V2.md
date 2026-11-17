@@ -510,6 +510,13 @@ is not written (before, every row was rewritten each night with the same values)
 its file keeps it, so nothing the backfill (`etl/v2/backfill.py`) chose is replaced. A law still moves to a
 better-ranked file when one appears (RANK). Checked on ampere: a `plan fetch` rewrote 0 of 12,275 rows.
 
+**Keys fit where they are stored (2026-11-16).** Zilliz `chunks.doc_key` is VarChar(64): 11 Court of Appeal keys
+(file names carrying the case's subject, up to 111 chars) stopped the embed. `courts.key` trims a key over 64 at
+creation and ends it in 8 hex of the whole file name (user: trim it when it is created, not where it is stored);
+test_v2 checks it. **Relinks move a few documents' links run to run** (seen 2026-11-16: two resolves with the same
+totals, 164,241 resolved, changed the links of 15 and then 52 documents, act:15/1979, act:20/1994, act:2/1965 in both):
+publish resends them (links only, no text). Probably a tie broken by order; not investigated.
+
 **Full chain, 2026-11-07 22:44 to 2026-11-08 00:35 (`all.sh 12` on ampere, scratch state DB, R2 `v2test/`):**
 
 | step | result |

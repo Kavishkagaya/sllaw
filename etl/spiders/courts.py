@@ -16,7 +16,7 @@ once from Wayback and a mirror (etl/v2/backfill.py), never part of the pipeline 
 A document is one PDF: key `ca:<file name>` / `sc:<file name>` (lower case, no .pdf), the court's own file name,
 so every copy of a file lands on one key.
 """
-import html, os, re, sys
+import hashlib, html, os, re, sys
 
 from etl.spiders.acts import _get
 
@@ -27,9 +27,15 @@ CA_BASE = "https://courtofappeal.lk/"
 SC_LIVE = "https://supremecourt.lk/judgements/"
 
 
+KEY_MAX = 64        # a key is stored where its length is capped: Zilliz chunks.doc_key is VarChar(64) (2026-11-16)
+
+
 def key(court, url):
-    """'sc', '.../sc_appeal_133_2018.pdf' -> 'sc:sc_appeal_133_2018'."""
-    return f"{court}:{os.path.basename(url.split('?')[0])[:-4].lower()}"
+    """'sc', '.../sc_appeal_133_2018.pdf' -> 'sc:sc_appeal_133_2018'. A file name that makes a key over KEY_MAX (CA tax
+    files carry the case's subject: 111 chars) is trimmed and ends in 8 hex of the whole name, so two never meet."""
+    name = os.path.basename(url.split('?')[0])[:-4].lower()
+    k = f"{court}:{name}"
+    return k if len(k) <= KEY_MAX else k[:KEY_MAX - 9].rstrip("-._") + "-" + hashlib.sha1(name.encode()).hexdigest()[:8]
 
 
 def _text(s):

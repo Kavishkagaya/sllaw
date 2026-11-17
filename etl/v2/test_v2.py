@@ -208,6 +208,11 @@ assert n == 2 and len(rows) == 1, (n, rows)
 assert rows[0]["url"] == "https://courtofappeal.lk/uploads/judgments/CA-Writ-0692.24-1-2.pdf"
 assert rows[0]["parties"] == "Lanwa v. Central Environmental Authority & Others" and rows[0]["date"] == "2024-12-20"
 assert courts.key("ca", rows[0]["url"]) == "ca:ca-writ-0692.24-1-2"
+long = "https://courtofappeal.lk/uploads/judgments/30.-PRINT-FINAL-FINAL-CA-TAX-16-2018-Commission-income-earned-outside-Sri-Lanka-30.07.2022-AutoRecovered-5-1.pdf"
+k1, k2 = courts.key("ca", long), courts.key("ca", long.replace("5-1", "5-2"))
+assert len(k1) <= courts.KEY_MAX and len(k2) <= courts.KEY_MAX and k1 != k2 and k1 == courts.key("ca", long), (k1, k2)
+assert k1.startswith("ca:30.-print-final-final-ca-tax-16-2018"), k1
+print("ok court keys fit", courts.KEY_MAX)
 SC = '''<tr>
     <td data-order="2026-08-07"><span class="jm-fe-date-badge">07 Aug 2026</span></td>
     <td><span class="jm-fe-case-code">SC/APPEAL/133/2018</span></td>
