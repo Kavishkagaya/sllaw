@@ -94,6 +94,8 @@ Each came from a correction or a costly mistake. Guarded = `.claude/hooks/guard.
   check each changed thing as a lawyer would (click it, read the result with a targeted eval) before telling the user
   it is ready; "typecheck passes" is not "it works". The user looks second, not first. Walk every kind of case the
   view can show, not one example (a law citation: an amended section, an amending section, a never-amended one; 2026-11-15).
+  A dependency patch bump is not a UI change: checks, a production build and the pages loading are its check, no walk
+  (user, 2026-11-17).
 - **Only the streaming message renders** (user, 2026-11-15): earlier messages in a chat get stable props (memo on their
   parts, no `animated`/`isAnimating`) and never re-render while an answer streams; data the chips read through context
   keeps its identity until it changes. A per-token re-render of the thread made stalls grow with chat length.
@@ -211,4 +213,6 @@ one, and record dead ends and what was *not* checked.
   renderers need comes through a context (`CiteInfo` in `components/chat/chat.tsx`).
 - **`:target` never matches after a Next `Link` navigation** (pushState sets no target, 2026-11-15): mark and scroll to
   a `#hash` in an effect (`/doc`'s `DocView` sets `data-cited`).
+- **`next build` fails on `/_global-error` ("reading 'useContext'")** when the shell has `NODE_ENV=development`
+  (this laptop does, 2026-11-17): build with `NODE_ENV=production`.
 - **Legacy-font Sinhala listed as English** (act:54/2007, act:7/2006): nothing flags it yet.
