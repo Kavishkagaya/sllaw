@@ -5,12 +5,11 @@
   "branch": "main",
   "issue": 63,
   "neon_branch": null,
-  "goal": "Judgments of the Court of Appeal and the Supreme Court decided from 2021 on, all the way into search: fetch, OCR, chunk, links to the sections they cite, publish to kb, embed. The backlog comes in bulk where it already exists (Supreme Court: the Wayback Machine's archive of the court's own listing and PDFs, the GitHub mirror for PDFs Wayback lacks); the live sites are crawled for what bulk lacks and then nightly, only for new items (published PDFs never change: user, 2026-11-15). The Supreme Court site is reached through its Cloudflare challenge with a real browser session (user, 2026-11-15). The app citing judgments is the next brief.",
+  "goal": "Judgments of the Court of Appeal and the Supreme Court decided from 2021 on, all the way into search: fetch, OCR, chunk, links to the sections they cite, publish to kb, embed. The backlog comes in bulk where it already exists (Supreme Court: the Wayback Machine's archive of the court's own listing and PDFs, the GitHub mirror for PDFs Wayback lacks); the live sites are crawled for what bulk lacks and then nightly, only for new items (published PDFs never change: user, 2026-11-15). The Supreme Court's live site (behind a Cloudflare challenge) is issue #71 (user, 2026-11-17). The app citing judgments is the next brief.",
   "for_whom": "Sri Lankan lawyers, who argue from judgments as much as from sections (docs/APP.md); the release waits for judgments.",
   "done_check": [
     {"id": "d1", "check": "Supreme Court backlog: every row decided 2021-01-01 to 2026-08-07 in Wayback's 2026-08-20 capture of supremecourt.lk/judgements/ (1,491 rows) is listed with date, case number, parties, judge, keywords and the Legislation column; its PDF comes from the nuuuwan mirror (1,348 on 2026-11-16), else Wayback, else the live site, else the row records that no copy was found."},
     {"id": "d2", "check": "A Court of Appeal spider (courtofappeal.lk/judgments?year=YYYY) lists 2021-2026 in one pass (3,194 rows on 2026-11-16), then nightly only the current year (and the previous one in January). Rows per year match the year page's row count; each row keeps decided date, case number, parties, judge, keywords and the Legislation column."},
-    {"id": "d3", "check": "A Supreme Court spider gets through the Cloudflare challenge on ampere (a real browser session, a few seconds between requests), lists what was decided after 2026-08-07 and fetches the PDFs bulk lacked, then nightly only new rows. A night it cannot pass the challenge adds 0 rows, logs a warning and the rest of the run goes on (user, 2026-11-16). docs/SOURCES.md records how."},
     {"id": "d4", "check": "Two sample years (one CA, one SC) go through fetch, extract/OCR and build. The user gets the scan share, GPU hours, chunk count and an estimate for the rest, and the rest runs only after their go."},
     {"id": "d5", "check": "All listed judgments from 2021 on are published to kb and embedded in Zilliz (production writes ask first); the quality gate passes; every chunk has its page; each judgment links to the sections it cites (from the Legislation column and the text); 10 judgments read by hand match their PDFs."},
     {"id": "d6", "check": "Search finds judgments: for 10 questions written from a judgment's subject (not its case number), that judgment is in the top 10 for at least 8."},
@@ -24,16 +23,14 @@
     {"id": "s3", "steps": "A nightly run on a day neither court published anything.",
      "expect": "The court spiders add 0 rows and fetch nothing; only the current year's page of each was read."},
     {"id": "s4", "steps": "Take SC/APPEAL/133/2018, decided 07 Aug 2026 (the newest row in Wayback's listing).",
-     "expect": "Listed with its date, parties and judge from the court's listing; its text and chunks are in kb and it is searchable."},
-    {"id": "s5", "steps": "A night the Supreme Court site's challenge does not pass.",
-     "expect": "The SC step adds 0 rows with a warning in Dagster; the Court of Appeal and the rest of the run complete; the next night picks up what was missed."}
-  ],
+     "expect": "Listed with its date, parties and judge from the court's listing; its text and chunks are in kb and it is searchable."}  ],
   "out_of_scope": [
     "Judgments decided before 2021 (user, 2026-11-16), law reports (NLR, SLR); other courts (High Court, Magistrate's Courts).",
     "Making the existing spiders (documents.gov.lk, parliament.lk, lankalaw) list only new items: later (user, 2026-11-15).",
     "The app citing judgments (next brief, on an app branch).",
     "A full re-walk of the court sites, on a schedule or on demand.",
     "Commercial Cloudflare solver services and TLS-fingerprint impersonation.",
+    "The Supreme Court live-site spider through Cloudflare (was d3, s5): issue #71 (user, 2026-11-17). Supreme Court judgments decided after 2026-08-07 and the 119 listed with no copy wait for it.",
     "SC determinations on Bills (#8)."
   ],
   "decisions": [
@@ -44,6 +41,7 @@
     {"date": "2026-11-16", "note": "Judgments decided from 2021 on only, not 2010 (user)."},
     {"date": "2026-11-16", "note": "Bulk first, live sites for daily updates (user). Supreme Court backlog from Wayback's archive of the court's own listing (2026-08-20 capture) and PDFs; the nuuuwan mirror only for PDFs Wayback lacks (user, reversing 2026-11-01's 'not the mirrors' for that fallback). Court of Appeal: its live site (open; Wayback holds 7 PDFs)."},
     {"date": "2026-11-16", "note": "A night the SC challenge fails: skip with a warning, the run goes on (user)."},
+    {"date": "2026-11-17", "note": "d3 and s5 (the Supreme Court live-site spider) moved out to issue #71 (user): headless Chrome does not pass the challenge and no host has both Chrome and a display (SOURCES.md, 2026-11-16)."},
     {"date": "2026-11-16", "note": "SC PDFs from the mirror first, Wayback only for what it lacks (user, reversing Wayback-first the same day): archive.org refused ampere's requests (14 fetched, 96 failed in 20 min, 1 at a time with back-off), while the mirror has a working PDF for 1,348 of the court's 1,495 listed judgments from 2021. Coverage, not file quality, is what the user asked to check; no sha256 comparison."}
   ],
   "progress": [
