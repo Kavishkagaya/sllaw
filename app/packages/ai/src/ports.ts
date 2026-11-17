@@ -4,7 +4,8 @@ import type { Office, Op } from "@sllaw/office";
 // services fills (search, read, links, as_of live in services; importing them here would be a cycle), already
 // scoped to the request, so a tool can only reach what this user may see.
 export type Mode = "dense" | "weighted" | "keyword";
-export type Filters = { docKeys?: string[]; kinds?: string[]; yearFrom?: number; yearTo?: number };
+export type Only = "laws" | "judgments" | "courtOfAppeal" | "supremeCourt";
+export type Filters = { docKeys?: string[]; kinds?: string[]; only?: Only; yearFrom?: number; yearTo?: number };
 
 export type Chunk = {
   chunkId: number;

@@ -6,7 +6,15 @@ import { embed } from "./embed";
 import { zilliz } from "./zilliz";
 
 export type Mode = "dense" | "weighted" | "keyword";
-export type Filters = { docKeys?: string[]; kinds?: string[]; yearFrom?: number; yearTo?: number };
+/** What to search: laws (every kind but judgments), judgments, or one court's judgments (keys ca:… and sc:…). */
+export type Only = "laws" | "judgments" | "courtOfAppeal" | "supremeCourt";
+export type Filters = { docKeys?: string[]; kinds?: string[]; only?: Only; yearFrom?: number; yearTo?: number };
+const ONLY: Record<Only, string> = {
+  laws: `kind != "judgment"`,
+  judgments: `kind == "judgment"`,
+  courtOfAppeal: `doc_key like "ca:%"`,
+  supremeCourt: `doc_key like "sc:%"`,
+};
 export type Hit = {
   chunkId: number;
   docKey: string;
@@ -29,6 +37,10 @@ export function filterExpr(f: Filters = {}) {
   const parts: string[] = [];
   if (f.docKeys?.length) parts.push(`doc_key in ${list(f.docKeys)}`);
   if (f.kinds?.length) parts.push(`kind in ${list(f.kinds)}`);
+  if (f.only) {
+    if (!(f.only in ONLY)) throw new Error(`bad filter value: ${f.only}`);
+    parts.push(ONLY[f.only]);
+  }
   if (f.yearFrom != null) parts.push(`year >= ${Math.trunc(f.yearFrom)}`);
   if (f.yearTo != null) parts.push(`year <= ${Math.trunc(f.yearTo)}`);
   return parts.join(" and ");
@@ -40,7 +52,9 @@ export async function searchLaw(query: string, opts: { mode?: Mode; filters?: Fi
   // BM25's English analyzer reads no Sinhala or Tamil script, so those queries go dense
   const mode = /[\u0D80-\u0DFF\u0B80-\u0BFF]/.test(query) ? "dense" : (opts.mode ?? "dense");
   const expr = filterExpr(opts.filters);
-  const filter = expr ? { filter: expr } : {};
+  // judgments only: one hit per judgment (its best passage), so ten hits are ten judgments, not eight (chat-judgments d6)
+  const only = opts.filters?.only;
+  const filter = { ...(expr && { filter: expr }), ...(only && only !== "laws" && { groupingField: "doc_key" }) };
   const common = { collectionName: "chunks", limit, outputFields: ["doc_key", "label", "text"] };
   const sparse = { data: [query], annsField: "sparse" };
   const rows: any[] =
@@ -49,6 +63,7 @@ export async function searchLaw(query: string, opts: { mode?: Mode; filters?: Fi
       : mode === "weighted"
         ? await zilliz("entities/hybrid_search", {
             ...common,
+            ...("groupingField" in filter && { groupingField: filter.groupingField }), // the merged hits too
             search: [
               { data: await embed([query]), annsField: "vec", limit: K, ...filter },
               { ...sparse, limit: K, ...filter },

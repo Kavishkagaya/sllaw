@@ -14,4 +14,4 @@ export {
   memoryFileIndex,
   zillizFileIndex,
 } from "./files";
-export { type Filters, type Hit, type Mode, searchLaw } from "./law";
+export { type Filters, type Hit, type Mode, type Only, searchLaw } from "./law";

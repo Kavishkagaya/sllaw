@@ -55,8 +55,18 @@ export function lawName(title: string | null | undefined, key: string | undefine
   const no = /\bno\.|\bcap\.|constitution|amendment/i.test(t) ? null : lawNo(key);
   return no ? `${t} (${no})` : t;
 }
-/** A law chunk's label from the chunk itself (search hit, read, asOf): "s. 22, Rent (Act No. 7 of 1972)". */
-export const lawLabel = (o: Obj) => join(where(o.path, o.label), lawName(o.title, o.docKey));
+/** A judgment passage's page from its breadcrumb: "pages 2-4 · paras 7-15" -> "pp. 2-4", "page 7" -> "p. 7"; the
+ *  case details and the caption have none. */
+export function judgmentPage(path: string | null | undefined) {
+  const m = path?.match(/^pages? (\d+)(?:-(\d+))?/);
+  return m ? (m[2] ? `pp. ${m[1]}-${m[2]}` : `p. ${m[1]}`) : null;
+}
+/** A law chunk's label from the chunk itself (search hit, read, asOf): "s. 22, Rent (Act No. 7 of 1972)"; a judgment
+ *  passage's: "Keerthi v. Gamage, CA/WRT/634/2021 (12.12.2025), p. 7" (its title is made from the listing). */
+export const lawLabel = (o: Obj) =>
+  /^(ca|sc):/.test(o.docKey ?? "")
+    ? join(o.title ?? o.docKey, judgmentPage(o.path))
+    : join(where(o.path, o.label), lawName(o.title, o.docKey));
 const law = (up: Obj[]) => lawLabel(own(up));
 const amending = (up: Obj[]) => {
   const o = own(up);
