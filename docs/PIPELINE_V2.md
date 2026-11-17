@@ -538,6 +538,25 @@ rescinds 6, repeals 5, repeals_act 4, amends_act 2, replaces 1; kb then held 60 
 cores, the worker at 18% CPU: it waits on R2 and Neon), 8 workers finished in ~30 min. Not checked: how many showed in
 the app before the fix.
 
+**Gazette links read as a regulation is worded (2026-11-17, gazette-links #81; findings in docs/LINKS.md).** The
+links stage runs `etl/v2/gazette_links.py` on a gazette's mentions (gazettes only; its file hash in their links
+fingerprint, so a rule change relinks the 3,481 gazettes and nothing else): made_under only where the words before the
+section use a power ("powers vested in", "by virtue of", "made", "Order under", "approved"), else cites; a gazette's
+change link to a law becomes made_under or cites; gazette -> gazette amends/rescinds need the nearer operative verb, an
+"as amended by" chain item cites; a bare "(Chapter N)" with no law word beside it (a customs tariff chapter) is no
+link; the printed name beats the chapter number (gazette:2013/29 misprints "Municipal Councils Ordinance (Chapter
+255)", so its "Urban Councils Ordinance (Chapter 255)" went to cap:576). Gold: 60 gazette links in gold_links.json,
+judged per sentence on resolved links, precision per kind (made_under >= 95%, amends/rescinds >= 90%; a gold link that
+is gone counts as a miss); before 19/25, 13/20, 10/10, after 21/21, 13/13, 10/10, cites 15/15. kb after the publish of
+state 9b311ea5 (15:59, 1,516 documents with #80's judgments): gazette links cites 22,015, made_under 4,819 (6,279 in
+2,611 gazettes before), amends 419 (783), rescinds 311 (301), repeals/amends_act/repeals_act 0 (15); gazette -> law
+change links 0 (47 in the state DB, 14 in kb before). Other sources' link totals identical in all 33 source/kind rows.
+Relink: 8 workers ~230 gazettes a minute; the rule adds 0.26 s on the largest gazette (2013/29, 452k chars, 3,820
+mentions; mentions() 7.7 s). A resolve started while workers still wrote failed on a foreign key and kept its lock 30
+minutes: resolve after every worker has exited. Gate on that state: gazette label_lost errors 124 in 58 (unchanged),
+structure gold 50/50; "mid_sentence new 362" against the previous run (info), not looked into. Not checked: link recall
+(regulations with no made_under link at all).
+
 **Keys fit where they are stored (2026-11-16).** Zilliz `chunks.doc_key` is VarChar(64): 11 Court of Appeal keys
 (file names carrying the case's subject, up to 111 chars) stopped the embed. `courts.key` trims a key over 64 at
 creation and ends it in 8 hex of the whole file name (user: trim it when it is created, not where it is stored);
