@@ -3,7 +3,7 @@
 // marked. A law by its chunk id (corpus.chunk: the chunk, which laws changed it, its law's timeline; corpus.doc, the law around it, only when opened); a case
 // file by its id and chunk number (case.fileChunks: the same chunks the agent read).
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, BookOpenText, ExternalLink, FileText, Gavel, History, Landmark, LocateFixed } from "lucide-react";
+import { ArrowLeft, BookOpenText, ExternalLink, FileText, Gavel, History, LocateFixed } from "lucide-react";
 import Link from "next/link";
 import { useRef, useState } from "react";
 import { ScanNote } from "@/components/scan-note";
@@ -12,6 +12,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { isJudgment, lawName, pinpoint, prose, textAs, titleCase } from "@/lib/law";
 import { cn } from "@/lib/utils";
 import { useTRPC } from "@/trpc/client";
+import { SOURCE_ICON, sourceKind } from "./source-icon";
 
 function Loading() {
   return (
@@ -153,7 +154,9 @@ export function AmendmentLine({
 }) {
   const [all, setAll] = useState(false);
   const enacted =
-    docKey === "constitution" || docKey.startsWith("constitution:") ? 1978 : Number(docKey.split("/")[1]) || null;
+    docKey === "constitution" || docKey.startsWith("constitution:")
+      ? 1978
+      : Number(docKey.match(/\/(\d{4})$/)?.[1]) || null; // act:7/1972; a gazette's number (2044/40) is no year
   const mine = new Set(section.map((c) => c.by));
   const rows = [...law, ...section.filter((c) => !law.some((l) => l.by === c.by)).map((c) => ({ ...c, title: null }))]
     .map((c) => ({ ...c, name: titleCase(c.title ?? lawName(c.by)), mine: mine.has(c.by) || c.by === current }))
@@ -309,7 +312,12 @@ function LawView({ chunkId, read, onOpen }: { chunkId: number; read?: boolean; o
     return (
       <div className="space-y-5 p-5">
         <ReadMark read={read}>a judgment</ReadMark>
-        <Head icon={Gavel} kind={lawName(c.docKey)} title={info?.title ?? c.title ?? c.docKey} sub={where}>
+        <Head
+          icon={SOURCE_ICON.judgment}
+          kind={lawName(c.docKey)}
+          title={info?.title ?? c.title ?? c.docKey}
+          sub={where}
+        >
           <Button asChild variant="outline" size="sm">
             <Link href={`/doc/${c.docKey}#c${c.chunkId}`}>
               Open the judgment <BookOpenText />
@@ -353,7 +361,13 @@ function LawView({ chunkId, read, onOpen }: { chunkId: number; read?: boolean; o
             ? `the text ${textAs(c.docKey)} · amended since`
             : "the text in force"}
       </ReadMark>
-      <Head icon={Landmark} kind={lawName(c.docKey)} title={info?.title ?? c.title ?? c.docKey} sub={where} law>
+      <Head
+        icon={SOURCE_ICON[sourceKind(c.docKey)]}
+        kind={lawName(c.docKey)}
+        title={info?.title ?? c.title ?? c.docKey}
+        sub={where}
+        law
+      >
         <Button asChild variant="outline" size="sm">
           {/* the same tab: the chat keeps its answer running in the store, Back returns to it */}
           <Link href={`/doc/${c.docKey}#c${c.chunkId}`}>

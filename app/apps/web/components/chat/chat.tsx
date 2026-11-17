@@ -10,9 +10,7 @@ import {
   Check,
   ChevronLeft,
   ChevronRight,
-  FileText,
   Gauge,
-  Landmark,
   TriangleAlert,
 } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
@@ -34,6 +32,7 @@ import { cn } from "@/lib/utils";
 import { type Cite, useChatStore } from "@/stores/chat-store";
 import { useTRPC } from "@/trpc/client";
 import { CaseChange } from "./case-change";
+import { SourceIcon, type SourceKind, sourceKind } from "./source-icon";
 import { FileSource, LawSource, TONE, type Tone } from "./source-view";
 import { splitAnswer, Trail, type TrailSource } from "./trail";
 
@@ -138,7 +137,7 @@ export function Chat({
   // order of first citation: its place is its number
   // `known`: every law section the agent's tools returned (search, read, amendment check), with its law and text, so the
   // Sources list groups a citation the moment it lands, with no request (a request per citation made each one late)
-  const { loaded, cites, known } = useMemo(() => {
+  const { loaded, cites, known, kinds } = useMemo(() => {
     const loaded = new Set<string>();
     const cites: Cite[] = [];
     const known = new Map<number, Known>();
@@ -173,7 +172,10 @@ export function Chat({
             if (!cites.some((y) => y.key === c.key)) cites.push(c);
           }
       }
-    return { loaded, cites, known };
+    // each law chunk's kind (law, regulation, judgment) for its chip's icon: from the doc the tools returned it in
+    const kinds = new Map<string, SourceKind>();
+    for (const [id, k] of known) if (k.docKey) kinds.set(`s:${id}`, sourceKind(k.docKey));
+    return { loaded, cites, known, kinds };
   }, [messages]);
   const numbers = useMemo(() => new Map(cites.map((c, i) => [c.key, i + 1])), [cites]);
 
@@ -251,12 +253,16 @@ export function Chat({
   // gets stay the same object for the whole stream and its blocks (and their word fade) are not redrawn per word
   // loaded and numbers are rebuilt per streamed token but only ever grow: keep one object until they do, so the chips
   // (context consumers) in earlier answers are not re-rendered per token
-  const stable = useRef({ loaded, numbers });
-  if (loaded.size !== stable.current.loaded.size || numbers.size !== stable.current.numbers.size)
-    stable.current = { loaded, numbers };
+  const stable = useRef({ loaded, numbers, kinds });
+  if (
+    loaded.size !== stable.current.loaded.size ||
+    numbers.size !== stable.current.numbers.size ||
+    kinds.size !== stable.current.kinds.size
+  )
+    stable.current = { loaded, numbers, kinds };
   const grown = stable.current;
   const citeInfo = useMemo(
-    () => ({ chatId: id, loaded: grown.loaded, numbers: grown.numbers, show }),
+    () => ({ chatId: id, loaded: grown.loaded, numbers: grown.numbers, kinds: grown.kinds, show }),
     [id, grown, show],
   );
 
@@ -626,6 +632,7 @@ type Known = {
 type Group = {
   key: string;
   law: boolean;
+  kind: SourceKind;
   title: string;
   sub: string | null;
   items: { c: Cite; n: number; where: string; snippet?: string }[];
@@ -683,7 +690,8 @@ function useGroups(cites: Cite[], known: Map<number, Known>, caseId?: string): G
       sub = "Older citation";
       where = c.label;
     }
-    const g = groups.get(key) ?? { key, law: c.kind === "law", title, sub, items: [] };
+    const kind: SourceKind = c.kind === "file" ? "file" : sourceKind(key.startsWith("d:") ? key.slice(2) : null);
+    const g = groups.get(key) ?? { key, law: c.kind === "law", kind, title, sub, items: [] };
     g.items.push({ c, n: i + 1, where, snippet });
     groups.set(key, g);
   });
@@ -695,13 +703,14 @@ const CiteInfo = createContext<{
   chatId: string;
   loaded: Set<string>;
   numbers: Map<string, number>;
+  kinds: Map<string, SourceKind>;
   show: (c: Cite) => void;
-}>({ chatId: "", loaded: new Set(), numbers: new Map(), show: () => {} });
+}>({ chatId: "", loaded: new Set(), numbers: new Map(), kinds: new Map(), show: () => {} });
 
 /** A link in an answer: a citation becomes its numbered chip (it opens the source in the panel), anything else an
  *  ordinary link out. */
 function CiteLink({ href, children }: { href?: string; children?: React.ReactNode }) {
-  const { chatId: id, loaded, numbers, show } = useContext(CiteInfo);
+  const { chatId: id, loaded, numbers, kinds, show } = useContext(CiteInfo);
   if (href === "#citing")
     return (
       <span className="mx-0.5 inline-flex animate-pulse items-center rounded-[5px] border border-dashed px-1.5 align-[1px] font-sans text-[12.5px] leading-5 text-muted-foreground">
@@ -735,7 +744,14 @@ function CiteLink({ href, children }: { href?: string; children?: React.ReactNod
       )}
     >
       <span className="shrink-0 tabular-nums opacity-80">
-        {!ok ? <TriangleAlert className="inline size-3 -translate-y-px" /> : tone === "file" ? "▤" : "§"}{" "}
+        {!ok ? (
+          <TriangleAlert className="inline size-3 -translate-y-px" />
+        ) : (
+          <SourceIcon
+            kind={c.kind === "file" ? "file" : (kinds.get(c.key) ?? "law")}
+            className="inline size-3 -translate-y-px"
+          />
+        )}{" "}
         {numbers.get(c.key)}
       </span>
       <span aria-hidden className="opacity-50">
@@ -808,7 +824,6 @@ function CitationPanel({
           ) : (
             <div className="flex flex-col gap-3">
               {groups.map((g) => {
-                const Icon = g.law ? Landmark : FileText;
                 return (
                   <section key={g.key} className="overflow-hidden rounded-lg border bg-card shadow-xs">
                     <header className="flex items-start gap-2.5 border-b px-3 py-2.5">
@@ -818,7 +833,7 @@ function CitationPanel({
                           TONE[g.law ? "law" : "file"].soft,
                         )}
                       >
-                        <Icon className="size-3.5" />
+                        <SourceIcon kind={g.kind} className="size-3.5" />
                       </span>
                       <div className="min-w-0">
                         <h3 className="text-[15px] leading-snug font-semibold">{g.title}</h3>
