@@ -220,4 +220,7 @@ one, and record dead ends and what was *not* checked.
   a `#hash` in an effect (`/doc`'s `DocView` sets `data-cited`).
 - **`next build` fails on `/_global-error` ("reading 'useContext'")** when the shell has `NODE_ENV=development`
   (this laptop does, 2026-11-17): build with `NODE_ENV=production`.
+- **`run work <stage> --n N` is the claim batch, not N workers** (2026-11-17: a hand-run `--n 8` relink of 3,481
+  gazettes was one sequential worker, ~39 a minute at 10% CPU): start several processes with `--n 2`, as `all.sh` and
+  Dagster do, then `resolve` once every worker has exited.
 - **Legacy-font Sinhala listed as English** (act:54/2007, act:7/2006): nothing flags it yet.
