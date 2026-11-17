@@ -1,0 +1,22 @@
+{
+  "title": "Next.js 16.4.6",
+  "slug": "next-16-4-6",
+  "status": "agreed",
+  "branch": "app/next-16-4-6",
+  "issue": 74,
+  "neon_branch": false,
+  "goal": "Push the Next.js update (user, 2026-11-17: \"push next version update also\"): next ^16.4.2 -> ^16.4.6 with its lockfile, and experimental.agentUpgrade \"security\" in next.config.ts (Next nudges coding agents about security upgrades).",
+  "for_whom": "Every user of the app: the framework they run on, kept current with its security fixes.",
+  "done_check": [
+    {"id": "d1", "check": "On the branch: pnpm check, typecheck and test pass; NODE_ENV=production pnpm build succeeds on 16.4.6; the dev server on 16.4.6 serves / and /coverage (no UI walk: a patch bump changes no UI, user 2026-11-17)."}
+  ],
+  "scenarios": [],
+  "out_of_scope": ["Any other dependency update.", "Code changes beyond what 16.4.6 needs."],
+  "decisions": [
+    {"date": "2026-11-17", "note": "No Neon branch: no schema or app-table change; the walk reads only."}
+  ],
+  "progress": [
+    {"date": "2026-11-17", "note": "Scoped from the user's request; agreed; issue #74."},
+    {"date": "2026-11-17", "note": "d1: pnpm check, typecheck, test pass; NODE_ENV=production pnpm build: Next.js 16.4.6 (Turbopack) compiled, 0 errors; installed next 16.4.6, agentUpgrade in Next's own config schema ('security' | 'latest' | 'experimental-future' | false); the dev server (started 07:28, after the 07:22 install) serves / and /coverage 200. The chat walk dropped from d1 (user: a patch bump needs none; CLAUDE.md walk rule updated). The CLAUDE.md known issue on next build with NODE_ENV=development goes with this change."}
+  ]
+}

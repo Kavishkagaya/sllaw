@@ -16,6 +16,9 @@ const config = {
     "@sllaw/storage",
     "@sllaw/extract",
   ],
+  experimental: {
+    agentUpgrade: "security",
+  },
 } satisfies NextConfig;
 
 export default withWorkflow(config);
