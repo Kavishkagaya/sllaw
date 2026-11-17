@@ -1187,5 +1187,124 @@
    "(court|Court of Appeal) (quashed|granted (a |the )?writ)"
   ],
   "note": "lawyer-research d2 (2026-11-17): Arpatha Gamage Anoma, CA/WRT/0152/2024 (27.03.2026) p. 8 and pp. 10-11: stating the provision was a reason; writ application dismissed."
+ },
+ {
+  "id": "reg-gm-food",
+  "cat": "regulation",
+  "q": "Can a supermarket sell genetically modified food in Sri Lanka, and does it have to be labelled as such?",
+  "gold": [
+   [
+    "gazette:2337/19",
+    null
+   ]
+  ],
+  "must": [
+   "genetically modified|GM food",
+   "label"
+  ],
+  "note": "chat-regulations d7 (2026-11-17): a lawyer's question; gold from kb's gazette and its links: made under s. 32 of the Food Act, No. 26 of 1980"
+ },
+ {
+  "id": "reg-aerodrome",
+  "cat": "regulation",
+  "q": "How are aerodromes in Sri Lanka classified for the purposes of the civil aviation rules, and who made that classification?",
+  "gold": [
+   [
+    "gazette:2087/27",
+    null
+   ]
+  ],
+  "must": [
+   "aerodrome"
+  ],
+  "note": "chat-regulations d7 (2026-11-17): a lawyer's question; gold from kb's gazette and its links: made under s. 117 of the Civil Aviation Act, No. 14 of 2010"
+ },
+ {
+  "id": "reg-ship-waste",
+  "cat": "regulation",
+  "q": "Does a port in Sri Lanka have to provide facilities to take waste and oil residues from ships, and what rules govern it?",
+  "gold": [
+   [
+    "gazette:1996/27",
+    null
+   ],
+   [
+    "gazette:2431/44",
+    null
+   ]
+  ],
+  "must": [
+   "reception facilit"
+  ],
+  "note": "chat-regulations d7 (2026-11-17): a lawyer's question; gold from kb's gazette and its links: made under s. 51 of the Marine Pollution Prevention Act, No. 35 of 2008; amended by 2431/44 (2025)"
+ },
+ {
+  "id": "reg-water-price",
+  "cat": "regulation",
+  "q": "My client sells bottled drinking water. Is the maximum retail price the Consumer Affairs Authority fixed in September 2018 still in force?",
+  "gold": [
+   [
+    "gazette:2264/68",
+    null
+   ]
+  ],
+  "must": [
+   "rescind|revoke|no longer",
+   "2264/68"
+  ],
+  "note": "chat-regulations d7 (2026-11-17): a lawyer's question; gold from kb's gazette and its links: Order No. 51 (2090/46) rescinded by 2264/68 (28.01.2022)"
+ },
+ {
+  "id": "reg-small-vessels",
+  "cat": "regulation",
+  "q": "A client operates small commercial boats. Do the Merchant Shipping (Small Commercial Vessels) Regulations of 2017 still apply to them?",
+  "gold": [
+   [
+    "gazette:2417/14",
+    null
+   ]
+  ],
+  "must": [
+   "rescind|revoke|no longer|replaced",
+   "2417/14"
+  ],
+  "note": "chat-regulations d7 (2026-11-17): a lawyer's question; gold from kb's gazette and its links: 2017/31 rescinded by reg. 33 of 2417/14 (31.12.2024)"
+ },
+ {
+  "id": "reg-hambantota",
+  "cat": "regulation",
+  "q": "Can the High Court sitting in Hambantota hear an admiralty action? I recall a 2021 Order under the Judicature Act giving it that jurisdiction.",
+  "gold": [
+   [
+    "gazette:2254/44",
+    null
+   ]
+  ],
+  "must": [
+   "revoke|rescind|no longer",
+   "2254/44"
+  ],
+  "note": "chat-regulations d7 (2026-11-17): a lawyer's question; gold from kb's gazette and its links: the Order in 2239/51 (06.08.2021) revoked by 2254/44 (19.11.2021)"
+ },
+ {
+  "id": "reg-held-1989",
+  "cat": "regulation",
+  "q": "What did the 1989 emergency regulations under the Public Security Ordinance say about detention without charge?",
+  "gold": [],
+  "must": [
+   "2010",
+   "weekly Gazette|Gazette itself|checked in"
+  ],
+  "note": "chat-regulations d7 (2026-11-17): a lawyer's question; gold from kb's gazette and its links: before 2010, not held: the holdings line, nothing stated from memory"
+ },
+ {
+  "id": "reg-held-2005",
+  "cat": "regulation",
+  "q": "What rate of Special Commodity Levy did the 2005 order on big onions set?",
+  "gold": [],
+  "must": [
+   "2010"
+  ],
+  "note": "chat-regulations d7 (2026-11-17): a lawyer's question; gold from kb's gazette and its links: before 2010, not held"
  }
 ]
