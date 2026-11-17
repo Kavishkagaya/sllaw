@@ -1,7 +1,7 @@
 {
   "title": "Next.js 16.4.6",
   "slug": "next-16-4-6",
-  "status": "agreed",
+  "status": "merged",
   "branch": "app/next-16-4-6",
   "issue": 74,
   "neon_branch": false,
@@ -17,6 +17,7 @@
   ],
   "progress": [
     {"date": "2026-11-17", "note": "Scoped from the user's request; agreed; issue #74."},
-    {"date": "2026-11-17", "note": "d1: pnpm check, typecheck, test pass; NODE_ENV=production pnpm build: Next.js 16.4.6 (Turbopack) compiled, 0 errors; installed next 16.4.6, agentUpgrade in Next's own config schema ('security' | 'latest' | 'experimental-future' | false); the dev server (started 07:28, after the 07:22 install) serves / and /coverage 200. The chat walk dropped from d1 (user: a patch bump needs none; CLAUDE.md walk rule updated). The CLAUDE.md known issue on next build with NODE_ENV=development goes with this change."}
+    {"date": "2026-11-17", "note": "d1: pnpm check, typecheck, test pass; NODE_ENV=production pnpm build: Next.js 16.4.6 (Turbopack) compiled, 0 errors; installed next 16.4.6, agentUpgrade in Next's own config schema ('security' | 'latest' | 'experimental-future' | false); the dev server (started 07:28, after the 07:22 install) serves / and /coverage 200. The chat walk dropped from d1 (user: a patch bump needs none; CLAUDE.md walk rule updated). The CLAUDE.md known issue on next build with NODE_ENV=development goes with this change."},
+    {"date": "2026-11-17", "note": "Semantic PASS, security PASS on d3d80e1 (low: pnpm audit --prod 32 transitive advisories, none in next/Clerk/Workflow, none added here). PR #75 rebase-merged as fdb8d44; Vercel deploys main."}
   ]
 }
