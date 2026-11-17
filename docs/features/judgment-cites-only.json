@@ -1,7 +1,7 @@
 {
   "title": "Judgments only cite",
   "slug": "judgment-cites-only",
-  "status": "agreed",
+  "status": "merged",
   "branch": "main",
   "issue": 80,
   "neon_branch": null,
@@ -24,5 +24,7 @@
     {"date": "2026-11-17", "note": "Cost: relink of the 4,433 judgments and a links-only publish (production write, asks); no rebuild of other documents, no embed."}
   ],
   "progress": [{"date": "2026-11-17", "note": "Scoped with the user; issue #80."},
-    {"date": "2026-11-17", "note": "Fix 8a45a3d (run.cite_only, a judgment's links fingerprint carries |cite_only; test in test_v2). On ampere (logs/v2/cites80): 4,557 judgments relinked, resolve; state links from ca:/sc: before cites 57,715 + 73 change kinds, after cites 57,788 only; gold-links 210/210; gate on state af3b4ca0: only the known 124 gazette label errors, structure gold 50/50. Publish dry run 378 documents (185 judgments, 196 gazettes, 15 others from resolve's known run-to-run moves). Not published: gazette-links (#81, another session) started a full gazette relink on the same state at 14:24, so the gated state is stale; one gate and one publish after it carries both. Next: that publish (asks the user), then s1 in the app, then /validate."}]
+    {"date": "2026-11-17", "note": "Fix 8a45a3d (run.cite_only, a judgment's links fingerprint carries |cite_only; test in test_v2). On ampere (logs/v2/cites80): 4,557 judgments relinked, resolve; state links from ca:/sc: before cites 57,715 + 73 change kinds, after cites 57,788 only; gold-links 210/210; gate on state af3b4ca0: only the known 124 gazette label errors, structure gold 50/50. Publish dry run 378 documents (185 judgments, 196 gazettes, 15 others from resolve's known run-to-run moves). Not published: gazette-links (#81, another session) started a full gazette relink on the same state at 14:24, so the gated state is stale; one gate and one publish after it carries both. Next: that publish (asks the user), then s1 in the app, then /validate."},
+    {"date": "2026-11-17", "note": "Published with gazette-links (#81) at 15:59 (the user's yes, in that session); its validators passed on 4fa1aac, which holds this fix, and reported judgment change links in kb 0 (73 before). s1: kb.links to act:23/2011 s.10: amends only from act:4/2012 and act:20/2013; 21 judgments cite it; the Cited by query on chunk 1136128582075025 gives 20 judgments, ca:ca-tax-46-2019 among them; /history/act:23/2011?c=1136128582075025 lists the two Acts and no judgment (headed browser, scratchpad s1-history.png). No UI changed: the app walk was not needed (the user, 2026-11-17)."},
+    {"date": "2026-11-17", "note": "Merged: on main since the joint push with #81; the user accepted #81's validation (on 4fa1aac, which holds this fix) instead of a separate round."}]
 }

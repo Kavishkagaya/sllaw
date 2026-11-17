@@ -97,7 +97,8 @@ Each came from a correction or a costly mistake. Guarded = `.claude/hooks/guard.
   it is ready; "typecheck passes" is not "it works". The user looks second, not first. Walk every kind of case the
   view can show, not one example (a law citation: an amended section, an amending section, a never-amended one; 2026-11-15).
   A dependency patch bump is not a UI change: checks, a production build and the pages loading are its check, no walk
-  (user, 2026-11-17).
+  (user, 2026-11-17). Neither is an ETL change (links, text): it is checked in kb with the query the app's view runs, no
+  browser, and its brief's scenarios are written that way (user, 2026-11-17).
 - **Only the streaming message renders** (user, 2026-11-15): earlier messages in a chat get stable props (memo on their
   parts, no `animated`/`isAnimating`) and never re-render while an answer streams; data the chips read through context
   keeps its identity until it changes. A per-token re-render of the thread made stalls grow with chat length.
