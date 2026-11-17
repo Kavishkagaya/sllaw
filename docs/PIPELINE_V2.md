@@ -72,8 +72,8 @@ Found 2026-11-07 by reading the current code:
   | `revised_1956` | `cap1956:N` | lankalaw |
   | `revised_1980` | `cap:N` | lankalaw |
   | `gazette` | `gazette:NNNN/NN` | documents.gov.lk |
-  | `supreme_court_judgment` | open | supremecourt.lk (Cloudflare, blocked) |
-  | `court_of_appeal_judgment` | open | courtofappeal.lk |
+  | `supreme_court_judgment` | `sc:<file>` | none: supremecourt.lk is behind Cloudflare (#71); to 2026-08-07 by the backfill |
+  | `court_of_appeal_judgment` | `ca:<file>` | courtofappeal.lk/judgments (current year nightly) |
   | reserved: `revised_1938` (`chapter1938:N`, 59 cited), `bill`, `sc_bill_determination`, `provincial_statute` | | none |
 
 - **Decided 2026-11-07: every language is listed** (Sinhala and Tamil too), so coverage per document is known
@@ -509,6 +509,24 @@ resolve on 6 documents (plan again: 0 to build); publish and embed dry runs.
 is not written (before, every row was rewritten each night with the same values); a judgment (`ca:`/`sc:`) that has
 its file keeps it, so nothing the backfill (`etl/v2/backfill.py`) chose is replaced. A law still moves to a
 better-ranked file when one appears (RANK). Checked on ampere: a `plan fetch` rewrote 0 of 12,275 rows.
+
+**Judgments (court-judgments #63, 2026-11-16).** Decided from 2021 on. Key `ca:<file>` / `sc:<file>`: the court's
+PDF name, lower case, no .pdf (`etl/spiders/courts.key`), so every copy of a file lands on one key. Stages 1-3 and 6-8
+are the laws' own; stages 4-5 are `etl/v2/judgment.py` (prose, not the law tree: no sections, schedules or marginal
+notes): a case-details chunk from the listing (court, case, date, judge, parties, keywords, Legislation column), the
+caption (up to the last Before/Counsel/Argued/Decided line in the first 4 pages), then the opinion packed to MAX at
+paragraph ends, crumb = page(s) and the judgment's own paragraph numbers when it has 5+ in sequence. Read from
+docling's line cells (`blocks.read(gazette=True)`), no margin column (the law reader's margin took 60 of 146 blocks of
+CA/WRT/0634/2023). Spider: `courtofappeal.lk/judgments`, the years from 2021 not yet held plus the current year (and
+the previous one in January). `stages.HOLD` keeps `ca:`/`sc:` out of the nightly fetch and extract unless named.
+The backlog came once from `etl/v2/backfill.py` (Supreme Court listing from Wayback's 2026-08-20 capture, PDFs from the
+nuuuwan mirror else Wayback; never in the pipeline, user 2026-11-16). **Measured 2026-11-16 (ampere):** 4,735 keys
+listed, 4,557 with a file (CA 3,116/3,175, SC 1,441/1,560; the rest 404 everywhere); extract 3,642 files in 56 min
+(docling, 6 workers on one card, 0 failed; 5 scanned pages in the 858 samples); build 4,557 in 26 min, 85,731 chunks
+(median 18 CA, 29 SC); 29 scans with only the details chunk (need OCR); links 57,788 from 4,433 judgments; embed
+85,577 chunks in ~2.5 h (bge-m3, one shared A6000). Search (d6): a lawyer's question from 10 judgments' subjects finds
+the judgment in the top 10 for 6/10 dense, 8/10 weighted. Text against the PDF's text layer (d5, 10 judgments):
+96-99.5% of words in order.
 
 **Keys fit where they are stored (2026-11-16).** Zilliz `chunks.doc_key` is VarChar(64): 11 Court of Appeal keys
 (file names carrying the case's subject, up to 111 chars) stopped the embed. `courts.key` trims a key over 64 at

@@ -169,6 +169,13 @@ Both are WordPress. The yearly listing pages contain direct PDF links. Cloudflar
 
 `judgements.courtofappeal.lk` (the old archive) is behind a CAPTCHA.
 
+**Backfill result (2026-11-16, `etl/v2/backfill.py` on ampere):** of 4,735 judgment keys decided 2021 on, 4,557 have a
+PDF. Court of Appeal 3,116 of 3,175: the 59 misses (49 from 2026) are the court's own links giving 404 (HEAD checked;
+its other 2026 files give 200). Supreme Court 1,441 of 1,560 (listing: Wayback's capture, 1,506 rows, plus 67 rows only
+the mirror lists): 119 have no copy in the mirror or Wayback (69 from 2026; 22 of June 2026's 22). Nothing decided after
+2026-08-07 is listed: the live site is issue #71. Wayback paced at one request a time, 3 s apart, back-off on
+refusals: 35 waits in the run.
+
 **Rechecked 2026-11-01:** **supremecourt.lk now challenges every path** (home, `/judgements/`, `?case_year=`, `www.`, `/wp-json/`, `robots.txt`, sitemaps): HTTP 403, `cf-mitigated: challenge` (Cloudflare managed challenge, passes in a real browser), the same from ampere, ada's network and a home connection, so not an IP block. Do not bypass. Headless Chrome on ampere (`--headless=new`, a real Chrome user agent, 25 s virtual time) still got the challenge page (2026-11-01). **Rechecked 2026-11-16 (for d3):** ampere has Google Chrome 135 (`/usr/bin/google-chrome`), no Xvfb, no Playwright/Selenium (only `websockets`, in sllaw_venv/dagster_venv); headless Chrome driven over its DevTools port (user agent without "Headless", `AutomationControlled` off) sat on "Just a moment... Performing security verification" for 60 s of real time, 0 rows: Cloudflare does not pass headless Chrome. A headed browser needs a display ampere has not got. **courtofappeal.lk is open:** `/judgements/?case_year=YYYY` returns the whole year on one page (2024: 551 rows), years 2010-2026 in the form, columns Decided Date, Case No ("CA/WRT/0634/2023"), Parties, Judgment By, Keywords, Legislation ("Industrial Disputes Act ... ss. 4(1), 17(1), 19; Constitution ... Article 140"), Document (PDF under `/wp-content/uploads/judgements/`). **Source decision (user, 2026-11-01): scrape the courts' own sites and OCR on our GPUs, not the lk_datasets mirrors** (someone else's copy, accuracy unknown; the SC mirror stops 2026-05-27, 30% of its rows have no PDF).
 
 **Bulk sources for 2021 on (checked 2026-11-16, laptop, counts only, nothing stored).** The user's plan: take the backlog in bulk, and use the live sites (the Supreme Court through its challenge) only for daily updates.

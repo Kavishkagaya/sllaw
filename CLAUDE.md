@@ -143,7 +143,8 @@ app (app/, Vercel) ─► its own database `app` in Neon sllaw-app (dev and prod
   measurements, v1 operations at the end), `LINKS.md`, `LAYOUT.md` (how Act PDFs are laid out), `APP.md`.
 
 Keys: Acts `act:N/YYYY`, Laws `law:N/YYYY`, chapters `cap:N` (1980) and `cap1956:N`, `constitution`, `amendment:N`,
-`gazette:NNNN/NN`, judgments `ca:<file>` / `sc:<file>` (the court's PDF name, lower case, no .pdf). Structuring is code-based and English-only; Sinhala and Tamil go to an agent with the whole Act.
+`gazette:NNNN/NN`, judgments `ca:<file>` / `sc:<file>` (the court's PDF name, lower case, no .pdf; over 64 chars, trimmed with 8 hex of
+the name, the Zilliz `doc_key` limit). Structuring is code-based and English-only; Sinhala and Tamil go to an agent with the whole Act.
 
 ### Hosts
 
