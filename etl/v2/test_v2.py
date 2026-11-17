@@ -333,3 +333,45 @@ _ca = [R.cite_only("ca:ca-tax-46-2019", r) for r in _M.mentions("ca:ca-tax-46-20
 assert any(_M.kind_of(r) != "cites" for r in _act), [_M.kind_of(r) for r in _act]
 assert _ca and len(_ca) == len(_act) and all(_M.kind_of(r) == "cites" and not r["ops"] for r in _ca), [_M.kind_of(r) for r in _ca]
 print("ok judgments only cite")
+
+# a gazette's links read as a regulation is worded (gazette-links #81)
+from etl.v2 import gazette_links as _G
+from etl import refs as _refs
+
+
+def _gz(t, key="gazette:2099/01"):
+    return sorted((_M.kind_of(r), r["dst_doc"], tuple(r["labels"])) for r in _G.apply(key, _M.mentions(key, "", [t]), [t]))
+
+
+_x = _gz("BY virtue of the powers vested in me under Section 14 of the Registration of Title Act, No. 21 of 1998, I declare.")
+assert ("made_under", "act:21/1998", ("14",)) in _x, _x
+_x = _gz("Such person shall be liable to the penalties in terms of Section 122(2) in the Pradeshiya Sabhas Act, No. 15 of 1987.")
+assert _x and all(k == "cites" for k, *_ in _x), _x                       # a section mentioned, not a power used
+_x = _gz("The Gazette Notification No. 1956/17 of March 01, 2016, published under Article 10 of Schedule 'E' of the Customs "
+         "(Amendment) Act, No. 02 of 2003 is hereby repealed with effect from 01st March 2016.")
+assert not any(d == "act:2/2003" and k != "cites" for k, d, _ in _x) and ("rescinds", "gazette:1956/17", ()) in _x, _x
+_x = _gz("The Food Regulations 2022, published in Gazette Extraordinary No. 2319/40 dated February 14, 2023, as amended by "
+         "Gazette Extraordinary No. 2364/24 dated December 27, 2023, are hereby amended by the repeal of regulation 1.")
+assert ("amends", "gazette:2319/40", ()) in _x and ("cites", "gazette:2364/24", ()) in _x, _x      # the chain only cites
+_x = _gz("Goods shipped on Letters of Credit established before 18th October 2015 and not amended subsequently, the Gazette "
+         "Notification No. 1901/3 dated 10th February 2015 shall be deemed to be in effect.")
+assert ("cites", "gazette:1901/03", ()) in _x, _x
+_x = _gz("By repeal of items 1 to 14 of Schedule IX of the Gazette Extraordinary No. 2104/18 dated 01st January 2019.")
+assert ("amends", "gazette:2104/18", ()) in _x, _x
+_x = _gz("(h) | Musical instruments or parts or accessories thereof (Chapter 92); (ij) | Articles of Chapter 93 (arms).")
+assert not _x, _x                                                          # customs tariff chapters, not laws
+_x = _gz("the notification issued by me in the exercise of powers vested in me under paragraph (1) of Article 43 of the "
+         "Constitution and published in the Gazette Extraordinary No. 1933/13 of 21st September, 2015 is hereby further amended")
+assert ("made_under", "constitution", ("43",)) in _x and ("amends", "gazette:1933/13", ()) in _x, _x
+_saved = dict(_refs.NAMES)
+_refs.NAMES.update({"urban councils": (["cap1956:255"], 1), "municipal councils": (["cap:576"], 0)})
+_x = _gz("BY virtue of the powers vested in me under sections 2 and 5 of Urban Councils Ordinance (Chapter 255) and section 27F")
+_refs.NAMES.clear(); _refs.NAMES.update(_saved)
+assert ("made_under", "cap1956:255", ("2", "5")) in _x, _x                 # the name printed beats the chapter number
+_t = ["Such person shall be liable to the penalties in terms of Section 122(2) in the Pradeshiya Sabhas Act, No. 15 of 1987."]
+assert _G.apply("act:1/2099", _M.mentions("act:1/2099", "", _t), _t) == _M.mentions("act:1/2099", "", _t)   # Acts untouched
+print("ok gazette links")
+_x = _gz("do by this Notification amend the Notification No. 902 published in Gazette Extraordinary No. 1544/17 and the "
+         "Notification No. 974 published in Gazette Extraordinary No. 1901/19 of February 13, 2015 is hereby rescinded.")
+assert ("rescinds", "gazette:1901/19", ()) in _x and ("amends", "gazette:1544/17", ()) in _x, _x    # the nearer verb
+print("ok gazette nearer verb")

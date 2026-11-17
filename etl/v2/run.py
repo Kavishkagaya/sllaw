@@ -297,10 +297,16 @@ def plan_links(keys=None):
         cur.execute("""SELECT d.key, string_agg(c.text_hash, ',' ORDER BY c.seq) FROM docs d JOIN chunks c ON c.doc_key = d.key
                        GROUP BY d.key""")
         rv = refs_version()
-        items = [(k, hashlib.sha1(f"{h}|{rv}{'|cite_only' if is_judgment(k) else ''}".encode()).hexdigest())
-                 for k, h in cur.fetchall() if not keys or k in keys]                   # cite_only's rule relinks judgments
+        gv = gazette_version()
+        items = [(k, hashlib.sha1(f"{h}|{rv}{'|cite_only' if is_judgment(k) else ''}{gv if k.startswith('gazette:') else ''}".encode()).hexdigest())
+                 for k, h in cur.fetchall() if not keys or k in keys]   # cite_only's rule relinks judgments; gazette_links' rules, gazettes
         changed, same = W.plan(c, "links", items)
     print(f"links: {changed} newly queued, {same} already queued or read")
+
+
+def gazette_version():
+    """etl/v2/gazette_links.py's code: a change relinks gazettes only (gazette-links #81)."""
+    return "|g" + hashlib.sha1(open(os.path.join(HERE, "gazette_links.py"), "rb").read()).hexdigest()[:12]
 
 
 def is_judgment(key):
@@ -316,6 +322,7 @@ def do_links(c, key, fp=None):
     """A document's mentions (etl/mentions.py, docs/LINKS.md): every citation in its chunk text, one row per span,
     replacing the ones it had. Which chunk each provision is, is `resolve`'s job."""
     from etl import mentions as M
+    from etl.v2 import gazette_links as G
     with c.cursor() as cur:
         cur.execute("SELECT parts, meta->>'long_title' FROM docs WHERE key = %s", (key,))
         parts, lt = cur.fetchone()
@@ -329,7 +336,7 @@ def do_links(c, key, fp=None):
         ids = [r[0] for r in cur.fetchall()]
         texts = [text.get(i, "") for i in ids]
         rows = []
-        for r in map(lambda r: cite_only(key, r), M.mentions(key, lt, texts)):
+        for r in G.apply(key, [cite_only(key, r) for r in M.mentions(key, lt, texts)], texts):
             labs = r["labels"] or []
             rows.append((key, None if r["i"] is None else ids[r["i"]], M.kind_of(r), r["dst_doc"], r["dst_name"],
                          labs[0] if len(labs) == 1 else None, (r["context"] or "")[:300] or None,
@@ -448,6 +455,8 @@ def gold_links():
                         (src, kind, kind, dst, lab, bool(lab), src, kind, kind, dst, label))
             return cur.fetchone() is not None
 
+        gaz = [x for x in g if x["src"].startswith("gazette:")]
+        g = [x for x in g if not x["src"].startswith("gazette:")]
         for x in g:
             if x["kind"] == "same_as":
                 cur.execute("SELECT 1 FROM same_as WHERE (a = %s AND b = ANY(%s)) OR (b = %s AND a = ANY(%s))",
@@ -468,11 +477,47 @@ def gold_links():
             t[1] += 1
             if not ok:
                 bad.append(x)
+        gazette_gold(cur, gaz)
     for k, (ok, all_) in sorted(n.items()):
         print(f"{k:13} {ok}/{all_}")
     print(f"total {sum(v[0] for v in n.values())}/{sum(v[1] for v in n.values())}")
     for x in bad:
         print("MISS", x["src"], x["kind"], x["dst"], x["label"], "|", (x.get("note") or x.get("context") or "")[:120])
+
+
+GAZETTE_BAR = {"made_under": 0.95, "amends": 0.90, "rescinds": 0.90}   # precision on the gold set (gazette-links #81)
+
+
+def gazette_gold(cur, gold):
+    """The 60 hand-labelled gazette links, one sentence each (`near`, a piece of the mention's context): the link that
+    sentence makes to the gold target (or its `was`), as resolved. Precision per kind = right / all the links of that
+    kind made there, plus the gold links of that kind that are gone; a kind under GAZETTE_BAR prints "gazette below bar" (the Dagster op fails on it)."""
+    pred = {}                                                        # kind -> [right, made]
+    for x in gold:
+        was = x.get("was") or [None, None, None]
+        cur.execute("""SELECT l.kind, l.dst_doc, l.dst_label FROM links l JOIN mentions m ON m.id = l.mention_id
+                       WHERE l.src_doc = %s AND position(lower(%s) in lower(m.context)) > 0
+                         AND l.dst_doc = ANY(%s)""", (x["src"], x["near"], x["dst"] + [was[1]]))
+        rows = [r for r in cur.fetchall() if x["label"] is None or r[2] in (x["label"], was[2])]
+        right = (any(k == x["kind"] and d in x["dst"] and (x["label"] is None or l == x["label"]) for k, d, l in rows)
+                 and not any((k, d, l) == tuple(was) or (was[2] is None and (k, d) == tuple(was[:2])) for k, d, l in rows))
+        if x["kind"] == "none":
+            right = not rows
+        made = x["kind"] if right else (rows[0][0] if rows else "none")
+        t = pred.setdefault(made, [0, 0])
+        t[0] += right
+        t[1] += 1
+        if not rows and x["kind"] != "none":                         # the link is gone: a miss of its own kind too,
+            pred.setdefault(x["kind"], [0, 0])[1] += 1               # so a run that links nothing cannot pass
+        if not right:
+            print("GAZETTE MISS", x["src"], x["kind"], x["dst"], x["label"], "made", rows[:3], "|", x["near"][:80])
+    low = []
+    for k, (r, m) in sorted(pred.items()):
+        bar = GAZETTE_BAR.get(k)
+        print(f"gazette {k:11} precision {r}/{m}" + (f" (bar {bar:.0%})" if bar else ""))
+        if bar and r < bar * m:
+            low.append(k)
+    print("gazette below bar: " + ", ".join(low) if low else "gazette bar ok")
 
 
 # -- the worker loop ----------------------------------------------------------------------------------------------------

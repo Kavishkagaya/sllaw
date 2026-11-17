@@ -1,0 +1,37 @@
+{
+  "title": "Gazette links right",
+  "slug": "gazette-links",
+  "status": "agreed",
+  "branch": "main",
+  "issue": 81,
+  "neon_branch": null,
+  "goal": "A regulation's links say what it really does: which Act section it is made under, which earlier gazette it amends or rescinds, and never that it amends or repeals an Act. Today they are often wrong (by eye, 2026-11-17: made_under 4/7, amends 3/7, repeals 0/7, amends_act 0/5, rescinds 7/7; docs/LINKS.md). First of three: then the chat cites regulations (app), then coverage (user, 2026-11-17).",
+  "for_whom": "A Sri Lankan lawyer who will ask the chat which regulations are made under a section and whether one is still current; the chat (next brief) answers through these links.",
+  "done_check": [
+    {"id": "d1", "check": "After the relink and publish, kb.links has 0 links from a gazette to a law (a key that is not gazette:) whose kind is a change (amends, inserts, replaces, repeals, amends_act, repeals_act, rescinds); 14 on 2026-11-17. Each becomes made_under or cites."},
+    {"id": "d2", "check": "made_under only where the gazette uses the power ('by virtue of the powers vested in me by section N', 'Order/Regulations under section N', 'resolution under section N'); a section merely mentioned ('lands not alienated under section 22', 'penalties in terms of section 122(2)') is cites. The Act is the one the gazette names (Municipal Councils Ordinance (Chapter 252), not cap:576)."},
+    {"id": "d3", "check": "A gazette's amends and rescinds point at the instrument it amends or rescinds, not at the gazettes in its 'as amended by No. X, No. Y' chain (those are cites): gazette:2086/37 amends gazette:1989/61, not 2049/31."},
+    {"id": "d4", "check": "Gold set: 60 random gazette links labelled by hand from their text before the fix (about 25 made_under, 20 amends, 10 rescinds, 5 that should be no link or cites) added to etl/gold_links.json; the gold op checks them nightly. On it: made_under precision at least 95%, amends and rescinds at least 90%; the semantic validator re-reads the labels."},
+    {"id": "d5", "check": "Only gazettes are relinked (3,481) and a links-only publish (asks); no other source's links change, the law gold stays 210/210, test_v2 passes; no text rebuild, no embed."}
+  ],
+  "scenarios": [
+    {"id": "s1", "steps": "Open section 10 of the Customs (Amendment) Act, No. 2 of 2003, and Article 17 of the Constitution in the app's law viewer and read their history.", "expect": "No gazette listed as repealing or amending either."},
+    {"id": "s2", "steps": "List the links of gazette:1692/20 (a land notice that mentions section 22 of Act 39/1981) and gazette:2345/03 (an Imports and Exports Control order under section 20 of Act 1/1969).", "expect": "1692/20 cites s22, not made_under; 2345/03 is made_under s20 of act:1/1969."}
+  ],
+  "out_of_scope": [
+    "The chat citing regulations: brief 2 (app), after this one.",
+    "Coverage: law gazettes the description filter misses, the weekly gazette, the 124 gazette label errors in 58 documents: brief 3 (ETL).",
+    "Recall: a regulation's link that is not made at all; the bar is wrong links.",
+    "Modelling a gazette as changing an Act (none found in the corpus, 2026-11-17).",
+    "Re-embedding or rebuilding gazette text."
+  ],
+  "decisions": [
+    {"date": "2026-11-17", "note": "Order: gazette links first, then the app, then coverage; no 'regulations under this section' list in the viewer (user)."},
+    {"date": "2026-11-17", "note": "A gazette's link to a law is made_under or cites, never a change: checked first, 101 gazettes 'amend the Schedule' but all of an earlier Order, none of an Act (user, docs/LINKS.md)."},
+    {"date": "2026-11-17", "note": "Proof: 60-link gold set kept in the nightly gold op; bar made_under >= 95%, amends/rescinds >= 90% (user)."},
+    {"date": "2026-11-17", "note": "Cost: relink of 3,481 gazettes on ampere and a links-only publish (production write, asks); no money spent."},
+    {"date": "2026-11-17", "note": "d2's example is mis-stated (my misreading at scope): cap:576 is Municipal Councils, rightly the target of 'Municipal Councils Ordinance (Chapter 252)'; the wrong one is gazette:2013/29's 'Urban Councils Ordinance (Chapter 255)' -> cap:576, because the gazette misprints 'Municipal Councils Ordinance (Chapter 255)' four times and the per-document chapter map learns 255 from it. The check's intent (the target is the Act the gazette names) is unchanged; gold item 2013/29 tests the real case. Fix: the printed name beats the chapter number (gazettes only)."},
+    {"date": "2026-11-17", "note": "Method: post-filter on mentions() in etl/v2/gazette_links.py, gazettes only (as #80's cite_only), its file hash in their links fingerprint, so a rule change relinks gazettes only; gold is per sentence (`near`, a piece of the mention's context) on resolved links. One gold item dropped as ambiguous (gazette:2055/13 'will be replaced', amends or rescinds) and replaced by a fresh random draw (gazette:2354/17)."}
+  ],
+  "progress": [{"date": "2026-11-17", "note": "Scoped with the user; issue #81. Findings (link sample, no gazette amends an Act) in docs/LINKS.md."}]
+}

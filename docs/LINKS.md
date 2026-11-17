@@ -207,6 +207,27 @@ etl.test_mentions` (new), `python -m etl.test_refs` (unchanged, passes).
   chunks never read: 24 (8); 116 of 126 cited chunks were first seen in search results, so this is the agent citing
   snippets, not links. `links` called 7 times; #8 used a same-law link (act:43/2000 s18 <- s29, s30).
 
+**Gazette links are often wrong (2026-11-17, read by eye: 33 random links from `kb.links` with their context; no
+gold set yet).** kb holds from 3,481 gazettes: cites 21,450, made_under 6,486 (2,613 gazettes, 984 target sections),
+amends 821 (788 of amends+rescinds point at a gazette), rescinds 300, repeals 9, amends_act 5. Right by eye:
+**made_under 4/7** (any "under section N of the said Act" counts: "lands not alienated under section 22" in
+gazette:1692/20, "penalties in terms of Section 122(2)" in 2166/18; gazette:2013/29's "Urban Councils Ordinance (Chapter 255)"
+went to cap:576, Municipal Councils, the target of its "Municipal Councils Ordinance (Chapter 252)" a line before;
+corrected the same day, first written as the Municipal Councils span being wrong); **amends 3/7** (the "as amended by No. X, No. Y" chain is taken as the target instead
+of the instrument amended: 2086/37 -> 2049/31 where 1989/61 is amended; 2469/13, 2189/04, 2437/24); **rescinds 7/7**;
+**repeals 0/7** ("the Notification published under section 10 of Act 2/2003 is hereby repealed" -> repeals act:2/2003
+s10, gazette:1968/11, 1956/17, 1992/28; "constitution of the National associations of sports" -> constitution:17,
+2334/22); **amends_act 0/5** (regulations *issued under* an Act amended -> the Act: 2282/60 -> act:12/2017; "their
+constitution" -> constitution). The extractor's verb rules were written for Acts; the repeals/amends_act misses can put
+a gazette into a real section's history. Not checked: whether `as_of`/the viewer shows these 14 today.
+**Does a gazette ever amend an Act? (2026-11-17, regex over gazette link contexts in kb, ≤300 chars each.)** 101
+gazettes say "amend the Schedule ... Act": all amend the Schedule of an earlier *Order made under* the Act
+(degree-awarding institutes under act:7/2007, universities under act:16/1978 s21/s22); leaving out "Schedule to the
+Order/Regulations/Rules/Notification" leaves 1, the same pattern with OCR "Schedule Il". Duty changes reach an Act as
+"resolution under Section 10 of the Customs Ordinance" (gazette:2244/24): made_under. Decided (user): a gazette's link
+to a law is made_under or cites, never a change link. Not checked: gazette text with no link (contexts exist only
+around a mention).
+
 ## Measuring it next
 
 - About 100 new gold links for the new forms (anaphora, same-law, in-quote, defined names, Constitution

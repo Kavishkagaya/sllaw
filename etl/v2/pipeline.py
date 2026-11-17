@@ -4,7 +4,7 @@ queue (etl/v2/work.py) stays the source of truth, so an op can be retried, a run
 can add workers to a stage while it runs.
 
   listing (one op per spider, in parallel) -> fetch -> extract -> ocr -> build -> links -> resolve
-      -> link gold set (fails below 210/210) -> quality gate (fails on any error outside gazettes)
+      -> link gold set (fails below 210/210, or a gazette kind under its bar) -> quality gate (fails on any error outside gazettes)
       -> publish -> embed   (dry runs unless the run config says apply: publish fills the kb schema the app reads, embed the search index)
 
 Each stage op is `plan`, then N workers until the queue is empty (none when nothing is queued); it fails if more than
@@ -280,7 +280,7 @@ def changes(context: dg.OpExecutionContext):
 
 @dg.op
 def link_gold(context: dg.OpExecutionContext, got: dict):
-    """The 210 hand-labelled links: every one must be right."""
+    """The 210 hand-labelled law links: every one must be right; the 60 gazette links: precision per kind at the bar."""
     if got["state"] == got["gated"]:
         context.log.info("skipped: nothing changed since the gate last passed")
         return got
@@ -292,6 +292,11 @@ def link_gold(context: dg.OpExecutionContext, got: dict):
     if m[1] != m[2]:
         raise dg.Failure(f"link gold set {m[1]}/{m[2]}", metadata={"misses": "\n".join(l for l in out if l.startswith("MISS"))},
                          allow_retries=False)                 # bad data: a retry gives the same answer
+    gz = [l for l in out if l.startswith("gazette ")]
+    context.add_output_metadata({"gazette": "\n".join(gz)})
+    if any(l.startswith("gazette below bar") for l in gz) or not gz:
+        raise dg.Failure("gazette link gold below its bar", metadata={"misses": "\n".join(l for l in out if l.startswith("GAZETTE MISS"))},
+                         allow_retries=False)
     return got
 
 

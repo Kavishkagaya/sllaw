@@ -2128,5 +2128,615 @@
   ],
   "label": null,
   "stored_ok": true
+ },
+ {
+  "src": "gazette:2254/37",
+  "kind": "made_under",
+  "dst": [
+   "cap1956:188"
+  ],
+  "label": "18",
+  "near": "Order made under section 18 of the aforesaid Ordinance"
+ },
+ {
+  "src": "gazette:2437/32",
+  "kind": "made_under",
+  "dst": [
+   "law:25/1973"
+  ],
+  "label": "33",
+  "near": "power vested in me under Section 33 of the Sports Law"
+ },
+ {
+  "src": "gazette:2070/11",
+  "kind": "cites",
+  "dst": [
+   "cap1956:255"
+  ],
+  "label": "4",
+  "near": "Urban Council under section 4 of Urban Councils Ordinance",
+  "was": [
+   "made_under",
+   "cap1956:255",
+   "4"
+  ]
+ },
+ {
+  "src": "gazette:2463/04",
+  "kind": "made_under",
+  "dst": [
+   "cap1956:203"
+  ],
+  "label": "124",
+  "near": "under section 44, 123, 124, 125"
+ },
+ {
+  "src": "gazette:2396/49",
+  "kind": "made_under",
+  "dst": [
+   "cap1956:451"
+  ],
+  "label": "63",
+  "near": "vested in me by section 63 of the Forest Conservation Ordinance"
+ },
+ {
+  "src": "gazette:2126/20",
+  "kind": "made_under",
+  "dst": [
+   "cap1956:255"
+  ],
+  "label": "154",
+  "near": "conferred to me under Section 154 of Urban Councils Ordinance"
+ },
+ {
+  "src": "gazette:1717/09",
+  "kind": "made_under",
+  "dst": [
+   "act:43/1950"
+  ],
+  "label": "34",
+  "near": "made to me under section 34 of the Industrial Disputes Act"
+ },
+ {
+  "src": "gazette:1947/44",
+  "kind": "made_under",
+  "dst": [
+   "cap1956:420"
+  ],
+  "label": "4",
+  "near": "vested in me by Section 4 of the Registered Stock and Securities Ordinance"
+ },
+ {
+  "src": "gazette:2399/29",
+  "kind": "made_under",
+  "dst": [
+   "act:21/1998"
+  ],
+  "label": "14",
+  "near": "vested in me under Section 14 of the Registration of Title Act"
+ },
+ {
+  "src": "gazette:2152/43",
+  "kind": "made_under",
+  "dst": [
+   "act:15/1987"
+  ],
+  "label": "122",
+  "near": "vested in it under Section 122 read with Section 126"
+ },
+ {
+  "src": "gazette:2166/22",
+  "kind": "cites",
+  "dst": [
+   "act:15/1987"
+  ],
+  "label": "122",
+  "near": "Karaitivu Pradeshiya penalties. Sabha limits liable to the penalties in terms of Section 122(2)",
+  "was": [
+   "made_under",
+   "act:15/1987",
+   "122"
+  ]
+ },
+ {
+  "src": "gazette:2160/45",
+  "kind": "made_under",
+  "dst": [
+   "act:16/1978"
+  ],
+  "label": "27",
+  "near": "vested in me by Section 27(1) of the Universities Act"
+ },
+ {
+  "src": "gazette:2127/36",
+  "kind": "made_under",
+  "dst": [
+   "cap:362"
+  ],
+  "label": "2",
+  "near": "in terms of Section 2 of Pilgrimages Ordinance (Chapter 175)"
+ },
+ {
+  "src": "gazette:2013/29",
+  "kind": "made_under",
+  "dst": [
+   "cap1956:255"
+  ],
+  "label": "2",
+  "near": "under sections 2 and 5 of Urban Councils Ordinance (Chapter 255)",
+  "was": [
+   "made_under",
+   "cap:576",
+   "2"
+  ]
+ },
+ {
+  "src": "gazette:2356/39",
+  "kind": "made_under",
+  "dst": [
+   "act:9/2003"
+  ],
+  "label": "20",
+  "near": "vested in it by Section 20(5) of the consumer affairs authority act"
+ },
+ {
+  "src": "gazette:2238/45",
+  "kind": "made_under",
+  "dst": [
+   "act:1/1969"
+  ],
+  "label": "20",
+  "near": "vested in me by Section 20 read together with Sub-Section 4(1)"
+ },
+ {
+  "src": "gazette:2384/35",
+  "kind": "cites",
+  "dst": [
+   "cap:235"
+  ],
+  "label": "134",
+  "near": "in terms of Section 134 of the Customs Ordinance",
+  "was": [
+   "made_under",
+   "cap:235",
+   "134"
+  ]
+ },
+ {
+  "src": "gazette:1884/35",
+  "kind": "made_under",
+  "dst": [
+   "cap1956:269"
+  ],
+  "label": "21",
+  "near": "Section 6(2)(b) and Section 21(2)(b) of the Town and Country Planning"
+ },
+ {
+  "src": "gazette:2361/06",
+  "kind": "made_under",
+  "dst": [
+   "act:16/1978"
+  ],
+  "label": "27",
+  "near": "vested in me by Section 27(1) of the Universities act, No. 16 of 1978, 1, dr. Suren"
+ },
+ {
+  "src": "gazette:1846/13",
+  "kind": "made_under",
+  "dst": [
+   "act:15/1987"
+  ],
+  "label": "123",
+  "near": "approved by me in terms of Section 123(1)"
+ },
+ {
+  "src": "gazette:2166/21",
+  "kind": "cites",
+  "dst": [
+   "act:15/1987"
+  ],
+  "label": "122",
+  "near": "Addalaichenai Pradeshiya Penalties. Sabha limits liable to the penalties",
+  "was": [
+   "made_under",
+   "act:15/1987",
+   "122"
+  ]
+ },
+ {
+  "src": "gazette:2414/04",
+  "kind": "made_under",
+  "dst": [
+   "act:9/2003"
+  ],
+  "label": "20",
+  "near": "vested in it by Section 20 (5) of the Consumer affairs authority act"
+ },
+ {
+  "src": "gazette:1725/14",
+  "kind": "made_under",
+  "dst": [
+   "act:20/2009"
+  ],
+  "label": "10",
+  "near": "Exemption Order UNDER SECTION 10 OF THE SRI LANKA ELECTRICITY ACT"
+ },
+ {
+  "src": "gazette:2397/30",
+  "kind": "made_under",
+  "dst": [
+   "act:25/1991"
+  ],
+  "label": "71",
+  "near": "under section 71(1) read with section 22 (7)"
+ },
+ {
+  "src": "gazette:2363/87",
+  "kind": "cites",
+  "dst": [
+   "act:15/1987"
+  ],
+  "label": "122",
+  "near": "punishment mentioned under Section 122 of the Pradeshiya Sabha Act",
+  "was": [
+   "made_under",
+   "act:15/1987",
+   "122"
+  ]
+ },
+ {
+  "src": "gazette:2411/56",
+  "kind": "amends",
+  "dst": [
+   "gazette:2152/35"
+  ],
+  "label": null,
+  "near": "No. 2152/35 dated december 05, 2019 is hereby further amended"
+ },
+ {
+  "src": "gazette:2262/18",
+  "kind": "amends",
+  "dst": [
+   "gazette:2231/18"
+  ],
+  "label": null,
+  "near": "published in the Gazette extraordinary No. 2231/18 dated 11th june 2021"
+ },
+ {
+  "src": "gazette:2366/42",
+  "kind": "amends",
+  "dst": [
+   "gazette:1990/23"
+  ],
+  "label": null,
+  "near": "published in Gazette Extraordinary No. 1990/23 dated 27.10.2016"
+ },
+ {
+  "src": "gazette:2465/10",
+  "kind": "amends",
+  "dst": [
+   "gazette:2441/10"
+  ],
+  "label": null,
+  "near": "Gazette Extraordinary No. 2441/10 dated June 17, 2025, is hereby amended"
+ },
+ {
+  "src": "gazette:2114/27",
+  "kind": "amends",
+  "dst": [
+   "gazette:1864/44"
+  ],
+  "label": null,
+  "near": "Gazette Extraordinary No. 1864/44 of may 29, 2014 is hereby amended"
+ },
+ {
+  "src": "gazette:1937/03",
+  "kind": "cites",
+  "dst": [
+   "gazette:1901/03"
+  ],
+  "label": null,
+  "near": "the Gazette Notification No. 1901/ 3 dated 10th February 2015 shall be deemed",
+  "was": [
+   "amends",
+   "gazette:1901/03",
+   null
+  ]
+ },
+ {
+  "src": "gazette:2224/43",
+  "kind": "amends",
+  "dst": [
+   "gazette:2044/40"
+  ],
+  "label": null,
+  "near": "published in the amended Gazette Extraordinary No. 2044/40"
+ },
+ {
+  "src": "gazette:2277/55",
+  "kind": "cites",
+  "dst": [
+   "gazette:2123/35"
+  ],
+  "label": null,
+  "near": "Gazette Extraordinary No. 2123/35 of May 15, 2019 as amended may increase",
+  "was": [
+   "amends",
+   "gazette:2123/35",
+   null
+  ]
+ },
+ {
+  "src": "gazette:2028/45",
+  "kind": "made_under",
+  "dst": [
+   "constitution"
+  ],
+  "label": "43",
+  "near": "paragraph (1) of Article 43 of the Constitution",
+  "was": [
+   "amends",
+   "constitution",
+   "43"
+  ]
+ },
+ {
+  "src": "gazette:1925/68",
+  "kind": "amends",
+  "dst": [
+   "gazette:1922/25"
+  ],
+  "label": null,
+  "near": "Extraordinary Gazette Number 1922/25 dated 08.07.2015 are suspended"
+ },
+ {
+  "src": "gazette:2273/77",
+  "kind": "amends",
+  "dst": [
+   "gazette:2104/18"
+  ],
+  "label": null,
+  "near": "schedule iX of the Gazette Extraordinary No. 2104/18"
+ },
+ {
+  "src": "gazette:2469/13",
+  "kind": "cites",
+  "dst": [
+   "gazette:2416/51"
+  ],
+  "label": null,
+  "near": "Gazette Extraordinary No. 2416/51 dated December 28, 2024",
+  "was": [
+   "amends",
+   "gazette:2416/51",
+   null
+  ]
+ },
+ {
+  "src": "gazette:1999/24",
+  "kind": "amends",
+  "dst": [
+   "gazette:1947/48"
+  ],
+  "label": null,
+  "near": "amend the Gazette Extraordinary No. 1947/48"
+ },
+ {
+  "src": "gazette:2416/54",
+  "kind": "cites",
+  "dst": [
+   "gazette:2364/25"
+  ],
+  "label": null,
+  "near": "as amended by regulations published in Gazette Extraordinary , No. 2364/25",
+  "was": [
+   "amends",
+   "gazette:2364/25",
+   null
+  ]
+ },
+ {
+  "src": "gazette:1947/27",
+  "kind": "amends",
+  "dst": [
+   "gazette:1789/21"
+  ],
+  "label": null,
+  "near": "Schedule III of the Gazette Extraordinary No. 1789/21"
+ },
+ {
+  "src": "gazette:2240/21",
+  "kind": "amends",
+  "dst": [
+   "gazette:2152/32"
+  ],
+  "label": null,
+  "near": "Schedule III of the Extraordinary Gazette Notification No. 2152/32"
+ },
+ {
+  "src": "gazette:2354/17",
+  "kind": "amends",
+  "dst": [
+   "gazette:2343/03"
+  ],
+  "label": null,
+  "near": "published in Gazette Extraordinary No. 2343/03, of July 31, 2023"
+ },
+ {
+  "src": "gazette:2469/15",
+  "kind": "cites",
+  "dst": [
+   "gazette:2443/09"
+  ],
+  "label": null,
+  "near": "Gazette Extraordinary No. 2443/09 dated June 30, 2025 are hereby amended",
+  "was": [
+   "amends",
+   "gazette:2443/09",
+   null
+  ]
+ },
+ {
+  "src": "gazette:2086/19",
+  "kind": "cites",
+  "dst": [
+   "gazette:1891/09"
+  ],
+  "label": null,
+  "near": "as last amended by Gazette Extraordinary No. 1891/9",
+  "was": [
+   "amends",
+   "gazette:1891/09",
+   null
+  ]
+ },
+ {
+  "src": "gazette:2189/04",
+  "kind": "amends",
+  "dst": [
+   "gazette:2044/40"
+  ],
+  "label": null,
+  "near": "Special Import License Regulations, published in the Gazette Extraordinary No. 2044/40 dated November 09, 2017"
+ },
+ {
+  "src": "gazette:1945/17",
+  "kind": "rescinds",
+  "dst": [
+   "gazette:1901/19"
+  ],
+  "label": null,
+  "near": "Gazette Extraordinary No. 1901/19 of February 13, 2015 is hereby rescinded"
+ },
+ {
+  "src": "gazette:2363/22",
+  "kind": "rescinds",
+  "dst": [
+   "gazette:2295/08"
+  ],
+  "label": null,
+  "near": "Notification No. 2295/08 dated August 31, 2022 will be hereby rescinded"
+ },
+ {
+  "src": "gazette:2038/39",
+  "kind": "rescinds",
+  "dst": [
+   "gazette:2013/29"
+  ],
+  "label": null,
+  "near": "do by this order, rescind the orders published in the Extraordinary Gazette No. 2013/29"
+ },
+ {
+  "src": "gazette:2364/35",
+  "kind": "rescinds",
+  "dst": [
+   "gazette:2338/57"
+  ],
+  "label": null,
+  "near": "Gazette Extraordinary No. 2338/57 of June 30, 2023 is hereby rescinded"
+ },
+ {
+  "src": "gazette:2038/39",
+  "kind": "rescinds",
+  "dst": [
+   "gazette:2013/29"
+  ],
+  "label": null,
+  "near": "do by this order,rescind the orders published"
+ },
+ {
+  "src": "gazette:2100/03",
+  "kind": "rescinds",
+  "dst": [
+   "gazette:2097/03"
+  ],
+  "label": null,
+  "near": "Gazette Notification No. 2097/3 dated November 12, 2018 is hereby rescinded"
+ },
+ {
+  "src": "gazette:1924/09",
+  "kind": "rescinds",
+  "dst": [
+   "gazette:1919/33"
+  ],
+  "label": null,
+  "near": "Gazette Extraordinary No. 1919/33 of 16.06.2015 in respect of vegetable oils"
+ },
+ {
+  "src": "gazette:1987/19",
+  "kind": "rescinds",
+  "dst": [
+   "gazette:1818/37"
+  ],
+  "label": null,
+  "near": "Gazette No. 1818/37 of July 12, 2013 shall be rescinded"
+ },
+ {
+  "src": "gazette:2091/76",
+  "kind": "rescinds",
+  "dst": [
+   "gazette:1990/48"
+  ],
+  "label": null,
+  "near": "revoke the orders made by the Extraordinary Gazette No. 1990/48"
+ },
+ {
+  "src": "gazette:1846/09",
+  "kind": "rescinds",
+  "dst": [
+   "gazette:1821/03"
+  ],
+  "label": null,
+  "near": "Excise Notification No. 958 published in the Gazette Extraordinary No. 1821/3"
+ },
+ {
+  "src": "gazette:1818/04",
+  "kind": "cites",
+  "dst": [
+   "act:13/1982"
+  ],
+  "label": null,
+  "near": "No. 56 of 1979, No. 13 of 1982, No. 84 of 1988"
+ },
+ {
+  "src": "gazette:2166/19",
+  "kind": "cites",
+  "dst": [
+   "act:15/1987"
+  ],
+  "label": "3",
+  "near": "as per the section 3 of the Pradeshiya Sabha Act"
+ },
+ {
+  "src": "gazette:2319/26",
+  "kind": "cites",
+  "dst": [
+   "cap:553"
+  ],
+  "label": null,
+  "near": "under the Quarantine and Prevention of Diseases Ordinance and the regulations made under it"
+ },
+ {
+  "src": "gazette:2213/49",
+  "kind": "cites",
+  "dst": [
+   "act:37/1968"
+  ],
+  "label": null,
+  "near": "Industrial Disputes (Special Provisions) Act, No. 37 of 1968 dated 13.03.2020"
+ },
+ {
+  "src": "gazette:2220/42",
+  "kind": "none",
+  "dst": [
+   "cap1956:92"
+  ],
+  "label": null,
+  "near": "Musical instruments or parts or accessories thereof (Chapter 92)",
+  "was": [
+   "cites",
+   "cap1956:92",
+   null
+  ]
  }
 ]
