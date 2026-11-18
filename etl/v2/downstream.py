@@ -14,6 +14,8 @@ otherwise, because they change what the app sees (kb.*, the search index).
 """
 import hashlib, json, os
 
+import psycopg2
+
 from psycopg2.extras import execute_values
 
 from etl.v2 import build as B
@@ -123,7 +125,13 @@ def publish(state, apply=False):
         if mark(c, "gated") != _hash(now):   # only a state the quality gate passed reaches the app
             raise SystemExit("publish refused: the quality gate has not passed this state (etl.v2.run checked)")
     state.commit()
-    out["mb_before_cleanup"], out["mb_after_cleanup"] = cleanup(state)
+    # its own connection: run.py holds `state` in `with db()`, which in psycopg2 2.9+ is a transaction even with
+    # autocommit, and VACUUM refuses to run inside one (run f0fdfce4, 2026-11-18)
+    vac = psycopg2.connect(os.environ["V2_DATABASE_URL"])
+    try:
+        out["mb_before_cleanup"], out["mb_after_cleanup"] = cleanup(vac)
+    finally:
+        vac.close()
     with state.cursor() as c:
         c.execute(KB_SCHEMA)
         c.execute("CREATE TEMP TABLE pub (key TEXT PRIMARY KEY, fingerprint TEXT NOT NULL) ON COMMIT DROP")
@@ -181,13 +189,10 @@ def cleanup(state):
                      WHERE schemaname IN ('public', 'kb') ORDER BY pg_total_relation_size(relid)""")
         tables = [r[0] for r in c.fetchall()]
     state.commit()
-    state.autocommit = True   # VACUUM cannot run inside a transaction
-    try:
-        with state.cursor() as c:
-            for t in tables:
-                c.execute(f"VACUUM FULL {t}")
-    finally:
-        state.autocommit = False
+    state.autocommit = True   # VACUUM cannot run inside a transaction (so never on a connection held in `with`)
+    with state.cursor() as c:
+        for t in tables:
+            c.execute(f"VACUUM FULL {t}")
     return before, db_mb(state)
 
 

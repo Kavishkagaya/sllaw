@@ -403,7 +403,7 @@ class _Conn:
 
 
 _c = _Conn()
-assert _D.cleanup(_c) == (500, 500) and not _c.autocommit
+assert _D.cleanup(_c) == (500, 500)   # publish hands it a fresh connection, never its `with db()` one (f0fdfce4)
 _vac = [(q, a) for q, a in _c.sql if q.startswith("VACUUM")]
 assert _vac == [("VACUUM FULL public.marks", True), ("VACUUM FULL kb.chunks", True)], _vac
 assert "TABLE IF NOT EXISTS kb.mentions" not in _D.KB_SCHEMA
