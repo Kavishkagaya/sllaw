@@ -6,7 +6,9 @@ otherwise, because they change what the app sees (kb.*, the search index).
             documents in one transaction run inside Postgres, so nothing leaves the database and the app sees a
             whole release or none of it. The app reads only `kb` (decision 2026-11-08: no separate app copy of the
             corpus; the pipeline's own tables change during a run, kb only after the quality gate). No chunk text
-            in the database: kb.docs.parts names the R2 text parts (decision 2026-11-07).
+            in the database: kb.docs.parts names the R2 text parts (decision 2026-11-07). Before it writes, cleanup
+            (VACUUM FULL on public and kb) gives back the space old row versions hold, or Neon Free's 1 GB fills
+            (2026-11-18, #84).
   embed     per chunk: same id and text hash in the index -> nothing; else embed (bge-m3). Ids gone -> deleted.
             Reads kb (what the app sees). Target: the live Zilliz collection `chunks` (Int64 id = vid(uuid), see below).
 """
@@ -38,21 +40,14 @@ CREATE INDEX IF NOT EXISTS kb_links_src_idx ON kb.links (src_doc);
 CREATE INDEX IF NOT EXISTS kb_links_src_chunk_idx ON kb.links (src_chunk);
 CREATE INDEX IF NOT EXISTS kb_links_dst_idx ON kb.links (dst_doc, dst_label);
 CREATE INDEX IF NOT EXISTS kb_links_dst_chunk_idx ON kb.links (dst_chunk);
--- docs/LINKS.md (2026-11-09): kb.links holds resolved links only (one source, one destination); the citation each
--- comes from is in kb.mentions (every citation as read, resolved or not, with why not)
+-- docs/LINKS.md (2026-11-09): kb.links holds resolved links only (one source, one destination); every citation as
+-- read, resolved or not, stays in the pipeline's own `mentions` (kb.mentions had no reader and was dropped, 2026-11-18)
 ALTER TABLE kb.links ADD COLUMN IF NOT EXISTS mention_id BIGINT, ADD COLUMN IF NOT EXISTS relation TEXT,
     ADD COLUMN IF NOT EXISTS scope TEXT, ADD COLUMN IF NOT EXISTS law_form TEXT, ADD COLUMN IF NOT EXISTS confidence TEXT,
     ADD COLUMN IF NOT EXISTS in_quote BOOLEAN, ADD COLUMN IF NOT EXISTS span TEXT, ADD COLUMN IF NOT EXISTS span_start INT,
     ADD COLUMN IF NOT EXISTS span_end INT, ADD COLUMN IF NOT EXISTS sub TEXT, ADD COLUMN IF NOT EXISTS dst_type TEXT,
     ADD COLUMN IF NOT EXISTS part TEXT, ADD COLUMN IF NOT EXISTS via_alias BOOLEAN;
 CREATE INDEX IF NOT EXISTS kb_links_mention_idx ON kb.links (mention_id);
-CREATE TABLE IF NOT EXISTS kb.mentions (id BIGINT PRIMARY KEY, src_doc TEXT NOT NULL REFERENCES kb.docs(key) ON DELETE CASCADE,
-    src_chunk BIGINT, kind TEXT NOT NULL, relation TEXT, scope TEXT, law_form TEXT, law_text TEXT, dst_type TEXT,
-    dst_doc TEXT, dst_name TEXT, unit TEXT, labels TEXT[], sub TEXT, in_quote BOOLEAN, confidence TEXT, via TEXT,
-    span TEXT, span_start INT, span_end INT, status TEXT, unresolved TEXT[], date DATE, context TEXT, ops JSONB);
-CREATE INDEX IF NOT EXISTS kb_mentions_src_idx ON kb.mentions (src_doc);
-CREATE INDEX IF NOT EXISTS kb_mentions_src_chunk_idx ON kb.mentions (src_chunk);
-CREATE INDEX IF NOT EXISTS kb_mentions_dst_idx ON kb.mentions (dst_doc);
 """
 
 
@@ -127,6 +122,9 @@ def publish(state, apply=False):
     with state.cursor() as c:
         if mark(c, "gated") != _hash(now):   # only a state the quality gate passed reaches the app
             raise SystemExit("publish refused: the quality gate has not passed this state (etl.v2.run checked)")
+    state.commit()
+    out["mb_before_cleanup"], out["mb_after_cleanup"] = cleanup(state)
+    with state.cursor() as c:
         c.execute(KB_SCHEMA)
         c.execute("CREATE TEMP TABLE pub (key TEXT PRIMARY KEY, fingerprint TEXT NOT NULL) ON COMMIT DROP")
         execute_values(c, "INSERT INTO pub VALUES %s", [(k, now[k]) for k in changed], page_size=5000)
@@ -141,13 +139,6 @@ def publish(state, apply=False):
         c.execute(f"""INSERT INTO kb.chunks (id, uuid, doc_key, address, seq, label, kind, path, part, text_hash)
                       SELECT {vid_sql("c.id")}, c.id, c.doc_key, c.address, c.seq, c.label, c.kind, c.crumb, c.part, c.text_hash
                       FROM chunks c JOIN pub ON pub.key = c.doc_key""")
-        c.execute(f"""INSERT INTO kb.mentions (id, src_doc, src_chunk, kind, relation, scope, law_form, law_text, dst_type,
-                                             dst_doc, dst_name, unit, labels, sub, in_quote, confidence, via, span,
-                                             span_start, span_end, status, unresolved, date, context, ops)
-                      SELECT m.id, m.src_doc, {vid_sql("m.src_chunk")}, m.kind, m.relation, m.scope, m.law_form, m.law_text,
-                             m.dst_type, m.dst_doc, m.dst_name, m.unit, m.labels, m.sub, m.in_quote, m.confidence, m.via,
-                             m.span, m.start_at, m.end_at, m.status, m.unresolved, k.commenced, m.context, m.ops
-                      FROM mentions m JOIN pub ON pub.key = m.src_doc JOIN kb.docs k ON k.key = m.src_doc""")
         c.execute(f"""INSERT INTO kb.links (src_doc, src_chunk, kind, dst_doc, dst_label, dst_chunk, status, date, context, detail,
                                           mention_id, relation, scope, law_form, confidence, in_quote, span, span_start,
                                           span_end, sub, dst_type, part, via_alias)
@@ -167,7 +158,37 @@ def publish(state, apply=False):
                      ON CONFLICT (key) DO UPDATE SET fingerprint = EXCLUDED.fingerprint, at = NOW()""")
         c.execute("DELETE FROM published WHERE key = ANY(%s)", (gone,))
     state.commit()   # the app sees the whole release at once, or nothing of it
+    out["mb_after_publish"] = db_mb(state)
     return out
+
+
+def db_mb(state):
+    with state.cursor() as c:
+        c.execute("SELECT pg_database_size(current_database()) / 1048576")
+        mb = c.fetchone()[0]
+    state.commit()
+    return mb
+
+
+def cleanup(state):
+    """VACUUM FULL every table in public and kb -> (MB before, MB after). An UPDATE or DELETE leaves the old row's
+    space in the file, so a relink or republish grows the files until they are rewritten; Neon Free counts that
+    space against its 1 GB (2026-11-18: 843 -> 532 MB by hand). Smallest table first, so the space each gives back
+    is free for the larger copies; a table is locked while it is rewritten (seconds each)."""
+    before = db_mb(state)
+    with state.cursor() as c:
+        c.execute("""SELECT format('%I.%I', schemaname, relname) FROM pg_stat_user_tables
+                     WHERE schemaname IN ('public', 'kb') ORDER BY pg_total_relation_size(relid)""")
+        tables = [r[0] for r in c.fetchall()]
+    state.commit()
+    state.autocommit = True   # VACUUM cannot run inside a transaction
+    try:
+        with state.cursor() as c:
+            for t in tables:
+                c.execute(f"VACUUM FULL {t}")
+    finally:
+        state.autocommit = False
+    return before, db_mb(state)
 
 
 # -- embed --------------------------------------------------------------------------------------------------------------

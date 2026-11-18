@@ -31,7 +31,7 @@ usage: imported by ai, search, extract, services (it imports nothing of ours)
 office: imported by db, ai, services, api, apps/web (pure: the case office's schema and operations; imports nothing of ours)
 ```
 
-- **`db`**: the app's own database (`DATABASE_URL`: database `app` in Neon sllaw-app, beside the corpus in `neondb`):
+- **`db`**: the app's own database (`DATABASE_URL`: database `app` in Neon sllaw-app; the retired v1 corpus `neondb` beside it was dropped 2026-11-18):
   drizzle schema, client, and every query on it. Nothing else.
   Migrations: `pnpm --filter @sllaw/db generate` / `migrate`.
 - **`etl_db`**: the corpus: schema `kb` in the ETL's state database (`ETL_DATABASE_URL`, Neon sllaw-etl): schema,

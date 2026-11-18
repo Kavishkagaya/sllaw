@@ -1,0 +1,41 @@
+{
+  "title": "Publish straight into the app's database",
+  "slug": "kb-in-app-db",
+  "status": "dropped",
+  "branch": "main",
+  "issue": null,
+  "neon_branch": null,
+  "goal": "Remove the duplicate: publish builds from the pipeline's base tables and goes directly to the app's database, so sllaw-etl stops holding a second copy of the corpus (it hit Neon Free's 1 GB limit 2026-11-18; the full republish after cf8ebae failed with DiskFull) (user).",
+  "for_whom": "The nightly pipeline (it must publish again) and the lawyers using the app (the corpus they search must stay whole and current).",
+  "done_check": [
+    {"id": "d1", "check": "publish --apply writes kb.docs, kb.chunks and kb.links into schema kb of the database `app` in Neon sllaw-app, built from sllaw-etl's base tables (docs, chunks, mentions, links, same_as); the pipeline's role there can write only schema kb; the app reads kb read-only."},
+    {"id": "d2", "check": "kb.mentions is not published (nothing in the app reads it); why a citation did not resolve stays in sllaw-etl's mentions table."},
+    {"id": "d3", "check": "Before writing, publish measures the app database's size plus the release it is about to write; if that would pass 900 MB it stops with a message naming both numbers and writes nothing (the chats live in that database)."},
+    {"id": "d4", "check": "The pending full republish (12,275 documents) lands in one transaction: row counts in the app's kb equal what the base tables yield (docs 12,275; chunks and links counted the same way), and the app sees the old release until commit."},
+    {"id": "d5", "check": "embed reads kb from the app's database; chunks whose id and text hash are unchanged are not re-embedded (count of re-embedded chunks reported)."},
+    {"id": "d6", "check": "The app (local and Vercel production) reads kb from its own database; a law page, a gazette and a judgment the app already shows return the same sections and links via the query the app's view runs; /coverage counts match kb."},
+    {"id": "d7", "check": "sllaw-etl's schema kb is dropped and its bloated work tables compacted (VACUUM FULL); its size is reported before and after (978 MB now, target under 550 MB)."},
+    {"id": "d8", "check": "The nightly Dagster run on ampere passes end to end (publish and embed green)."}
+  ],
+  "scenarios": [
+    {"id": "s1", "steps": "After the move, run the app view's query for an amended section of an Act (e.g. one the citation chips open) against the app's kb.", "expect": "Same text parts and the same amending links as the release before the move."},
+    {"id": "s2", "steps": "Run publish in memory/test with a size limit set below what the release needs.", "expect": "It stops before writing, with both sizes in the message; the app's kb is unchanged."},
+    {"id": "s3", "steps": "Nightly run after a builder change that re-fingerprints every document.", "expect": "Full republish fits (about 20 MB app data + 2 x ~300 MB at the peak, ~620 MB, under 900 MB) and commits in one go."}
+  ],
+  "out_of_scope": [
+    "Publishing in batches (the release stays one transaction).",
+    "Moving any Neon project to a paid plan.",
+    "Changing the build fingerprint so a builder edit stops rebuilding every document.",
+    "App features or UI; the app changes only where it connects to read kb.",
+    "kb.mentions in the app."
+  ],
+  "decisions": [
+    {"date": "2026-11-18", "note": "Reverses 2026-11-08 'no separate app copy': kb lives in the app's database, sllaw-etl keeps only the pipeline's tables (user)."},
+    {"date": "2026-11-18", "note": "The app maps only kb.docs, kb.chunks, kb.links; kb.mentions (135 MB) has no reader, so it is not published."},
+    {"date": "2026-11-18", "note": "kb.links keeps its context snippet (39 MB): with kb.mentions gone it is the only copy the app can read."},
+    {"date": "2026-11-18", "note": "Rows now leave sllaw-etl (Neon egress): a full republish sends ~300 MB of the 5 GB monthly Free egress; nightly publishes send only changed documents."},
+    {"date": "2026-11-18", "note": "Done by hand at the user's word before the build: sllaw-app's `neondb` (v1 corpus, 238 MB, read by nothing) and sllaw-etl's kb.mentions dropped; sllaw-app now holds `app` 10 MB, sllaw-etl 843 MB. publish still recreates kb.mentions until d2."},
+    {"date": "2026-11-18", "note": "Recommended options taken after the user skipped the question round and said continue; the user corrects them at sign-off."}
+  ],
+  "progress": [{"date": "2026-11-18", "note": "Dropped by the user before sign-off ('no moving'); the waste in sllaw-etl is audited instead."}]
+}

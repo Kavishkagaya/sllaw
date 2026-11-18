@@ -150,7 +150,8 @@ own table (editions and old laws that are the same law); it is not a mention.
 
 ## In `kb` (what the app reads)
 
-`kb.mentions` and `kb.links` are copies of the two tables. `kb.links` keeps today's columns (`kind` computed as
+`kb.links` is a copy of `links` joined with its mention (`kb.mentions`, a copy of `mentions`, was dropped
+2026-11-18: nothing in the app read it, #84; the ideas below that read it would read the pipeline's `mentions`). `kb.links` keeps today's columns (`kind` computed as
 today: relation, plus `_act` for `whole_law`; `status`, `date`, `context` from the mention), so the app keeps working
 unchanged; new columns are added beside them. The app can then underline a mention's span, show "amended by …
 (low confidence)", list a law's "(not in the library)" citations from `kb.mentions`, and keep same-law references

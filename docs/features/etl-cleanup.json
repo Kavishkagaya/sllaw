@@ -1,0 +1,30 @@
+{
+  "title": "Cleanup step before publish",
+  "slug": "etl-cleanup",
+  "status": "agreed",
+  "branch": "main",
+  "issue": 84,
+  "neon_branch": null,
+  "goal": "Add a cleanup phase to the pipeline that does what the hand-run VACUUM FULL did (843 -> 532 MB, 2026-11-18), so relinks and republishes stop filling sllaw-etl's 1 GB; and stop publishing kb.mentions, which nothing reads (user).",
+  "for_whom": "The nightly pipeline on ampere, which must keep fitting in Neon Free's 1 GB without hand cleanups.",
+  "done_check": [
+    {"id": "d1", "check": "A cleanup step runs in the pipeline right before publish writes (only when publish has documents to write): VACUUM FULL on the tables of schemas public and kb, and the run's log shows the database size before and after."},
+    {"id": "d2", "check": "publish no longer creates or fills kb.mentions; the dropped table stays gone after a publish."},
+    {"id": "d3", "check": "The pending full republish (12,275 documents) passes in a Dagster run on ampere, publish and embed green, with the size after cleanup and after publish recorded under 1 GB."}
+  ],
+  "scenarios": [
+    {"id": "s1", "steps": "Run the Dagster job on ampere with the 12,275 documents waiting to publish.", "expect": "cleanup, publish and embed green; the logged sizes show cleanup gave space back before publish wrote; kb.mentions absent."},
+    {"id": "s2", "steps": "A run with nothing to publish.", "expect": "cleanup is skipped (no rewrite of unchanged tables)."}
+  ],
+  "out_of_scope": [
+    "Removing the kb copy (the app keeps reading kb).",
+    "Moving kb to the app's database (dropped brief kb-in-app-db).",
+    "A paid Neon plan.",
+    "Changing the build fingerprint."
+  ],
+  "decisions": [
+    {"date": "2026-11-18", "note": "Cleanup goes before publish, not after: it gives back both last publish's kb leftovers and this run's relink bloat in public, so publish has room for its copy."},
+    {"date": "2026-11-18", "note": "VACUUM FULL locks a table while it is rewritten; by hand each table took seconds, at 02:00 Colombo, so the app's kb reads wait at most that long."}
+  ],
+  "progress": [{"date": "2026-11-18", "note": "Scoped with the user; issue #84."}, {"date": "2026-11-18", "note": "d1, d2 built: downstream.cleanup() (VACUUM FULL public+kb, smallest first, autocommit) runs in publish --apply after the gate check, before the write; sizes in publish's output (mb_before_cleanup, mb_after_cleanup, mb_after_publish); kb.mentions no longer created or filled. test_v2 'ok cleanup' (fake connection: VACUUMs out of a transaction, autocommit restored). Next: copy downstream.py to ampere, Dagster run (d3, s1)."}]
+}

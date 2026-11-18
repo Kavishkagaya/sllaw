@@ -462,6 +462,14 @@ unchanged. All 7,336 documents built in memory in 276 s (16 workers), 0 failed, 
   chunks = 78,825 of 40+ chars (all in Zilliz, 0 missing, 0 extra) + 2,320 shorter, which embed skips (`E.MIN`).
 - **Decided 2026-11-07 (user): every chunk is embedded again** (bge-m3, `EMBED_LOCAL=1` on a GPU host), no copy by
   hash. bge-m3 (4.3 GB) and `gpu_venv` are on ampere; ada has neither (2026-11-08).
+- **Cleanup before publish, kb.mentions dropped (2026-11-18, #84).** The nightly run failed at publish with
+  `DiskFull` (Neon Free, 1 GB per project): cf8ebae edited `build.py`, so all 12,275 docs re-fingerprinted, and a
+  full republish needs kb twice inside one transaction. The db was 978 MB: ~420 MB rows, ~230 MB indexes, ~250 MB
+  empty space (an UPDATE or DELETE leaves the old row's space in the file; public.mentions 229 MB file, 102 MB rows).
+  By hand: kb.mentions dropped (135 MB, no reader in the app), then VACUUM FULL: 532 MB. Now `publish --apply`
+  runs `cleanup()` (VACUUM FULL on every public and kb table, smallest first) after the gate check and before it
+  writes, and logs `mb_before_cleanup`, `mb_after_cleanup`, `mb_after_publish`. Not done: removing the kb copy
+  (~300 MB of the rows are kb repeating public); moving kb to sllaw-app was scoped and dropped (user).
 
 ## Fix loop (2026-11-07, gate runs 19-26), each change kept only when the gate showed no law error
 - **Gazettes, text layer (stage 3, `blocks.gazette_lines`):** lines rebuilt from docling's line cells (a line start

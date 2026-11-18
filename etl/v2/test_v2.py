@@ -380,3 +380,31 @@ from etl.v2.build import doc_year   # the year filter's year: a gazette's from i
 assert doc_year("act:9/2023") == 2023 and doc_year("gazette:2345/03", {"certified": "2023-08-14"}) == 2023
 assert doc_year("gazette:2345/03") is None and doc_year("cap:107", {"certified": "1980-01-01"}) is None
 print("ok doc year")
+
+from etl.v2 import downstream as _D   # publish: cleanup first, out of a transaction; kb.mentions no more (#84)
+
+
+class _Conn:
+    def __init__(self):
+        self.sql, self.autocommit = [], False
+
+    def cursor(self):
+        conn = self
+
+        class C:
+            def __enter__(self): return self
+            def __exit__(self, *a): return False
+            def execute(self, q, args=None): conn.sql.append((q, conn.autocommit))
+            def fetchone(self): return (500,)
+            def fetchall(self): return [("public.marks",), ("kb.chunks",)]
+        return C()
+
+    def commit(self): pass
+
+
+_c = _Conn()
+assert _D.cleanup(_c) == (500, 500) and not _c.autocommit
+_vac = [(q, a) for q, a in _c.sql if q.startswith("VACUUM")]
+assert _vac == [("VACUUM FULL public.marks", True), ("VACUUM FULL kb.chunks", True)], _vac
+assert "TABLE IF NOT EXISTS kb.mentions" not in _D.KB_SCHEMA
+print("ok cleanup")
