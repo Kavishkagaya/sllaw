@@ -386,7 +386,7 @@ from etl.v2 import downstream as _D   # publish: cleanup first, out of a transac
 
 class _Conn:
     def __init__(self):
-        self.sql, self.autocommit = [], False
+        self.sql, self.autocommit, self.args = [], False, []
 
     def cursor(self):
         conn = self
@@ -394,7 +394,7 @@ class _Conn:
         class C:
             def __enter__(self): return self
             def __exit__(self, *a): return False
-            def execute(self, q, args=None): conn.sql.append((q, conn.autocommit))
+            def execute(self, q, args=None): conn.sql.append((q, conn.autocommit)); conn.args.append(args)
             def fetchone(self): return (500,)
             def fetchall(self): return [("public.marks",), ("kb.chunks",)]
         return C()
@@ -406,6 +406,8 @@ _c = _Conn()
 assert _D.cleanup(_c) == (500, 500)   # publish hands it a fresh connection, never its `with db()` one (f0fdfce4)
 _vac = [(q, a) for q, a in _c.sql if q.startswith("VACUUM")]
 assert _vac == [("VACUUM FULL public.marks", True), ("VACUUM FULL kb.chunks", True)], _vac
+assert (["public", "kb"],) in _c.args                                # every schema by default
+_c = _Conn(); _D.cleanup(_c, ("kb",)); assert (["kb"],) in _c.args   # after publish: kb only (#85 d8)
 assert "TABLE IF NOT EXISTS kb.mentions" not in _D.KB_SCHEMA
 print("ok cleanup")
 

@@ -180,6 +180,13 @@ def publish(state, apply=False):
         c.execute("DELETE FROM published WHERE key = ANY(%s)", (gone,))
     state.commit()   # the app sees the whole release at once, or nothing of it
     out["mb_after_publish"] = db_mb(state)
+    # and again for kb, now that the release is in: the deleted rows of every republished document are still in
+    # its files (a full republish left 205 MB of them until the next publish, run cebb22bc, #85)
+    vac = psycopg2.connect(os.environ["V2_DATABASE_URL"])
+    try:
+        out["mb_after_kb_cleanup"] = cleanup(vac, ("kb",))[1]
+    finally:
+        vac.close()
     return out
 
 
@@ -191,15 +198,15 @@ def db_mb(state):
     return mb
 
 
-def cleanup(state):
-    """VACUUM FULL every table in public and kb -> (MB before, MB after). An UPDATE or DELETE leaves the old row's
+def cleanup(state, schemas=("public", "kb")):
+    """VACUUM FULL every table in `schemas` -> (MB before, MB after). An UPDATE or DELETE leaves the old row's
     space in the file, so a relink or republish grows the files until they are rewritten; Neon Free counts that
     space against its 1 GB (2026-11-18: 843 -> 532 MB by hand). Smallest table first, so the space each gives back
     is free for the larger copies; a table is locked while it is rewritten (seconds each)."""
     before = db_mb(state)
     with state.cursor() as c:
         c.execute("""SELECT format('%I.%I', schemaname, relname) FROM pg_stat_user_tables
-                     WHERE schemaname IN ('public', 'kb') ORDER BY pg_total_relation_size(relid)""")
+                     WHERE schemaname = ANY(%s) ORDER BY pg_total_relation_size(relid)""", (list(schemas),))
         tables = [r[0] for r in c.fetchall()]
     state.commit()
     state.autocommit = True   # VACUUM cannot run inside a transaction (so never on a connection held in `with`)
