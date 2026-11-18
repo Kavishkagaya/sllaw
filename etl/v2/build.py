@@ -103,7 +103,10 @@ def store(db, key, title, sha, prof, tree, ch, issues, fp, meta=None):
                        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,NOW())
                        ON CONFLICT (key) DO UPDATE SET kind = EXCLUDED.kind, title = EXCLUDED.title, year = EXCLUDED.year,
                          sha256 = EXCLUDED.sha256, tree_key = EXCLUDED.tree_key, parts = EXCLUDED.parts,
-                         fingerprint = EXCLUDED.fingerprint, meta = EXCLUDED.meta, built_at = NOW()""",
+                         fingerprint = EXCLUDED.fingerprint, meta = EXCLUDED.meta, built_at = NOW()
+                       WHERE (docs.kind, docs.title, docs.year, docs.sha256, docs.tree_key, docs.parts, docs.meta)
+                             IS DISTINCT FROM (EXCLUDED.kind, EXCLUDED.title, EXCLUDED.year, EXCLUDED.sha256,
+                                               EXCLUDED.tree_key, EXCLUDED.parts, EXCLUDED.meta)""",
                     (key, prof["kind"], title, year, sha, tree_key, part_keys, fp, json.dumps(meta or {})))   # long_title, certified, commenced, commencement
         ids = [c["id"] for c in ch]
         cur.execute("DELETE FROM chunks WHERE doc_key = %s AND NOT (id::text = ANY(%s))", (key, ids))
@@ -111,7 +114,10 @@ def store(db, key, title, sha, prof, tree, ch, issues, fp, meta=None):
         execute_values(cur, """INSERT INTO chunks (id, doc_key, address, seq, label, kind, crumb, part, text_hash) VALUES %s
                                ON CONFLICT (id) DO UPDATE SET seq = EXCLUDED.seq, label = EXCLUDED.label,
                                  kind = EXCLUDED.kind, crumb = EXCLUDED.crumb, part = EXCLUDED.part,
-                                 text_hash = EXCLUDED.text_hash""",
+                                 text_hash = EXCLUDED.text_hash
+                               WHERE (chunks.seq, chunks.label, chunks.kind, chunks.crumb, chunks.part, chunks.text_hash)
+                                     IS DISTINCT FROM (EXCLUDED.seq, EXCLUDED.label, EXCLUDED.kind, EXCLUDED.crumb,
+                                                       EXCLUDED.part, EXCLUDED.text_hash)""",
                        [(c["id"], key, c["address"], i, c["label"], c["kind"], c["crumb"], part_of[c["id"]], c["text_hash"])
                         for i, c in enumerate(ch)], page_size=1000)
         cur.execute("DELETE FROM issues WHERE key = %s AND stage = 'build'", (key,))

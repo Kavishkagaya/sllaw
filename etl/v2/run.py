@@ -344,13 +344,26 @@ def do_links(c, key, fp=None):
                          r["start"], r["end"], (r["span"] or "")[:300], r["relation"], r["scope"], r["law_form"],
                          (r["law_text"] or "")[:200] or None, r["dst_type"], r["unit"], labs, r["sub"], r["in_quote"],
                          r["confidence"], r["via"], Json(r["ops"]) if r["ops"] else None, rv))
-        cur.execute("DELETE FROM mentions WHERE src_doc = %s", (key,))
+        # into a temp table first: if the document's citations come out identical, its rows stay as they are (a
+        # rewrite left the old copies in the file, and new ids moved every link; #85). Compared inside the database.
+        cur.execute(f"DROP TABLE IF EXISTS _m; CREATE TEMP TABLE _m AS SELECT {MENTION_COLS}, refs_version FROM mentions WITH NO DATA")
         if rows:
-            execute_values(cur, """INSERT INTO mentions (src_doc, src_chunk, kind, dst_doc, dst_name, dst_label, context, detail,
-                                   start_at, end_at, span, relation, scope, law_form, law_text, dst_type, unit, labels, sub,
-                                   in_quote, confidence, via, ops, refs_version) VALUES %s""", rows, page_size=1000)
+            execute_values(cur, f"INSERT INTO _m ({MENTION_COLS}, refs_version) VALUES %s", rows, page_size=1000)
+        cur.execute(f"""SELECT EXISTS (SELECT {MENTION_COLS} FROM mentions WHERE src_doc = %s EXCEPT ALL SELECT {MENTION_COLS} FROM _m)
+                           OR EXISTS (SELECT {MENTION_COLS} FROM _m EXCEPT ALL SELECT {MENTION_COLS} FROM mentions WHERE src_doc = %s)""",
+                    (key, key))
+        changed = cur.fetchone()[0]
+        if changed:
+            cur.execute("DELETE FROM mentions WHERE src_doc = %s", (key,))
+            cur.execute(f"INSERT INTO mentions ({MENTION_COLS}, refs_version) SELECT {MENTION_COLS}, refs_version FROM _m")
+        cur.execute("DROP TABLE _m")
     c.commit()
-    return {"mentions": len(rows), "unidentified": sum(1 for r in rows if r[3] is None)}
+    return {"mentions": len(rows), "unidentified": sum(1 for r in rows if r[3] is None), "rewritten": changed}
+
+
+# the columns do_links writes (resolve fills status and unresolved; refs_version is a note nothing reads)
+MENTION_COLS = ("src_doc, src_chunk, kind, dst_doc, dst_name, dst_label, context, detail, start_at, end_at, span, relation, "
+                "scope, law_form, law_text, dst_type, unit, labels, sub, in_quote, confidence, via, ops")
 
 
 def resolve():
@@ -421,16 +434,22 @@ def resolve():
                                    FROM mentions m CROSS JOIN LATERAL unnest(CASE WHEN cardinality(m.labels) > 0 THEN m.labels
                                                                                  ELSE ARRAY[NULL::text] END) t(lab)
                                    LEFT JOIN lk ON lk.mention_id = m.id AND lk.lab IS NOT DISTINCT FROM t.lab
-                                   GROUP BY m.id, m.dst_doc)
-                           UPDATE mentions m SET
-                             status = CASE WHEN p.dst_doc IS NULL THEN 'unidentified'
-                                           WHEN p.ok = p.n THEN 'resolved'
-                                           WHEN NOT EXISTS (SELECT 1 FROM heldk h WHERE h.doc = p.dst_doc) THEN 'not_held'
-                                           WHEN p.ok > 0 THEN 'partial'
-                                           WHEN p.all_ins THEN 'inserted'
-                                           ELSE 'label_not_found' END,
-                             unresolved = CASE WHEN p.ok = p.n THEN NULL ELSE p.unres END
-                           FROM per p WHERE p.id = m.id""")
+                                   GROUP BY m.id, m.dst_doc),
+                                new AS (SELECT p.id,
+                                          CASE WHEN p.dst_doc IS NULL THEN 'unidentified'
+                                               WHEN p.ok = p.n THEN 'resolved'
+                                               WHEN NOT EXISTS (SELECT 1 FROM heldk h WHERE h.doc = p.dst_doc) THEN 'not_held'
+                                               WHEN p.ok > 0 THEN 'partial'
+                                               WHEN p.all_ins THEN 'inserted'
+                                               ELSE 'label_not_found' END AS status,
+                                          CASE WHEN p.ok = p.n THEN NULL ELSE p.unres END AS unresolved
+                                        FROM per p)
+                           UPDATE mentions m SET status = x.status, unresolved = x.unresolved
+                           FROM new x WHERE x.id = m.id
+                             AND (m.status, m.unresolved) IS DISTINCT FROM (x.status, x.unresolved)""")
+            # only the mentions whose status moved are written: every run rewrote all ~213k (each rewrite left the old
+            # copy in the file; public.mentions held 127 MB of them, 2026-11-18, #85)
+            print("mention statuses changed:", cur.rowcount)
             cur.execute("SELECT status, count(*) FROM mentions GROUP BY 1 ORDER BY 2 DESC")
             st = cur.fetchall()
             cur.execute("SELECT count(*), count(*) FILTER (WHERE part IS NOT NULL), count(*) FILTER (WHERE dst_doc = src_doc) FROM links")

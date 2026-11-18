@@ -124,9 +124,14 @@ def write_rows(connect, name, rows):
                                      language, format, listing) VALUES %s
                                    ON CONFLICT (source, source_url) DO UPDATE SET title = EXCLUDED.title, date = EXCLUDED.date,
                                      type = EXCLUDED.type, listed_key = EXCLUDED.listed_key, language = EXCLUDED.language,
-                                     listing = listings.listing || EXCLUDED.listing, last_seen = NOW()
+                                     listing = listings.listing || EXCLUDED.listing
+                                   WHERE (listings.title, listings.date, listings.type, listings.listed_key, listings.language,
+                                          listings.listing) IS DISTINCT FROM (EXCLUDED.title, EXCLUDED.date, EXCLUDED.type,
+                                          EXCLUDED.listed_key, EXCLUDED.language, listings.listing || EXCLUDED.listing)
                                    RETURNING (xmax = 0)""", uniq, page_size=2000, fetch=True)
-            new = sum(1 for (ins,) in got if ins)     # xmax = 0: a row inserted now, not updated
+            # an unchanged row is not rewritten (each rewrite left its old copy in the file: #85); last_seen had no
+            # reader and is no longer bumped. Returned: rows inserted (xmax = 0) or changed, never the unchanged ones.
+            new = sum(1 for (ins,) in got if ins)
     finally:
         db.close()
     s3, bucket = B.r2()
@@ -135,7 +140,7 @@ def write_rows(connect, name, rows):
                                               ensure_ascii=False) for r in uniq).encode())
     snap = f"{B.PREFIX}listings/{name}/{datetime.now(timezone.utc):%Y-%m-%dT%H%M%SZ}.jsonl.gz"   # two runs a day keep both
     s3.put_object(Bucket=bucket, Key=snap, Body=body, ContentType="application/gzip")
-    return {"rows": len(uniq), "new": new, "snapshot": snap, **({"pages": courts.SEEN.pop("ca")} if "ca" in courts.SEEN else {})}
+    return {"rows": len(uniq), "new": new, "changed": len(got) - new, "snapshot": snap, **({"pages": courts.SEEN.pop("ca")} if "ca" in courts.SEEN else {})}
 
 
 # -- stage 2: fetch --------------------------------------------------------------------------------------------------

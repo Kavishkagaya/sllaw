@@ -470,6 +470,14 @@ unchanged. All 7,336 documents built in memory in 276 s (16 workers), 0 failed, 
   runs `cleanup()` (VACUUM FULL on every public and kb table, smallest first) after the gate check and before it
   writes, and logs `mb_before_cleanup`, `mb_after_cleanup`, `mb_after_publish`. Not done: removing the kb copy
   (~300 MB of the rows are kb repeating public); moving kb to sllaw-app was scoped and dropped (user).
+- **No duplicate work (2026-11-18, #85).** A row is written only when it differs, at every stage: listing's upsert,
+  build's docs and chunks upserts (`WHERE ... IS DISTINCT FROM`), links (a document's new citations go to a temp
+  table and replace the old ones only if the sets differ, so unchanged mention ids, and the links on them, stay),
+  resolve's status UPDATE (it rewrote all ~213k mentions every run). publish compares a hash of what it writes to
+  kb, not the build's input fingerprint (a builder edit that changes no output republishes nothing). embed reads
+  from R2 only the documents published after its last mark (`marks.at` of `embedded`); deletions come from kb's
+  chunk ids. Kept: a builder code edit still recomputes every document (ampere CPU; nothing written when identical).
+  `listings.last_seen` and `docs.fingerprint` are no longer kept current (no reader).
 
 ## Fix loop (2026-11-07, gate runs 19-26), each change kept only when the gate showed no law error
 - **Gazettes, text layer (stage 3, `blocks.gazette_lines`):** lines rebuilt from docling's line cells (a line start

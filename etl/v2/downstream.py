@@ -224,16 +224,19 @@ def vid(u):
     return V2_BASE + (uuid.UUID(u).int >> 80)
 
 
-def embed_texts(state):
-    """[{id, text, hash, doc_key, kind, label, year}] for every chunk of 40+ chars, the text sent as v1 sends it
-    ("title › breadcrumb" + the chunk), read from the R2 parts."""
+def embed_texts(state, since=None):
+    """([{id, text, hash, doc_key, kind, label, year}] for every chunk of 40+ chars, the text sent as v1 sends it
+    ("title › breadcrumb" + the chunk), read from the R2 parts; {every chunk id read}). With `since`, only the
+    documents published after it: the others' chunks are what the last embed sent (#85: every embed read all
+    12,275 documents' parts, ~7 minutes, after a publish that changed none of them)."""
     from etl import embed as E
     out = []
     with state.cursor() as cur:
         cur.execute("SELECT to_regclass('kb.docs') IS NOT NULL")
         docs = []
         if cur.fetchone()[0]:   # what the app sees: kb.docs, filled by publish
-            cur.execute("SELECT key, kind, title, year, parts FROM kb.docs")
+            cur.execute("SELECT key, kind, title, year, parts FROM kb.docs WHERE %s::timestamptz IS NULL OR published_at > %s",
+                        (since, since))
             docs = cur.fetchall()
     state.commit()
     # Parts are read on 16 threads (one after another took 24 minutes for 7,715 docs, 2026-11-08).
@@ -242,9 +245,11 @@ def embed_texts(state):
     keys = [p for d in docs for p in d[4] or []]
     with ThreadPoolExecutor(16) as pool:
         got = dict(zip(keys, pool.map(B.get_json, keys)))
+    seen = set()
     for key, kind, title, year, parts in docs:
         for p in parts or []:
             for c in got[p]["chunks"]:
+                seen.add(vid(c["id"]))
                 if len(c["text"].strip()) < E.MIN:
                     continue
                 t = " › ".join(x for x in (title or key, c.get("crumb")) if x) + "\n\n" + c["text"]
@@ -252,7 +257,7 @@ def embed_texts(state):
                             "doc_key": key, "kind": kind, "label": c.get("label"), "year": year})
     ids = [r["id"] for r in out]
     assert len(ids) == len(set(ids)), "two chunks share a vector id"
-    return out
+    return out, seen
 
 
 def stored_v2(E, lo=V2_BASE, hi=V2_BASE + (1 << 48)):
@@ -272,15 +277,21 @@ def embed(state, apply=False, prune_v1=False):
         cur.execute("SELECT key, fingerprint FROM published")
         kb = _hash(dict(cur.fetchall()))
         last = mark(cur, "embedded")
+        cur.execute("SELECT at FROM marks WHERE name = 'embedded'")   # when the last embed finished
+        since = (cur.fetchone() or [None])[0]
+        cur.execute("SELECT id FROM kb.chunks")                       # ids only (8 bytes each), no text
+        live = {r[0] for r in cur.fetchall()}
     state.commit()
     if kb == last and not prune_v1:
         return {"skipped": "kb unchanged since the last embed"}
-    rows = embed_texts(state)
+    rows, seen = embed_texts(state, None if prune_v1 else since)
     have = stored_v2(E)
     ids = {r["id"] for r in rows}
     todo = [r for r in rows if have.get(r["id"]) != r["hash"]]
-    gone = [i for i in have if i not in ids]
-    out = {"chunks": len(rows), "in_index": len(have), "to_upsert": len(todo), "to_delete": len(gone)}
+    # gone: no longer a chunk in kb, or a chunk read now that is too short to embed
+    gone = [i for i in have if i not in live or (i in seen and i not in ids)]
+    out = {"chunks_read": len(seen), "chunks": len(rows), "in_index": len(have),
+           "to_upsert": len(todo), "to_delete": len(gone)}
     if prune_v1:
         out["v1_to_delete"] = E.zilliz("entities/query", {"collectionName": E.COLL, "filter": f"id < {V2_BASE}",
                                                           "outputFields": ["count(*)"]})[0]["count(*)"]
