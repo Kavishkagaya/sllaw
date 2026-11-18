@@ -224,12 +224,12 @@ one, and record dead ends and what was *not* checked.
 - **`run work <stage> --n N` is the claim batch, not N workers** (2026-11-17: a hand-run `--n 8` relink of 3,481
   gazettes was one sequential worker, ~39 a minute at 10% CPU): start several processes with `--n 2`, as `all.sh` and
   Dagster do, then `resolve` once every worker has exited.
-- **sllaw-etl is a Free-plan Neon project, 1 GB logical size** (2026-11-18): the db is 978 MB (kb.* ~435 MB, public
-  staging ~540 MB; of the 978: ~420 rows, ~230 indexes, ~250 empty space in table files, e.g. public.mentions 229 MB
-  holding 100 MB of rows, and the ~210 B citation context per mention stored 3 times = 129 MB). publish replaces changed docs in one transaction, so a full republish (any change to a builder
-  file re-fingerprints every doc, e.g. cf8ebae) needs room for kb twice and fails with `DiskFull ... project size
-  limit (1024 MB)`; the transaction rolls back, so kb keeps the last release. kb.mentions (135 MB, read by nothing)
-  dropped 2026-11-18 (843 MB left), but publish still recreates it. Then `VACUUM FULL` (user): 532 MB (public.mentions
-  229 → 107 MB heap; indexes rebuilt smaller). Each full relink/republish bloats the files again (an UPDATE or
-  DELETE leaves the old row's space in the file), so space comes back only by another VACUUM FULL. Not fixed yet.
+- **sllaw-etl is a Free-plan Neon project, 1 GB logical size** (2026-11-18): an UPDATE or DELETE leaves the old
+  row's space in the file, and a full republish holds kb twice in one transaction, so it filled to 978 MB and publish
+  failed `DiskFull ... project size limit (1024 MB)` (rolled back; kb kept the last release). Fixed (#84): kb.mentions
+  (read by nothing) dropped, and publish runs `cleanup()` (VACUUM FULL public+kb) before it writes; a full republish
+  now goes 664 → 531 after cleanup → 741 MB after publish (run f0fdfce4). Details: `docs/PIPELINE_V2.md` stages 7-8.
+- **psycopg2 2.9's `with conn:` is a transaction even with autocommit** (2026-11-18, run f0fdfce4): VACUUM (or
+  anything that refuses a transaction) on a connection `run.py` holds in `with db()` fails "cannot run inside a
+  transaction block". Give it its own `psycopg2.connect(...)` with `autocommit = True`, as `downstream.cleanup` does.
 - **Legacy-font Sinhala listed as English** (act:54/2007, act:7/2006): nothing flags it yet.

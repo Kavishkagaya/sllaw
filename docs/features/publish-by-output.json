@@ -1,0 +1,26 @@
+{
+  "title": "Publish only documents whose output changed",
+  "slug": "publish-by-output",
+  "status": "agreed",
+  "branch": "main",
+  "issue": 85,
+  "neon_branch": null,
+  "goal": "A document is republished only when what the app reads of it changes, not every time the builder's code changes (cf8ebae edited build.py and all 12,275 documents were republished with 0 chunks changed, 2026-11-18) (user).",
+  "for_whom": "The nightly pipeline: publish and embed stop rewriting the whole corpus after a builder edit that changes nothing.",
+  "done_check": [
+    {"id": "d1", "check": "publish decides a document changed from a hash of what it writes to kb for it (its kb.docs fields, its chunks' address, label, path, part and text hash, its links), computed inside the database, not from the build's input fingerprint."},
+    {"id": "d2", "check": "Unit tests: the same output with a different build fingerprint is not republished; a changed title, chunk text hash or link is."},
+    {"id": "d3", "check": "On ampere after it lands: one publish switches the stored fingerprints to the new form, then a publish dry run reports 0 to publish."}
+  ],
+  "scenarios": [
+    {"id": "s1", "steps": "Publish dry run on ampere after the switch, with nothing rebuilt.", "expect": "to_publish 0, to_delete 0."}
+  ],
+  "out_of_scope": [
+    "Rebuilding fewer documents after a builder edit (the build still reruns to find out what changed; that costs ampere CPU, not Neon or the app).",
+    "Embed (it already skips chunks whose text hash is unchanged)."
+  ],
+  "decisions": [
+    {"date": "2026-11-18", "note": "The first publish after the change rewrites every document once more (the stored fingerprints change form); with cleanup (#84) it fits."}
+  ],
+  "progress": [{"date": "2026-11-18", "note": "Scoped with the user; issue #85. Build waits for run f0fdfce4 (etl-cleanup #84) to finish."}]
+}
