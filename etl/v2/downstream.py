@@ -63,15 +63,28 @@ def date_sql(expr):
 
 
 def doc_state(cur):
-    """{key: fingerprint to publish}: the build fingerprint plus a hash of its mentions and links (a relink
-    republishes only the documents whose citations or resolved targets changed)."""
-    cur.execute("""SELECT d.key, coalesce(d.fingerprint, '') || '|' || coalesce(md5(string_agg(concat_ws(',', m.kind,
-                     m.dst_doc, m.dst_name, array_to_string(m.labels, ' '), m.status, m.start_at, m.end_at, m.law_form,
-                     m.confidence, m.src_chunk::text), ';' ORDER BY m.src_chunk, m.start_at, m.kind, m.dst_doc, m.id)), '')
-                   FROM docs d LEFT JOIN mentions m ON m.src_doc = d.key GROUP BY d.key, d.fingerprint""")
+    """{key: fingerprint to publish}: a hash of what publish writes for the document (its kb.docs fields and its
+    chunks), plus a hash of its mentions and links (a relink republishes only the documents whose citations or
+    resolved targets changed). Not the build's fingerprint: that moves with the builder's code, and a builder edit
+    that changed no output republished all 12,275 documents (cf8ebae, 2026-11-18, #85)."""
+    cur.execute("""WITH ch AS (SELECT doc_key, md5(string_agg(concat_ws(',', id::text, address, seq::text, label, kind,
+                                   crumb, part::text, text_hash), ';' ORDER BY seq, address)) AS h
+                               FROM chunks GROUP BY doc_key),
+                        me AS (SELECT src_doc, md5(string_agg(concat_ws(',', kind, dst_doc, dst_name,
+                                   array_to_string(labels, ' '), status, start_at, end_at, law_form, confidence,
+                                   src_chunk::text, relation, scope, in_quote::text, span, sub, dst_type, context,
+                                   detail::text), ';' ORDER BY src_chunk, start_at, kind, dst_doc, id)) AS h
+                               FROM mentions GROUP BY src_doc),
+                        sa AS (SELECT a, md5(string_agg(b, ';' ORDER BY b)) AS h FROM same_as GROUP BY a)
+                   SELECT d.key, md5(concat_ws(',', d.kind, d.title, d.year::text, array_to_string(d.parts, ' '),
+                              d.meta::text, l.source_url, f.r2_key)) || '|' || coalesce(ch.h, '') || '|' || coalesce(me.h, '')
+                              || '|' || coalesce(sa.h, '')
+                   FROM docs d LEFT JOIN documents x ON x.key = d.key LEFT JOIN listings l ON l.id = x.listing_id
+                   LEFT JOIN files f ON f.sha256 = d.sha256
+                   LEFT JOIN ch ON ch.doc_key = d.key LEFT JOIN me ON me.src_doc = d.key LEFT JOIN sa ON sa.a = d.key""")
     now = dict(cur.fetchall())
-    cur.execute("""SELECT src_doc, md5(string_agg(concat_ws(',', src_chunk::text, kind, dst_doc, dst_label, dst_chunk::text, part),
-                     ';' ORDER BY src_chunk, kind, dst_doc, dst_label, dst_chunk, part)) FROM links GROUP BY 1""")
+    cur.execute("""SELECT src_doc, md5(string_agg(concat_ws(',', src_chunk::text, kind, dst_doc, dst_label, dst_chunk::text,
+                     part, via_alias::text), ';' ORDER BY src_chunk, kind, dst_doc, dst_label, dst_chunk, part)) FROM links GROUP BY 1""")
     for k, h in cur.fetchall():
         now[k] = now.get(k, "") + "|" + h
     return now

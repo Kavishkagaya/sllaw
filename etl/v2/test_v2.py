@@ -408,3 +408,8 @@ _vac = [(q, a) for q, a in _c.sql if q.startswith("VACUUM")]
 assert _vac == [("VACUUM FULL public.marks", True), ("VACUUM FULL kb.chunks", True)], _vac
 assert "TABLE IF NOT EXISTS kb.mentions" not in _D.KB_SCHEMA
 print("ok cleanup")
+
+import inspect as _inspect   # publish compares output, not the builder's input fingerprint (#85; the SQL itself was
+_src = _inspect.getsource(_D.doc_state)   # checked on a Neon branch: see docs/features/publish-by-output.json)
+assert "d.fingerprint" not in _src and "text_hash" in _src and "context" in _src and "same_as" in _src
+print("ok publish by output")

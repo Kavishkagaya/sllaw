@@ -1,26 +1,36 @@
 {
-  "title": "Publish only documents whose output changed",
+  "title": "No duplicate work across the pipeline",
   "slug": "publish-by-output",
   "status": "agreed",
   "branch": "main",
   "issue": 85,
   "neon_branch": null,
-  "goal": "A document is republished only when what the app reads of it changes, not every time the builder's code changes (cf8ebae edited build.py and all 12,275 documents were republished with 0 chunks changed, 2026-11-18) (user).",
-  "for_whom": "The nightly pipeline: publish and embed stop rewriting the whole corpus after a builder edit that changes nothing.",
+  "goal": "From the listing to embed, no stage redoes or rewrites what has not changed: a row is written only when it differs, and a document is republished and re-read only when what the app reads of it changed. cf8ebae edited build.py and all 12,275 documents were rebuilt, republished and re-read for embed with 0 chunks changed (2026-11-18) (user).",
+  "for_whom": "The nightly pipeline on ampere and the 1 GB Neon project it writes: less work each night and no table bloat from identical rewrites.",
   "done_check": [
-    {"id": "d1", "check": "publish decides a document changed from a hash of what it writes to kb for it (its kb.docs fields, its chunks' address, label, path, part and text hash, its links), computed inside the database, not from the build's input fingerprint."},
-    {"id": "d2", "check": "Unit tests: the same output with a different build fingerprint is not republished; a changed title, chunk text hash or link is."},
-    {"id": "d3", "check": "On ampere after it lands: one publish switches the stored fingerprints to the new form, then a publish dry run reports 0 to publish."}
+    {"id": "d1", "check": "listing: a listed row is updated only when its data differs (no nightly rewrite of every row; last_seen, read by nothing, is no longer bumped)."},
+    {"id": "d2", "check": "build: a rebuilt document whose docs row or chunks come out identical leaves those rows untouched (no new row versions)."},
+    {"id": "d3", "check": "links: a relinked document whose citations come out identical leaves its mentions rows untouched."},
+    {"id": "d4", "check": "publish decides a document changed from a hash of what it writes to kb for it (its kb.docs fields; its chunks' address, label, path, part and text hash; its links and their mention columns; its same_as), computed inside the database, not from the build's input fingerprint."},
+    {"id": "d5", "check": "embed reads from R2 only the documents published since the last embed, not every document."},
+    {"id": "d6", "check": "Tests: the same output with a different build fingerprint is not republished; a changed title, chunk text hash, link or citation is; identical build and link output writes no rows."},
+    {"id": "d7", "check": "On ampere after it lands: one run switches publish's stored fingerprints to the new form; the next run with nothing new reports 0 to publish, 0 rows rewritten by listing, and embed reads 0 documents."}
   ],
   "scenarios": [
-    {"id": "s1", "steps": "Publish dry run on ampere after the switch, with nothing rebuilt.", "expect": "to_publish 0, to_delete 0."}
+    {"id": "s1", "steps": "Nightly-style Dagster run on ampere after the switch, with no new documents listed.", "expect": "listing rewrites 0 unchanged rows; publish to_publish 0; embed reads 0 documents; the database size does not grow."}
   ],
   "out_of_scope": [
-    "Rebuilding fewer documents after a builder edit (the build still reruns to find out what changed; that costs ampere CPU, not Neon or the app).",
-    "Embed (it already skips chunks whose text hash is unchanged)."
+    "Recomputing fewer documents after a builder code edit (the build still recomputes every document to find out what changed; ampere CPU only, nothing written when identical).",
+    "fetch, extract and OCR (already keyed by file hash and tool version).",
+    "resolve's per-run recompute of links in SQL (seconds, no bloat: it truncates)."
   ],
   "decisions": [
-    {"date": "2026-11-18", "note": "The first publish after the change rewrites every document once more (the stored fingerprints change form); with cleanup (#84) it fits."}
+    {"date": "2026-11-18", "note": "Widened from 'publish only documents whose output changed' to every stage (user: 'from the fetch and from the start we need to remove duplicate work')."},
+    {"date": "2026-11-18", "note": "The first publish after the change rewrites every document once more (the stored fingerprints change form); with cleanup (#84) it fits."},
+    {"date": "2026-11-18", "note": "listings.last_seen has no reader (grep of etl and app), so it stops being bumped rather than moving to a side table."}
   ],
-  "progress": [{"date": "2026-11-18", "note": "Scoped with the user; issue #85. Build waits for run f0fdfce4 (etl-cleanup #84) to finish."}]
+  "progress": [
+    {"date": "2026-11-18", "note": "Scoped with the user; issue #85. Build waits for run f0fdfce4 (etl-cleanup #84) to finish."},
+    {"date": "2026-11-18", "note": "d4 written (uncommitted): doc_state hashes kb output inside the DB. Checked on Neon branch agent/publish-by-output (deleted after): builder-only fingerprint change on act:1/1950 -> same hash; cap:19 title -> doc part moved; one gazette:2345/03 chunk text_hash -> chunks part moved; act:1/1950 link via_alias -> links hash 4012e6.. -> 0d24c0..; one mention context -> mentions hash 5e02f2.. -> 38b154..; full query 12,275 docs, 12,275 distinct, 2.3 s. test_v2 'ok publish by output' (source check)."}
+  ]
 }
