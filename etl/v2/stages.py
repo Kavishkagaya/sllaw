@@ -105,12 +105,22 @@ def listing(connect, name, limit=None):
     return write_rows(connect, name, spider_rows(name, limit, **extra))
 
 
+def stable(meta):
+    """documents.gov.lk sends a record's language versions (`contents`) in a new order each time: sorted, so an
+    unchanged record is stored unchanged (110-144 gazette rows were rewritten a run, 2026-11-18, #85)."""
+    rec = meta.get("listing") or {}
+    if isinstance(rec.get("contents"), list):
+        rec["contents"].sort(key=lambda x: json.dumps(x, sort_keys=True))
+    return meta
+
+
 def write_rows(connect, name, rows):
     """Spider rows -> listings (upsert on source, source_url) and the run's snapshot in R2."""
     from etl.spiders import courts
     from etl.v2.run import SOURCES, v1_type
     out = []
     for src, url, title, d, meta in rows:
+        stable(meta)
         source, spider = SOURCES[src]
         typ, key = v1_type(src, meta)
         fmt = "html" if meta.get("format") == "html" or url.lower().endswith((".html", ".htm")) else "pdf"

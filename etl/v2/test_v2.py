@@ -413,3 +413,10 @@ import inspect as _inspect   # publish compares output, not the builder's input 
 _src = _inspect.getsource(_D.doc_state)   # checked on a Neon branch: see docs/features/publish-by-output.json)
 assert "d.fingerprint" not in _src and "text_hash" in _src and "context" in _src and "same_as" in _src
 print("ok publish by output")
+
+from etl.v2.stages import stable as _stable   # the site's order of a record's languages shifts (#85)
+_a = _stable({"listing": {"contents": [{"language": "TAMIL"}, {"language": "ENGLISH"}]}})
+_b = _stable({"listing": {"contents": [{"language": "ENGLISH"}, {"language": "TAMIL"}]}})
+assert _a == _b and _a["listing"]["contents"][0]["language"] == "ENGLISH"
+assert _stable({"listing": {"title": "x"}}) == {"listing": {"title": "x"}} and _stable({}) == {}
+print("ok listing contents sorted")
