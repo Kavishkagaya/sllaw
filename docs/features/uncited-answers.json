@@ -1,10 +1,10 @@
 {
   "title": "Answers cite even when the lawyer's text names sections in words",
   "slug": "uncited-answers",
-  "status": "agreed",
+  "status": "merged",
   "branch": "app/uncited-answers",
   "issue": 87,
-  "neon_branch": {"name": "agent/uncited-answers", "id": "br-tiny-king-b732zjbi"},
+  "neon_branch": null,
   "goal": "Hulft's promise is that every answer cites the text it rests on. On 2026-11-21 an answer (chat fa91b05a: a review of a pasted Terms of Service and Privacy Policy, 19 steps, 33 tool calls, 15,335 characters) came back with no citations at all; the user: 'I see answer without citations? Are we kidding now?' and 'we need to fix it'. Fix the cause in the main agent's system prompt (user: 'isn't it better give proper system prompt'; prompt fix only, no rewrite, since a rewrite would show the answer, remove it and regenerate it).",
   "for_whom": "A lawyer who pastes a document (a contract, a policy, a plaint) that names sections in plain words and asks Hulft about it, in a quick chat or a case chat.",
   "done_check": [
@@ -44,6 +44,7 @@
     {"date": "2026-11-22", "note": "Agreed; issue #87; branch app/uncited-answers off origin/main; Neon branch agent/uncited-answers (.env.local points at it, production kept as .env.main)."},
     {"date": "2026-11-22", "note": "d1: the citation rule was already in 'How you write', the last law section before the case, so it stays there; added two bullets at its end: pasted or uploaded text may name sections in words, 'never cite in words'; and a check before sending that every statement of law carries an [[id]]. build.test.ts asserts both lines are in a plain and a case chat's prompt, before the closing lines (10/10 pass; ai 48 tests)."},
     {"date": "2026-11-22", "note": "d2: the failing question (the round-2 review prompt with the same two pasted documents, scratchpad terms.txt + privacy.txt) asked once on local dev against agent/uncited-answers, test account, headed browser: chat 459ada69, 15 steps, 19 searches, 44 provisions, 6 amendment checks; 25 citations checked, 5 not verified (was 0 and 0 in fa91b05a); cost $0.0142 ($0.0164 billed), deepinfra."},
-    {"date": "2026-11-22", "note": "d3: eval-chat 4,6,7,8,10,11,14,16,17 (the 9-question set of PIPELINE.md 2026-10-20 and 10-27; the brief's '20/20' baseline was wrong, the recorded runs are 9/9 on these 9; user approved this one run): hits 9/9; unread cites 10 (q6 3, q8 4, q17 3; the recorded runs had 5 and 9, one run each, so noise and the new 'every statement carries an [[id]]' line are not separated); 48 calls, 82% cached, $0.0220 in all ($0.0024 a question; recorded $0.0118-0.0148), slowest 32 s. A first run without the question list ran only the default 'dl' question ($0.0100, 20 cited, 2 unread): my slip, not a result. Log: scratchpad eval-chat9.log."}
+    {"date": "2026-11-22", "note": "d3: eval-chat 4,6,7,8,10,11,14,16,17 (the 9-question set of PIPELINE.md 2026-10-20 and 10-27; the brief's '20/20' baseline was wrong, the recorded runs are 9/9 on these 9; user approved this one run): hits 9/9; unread cites 10 (q6 3, q8 4, q17 3; the recorded runs had 5 and 9, one run each, so noise and the new 'every statement carries an [[id]]' line are not separated); 48 calls, 82% cached, $0.0220 in all ($0.0024 a question; recorded $0.0118-0.0148), slowest 32 s. A first run without the question list ran only the default 'dl' question ($0.0100, 20 cited, 2 unread): my slip, not a result. Log: scratchpad eval-chat9.log."},
+    {"date": "2026-11-22", "note": "Validated on acfa0dd: semantic PASS (minor: wrong '20/20' baseline, disclosed; unread cites 10 vs 5-9 not separated; 5 of 25 citations in the d2 answer not verified), security PASS (no findings; no injection probe, paid). PR #88 rebase-merged; Vercel deploys main. Neon branch agent/uncited-answers deleted. Merged."}
   ]
 }
