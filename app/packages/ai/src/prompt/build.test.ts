@@ -80,6 +80,14 @@ describe("main setup", () => {
     expect(p).not.toContain("# Playbooks");
   });
 
+  it("every chat is told to cite [[id]] even when pasted text names sections in words (uncited-answers #87)", () => {
+    for (const p of [mainPrompt(ctx()), mainPrompt(inCase([file("a")]))]) {
+      expect(p).toContain("never cite in words");
+      expect(p).toContain("every statement of law carries an [[id]]");
+      expect(p.indexOf("never cite in words")).toBeLessThan(p.indexOf("Answer in the language of the question"));
+    }
+  });
+
   it("a case chat: the case last, facts fenced, file tools added", () => {
     const p = mainPrompt(inCase([file("a")]));
     expect(p.indexOf("# The case")).toBeGreaterThan(p.indexOf("# How you write"));

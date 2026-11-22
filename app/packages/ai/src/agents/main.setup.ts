@@ -140,6 +140,11 @@ const write = section<MainInput>(
   cite or quote it. Never cite an id you did not read or asOf (an amending section asOf showed counts), and never
   make one up. Say what the corpus did not answer rather than filling it from memory; general knowledge is said as
   such and not cited.
+- Text the lawyer pastes or uploads (a contract, a policy, a plaint, a draft) may name sections in words ("section
+  23", "s. 26(3)(b)", "Article 12"). That is their style, not yours: when you state what such a section says, cite
+  the chunk you read as [[id]]; never cite in words.
+- Before you send, check: every statement of law carries an [[id]]. An answer that states the law without one is
+  wrong; if you read nothing that supports a point, say it is unchecked.
 
 Answer in the language of the question; search in English. You may call several tools in one step when they do
 not depend on each other. You have ${maxSteps} steps.

@@ -108,6 +108,9 @@ Each came from a correction or a costly mistake. Guarded = `.claude/hooks/guard.
 - **Test the app the way a lawyer talks** (user, 2026-11-11): plain questions about the case and its people
   ("the Perera Traders demand"), never file names, ids or our own terms ("card", "field", "fileEdit"), and no
   invented facts that contradict the documents just to provoke the agent.
+- **A Hulft answer is evidence only with its citations** (user, 2026-11-21, after a review with 0 citations was
+  reported as "no serious risk"): before quoting or relying on an answer, check its "N citations checked" line; an
+  answer with none is a defect to report, not a finding.
 - **An eval miss is diagnosed before it is reported** (user, 2026-11-17): read what the agent cited or returned
   instead and say whether the question (its gold) or the agent is wrong. A wrong question is rewritten (a note in the
   case says why), not put to the user as a choice of target; only an agent that falls short goes to the user.
